@@ -1,0 +1,10 @@
+image: alpine/edge
+oauth: pages.sr.ht/PAGES:RW
+packages:
+  - hut
+tasks:
+  - package: |
+      cd website
+      tar -cvz . > ../website.tar.gz
+  - upload: |
+      hut pages publish -d hutch.cleberg.net website.tar.gz
