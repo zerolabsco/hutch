@@ -1,6 +1,8 @@
 # Hutch for Sourcehut
 Sourcehut on iOS
 
+[![builds.sr.ht status](https://builds.sr.ht/~ccleberg/Hutch.svg)](https://builds.sr.ht/~ccleberg/Hutch?)
+
 ## Table of Contents
 
 - [Introduction](#introduction)
