@@ -1,8 +1,6 @@
 # Hutch for Sourcehut
 Sourcehut on iOS
 
-![Hutch App Logo]()
-
 ## Table of Contents
 
 - [Introduction](#introduction)
