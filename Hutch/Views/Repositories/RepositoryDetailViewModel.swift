@@ -1,0 +1,397 @@
+import Foundation
+
+// MARK: - Response types (file-private to avoid @MainActor Decodable issues)
+
+private struct LogResponse: Decodable, Sendable {
+    let repository: LogRepository?
+}
+
+private struct LogRepository: Decodable, Sendable {
+    let log: LogPage
+}
+
+private struct LogPage: Decodable, Sendable {
+    let results: [CommitSummary]
+    let cursor: String?
+}
+
+private struct RefsResponse: Decodable, Sendable {
+    let repository: RefsRepository?
+}
+
+private struct RefsRepository: Decodable, Sendable {
+    let references: RefsPage
+}
+
+private struct RefsPage: Decodable, Sendable {
+    let results: [Reference]
+    let cursor: String?
+}
+
+private struct ReadmeResponse: Decodable, Sendable {
+    let repository: ReadmeRepository?
+}
+
+private struct ReadmeRepository: Decodable, Sendable {
+    let readme: String?
+}
+
+private struct PathResponse: Decodable, Sendable {
+    let repository: PathRepository?
+}
+
+private struct PathRepository: Decodable, Sendable {
+    let readme: PathEntry?
+}
+
+private struct PathEntry: Decodable, Sendable {
+    let object: PathObject?
+}
+
+private struct PathObject: Decodable, Sendable {
+    let text: String?
+}
+
+private struct ArtifactsResponse: Decodable, Sendable {
+    let repository: ArtifactsRepository?
+}
+
+private struct ArtifactsRepository: Decodable, Sendable {
+    let references: ArtifactRefsPage
+}
+
+private struct ArtifactRefsPage: Decodable, Sendable {
+    let results: [ArtifactRef]
+    let cursor: String?
+}
+
+private struct ArtifactRef: Decodable, Sendable {
+    let name: String
+    let artifacts: ArtifactPage
+}
+
+// MARK: - View Model
+
+@Observable
+@MainActor
+final class RepositoryDetailViewModel {
+
+    enum Tab: String, CaseIterable {
+        case summary = "Summary"
+        case tree = "Tree"
+        case log = "Log"
+        case refs = "Refs"
+        case artifacts = "Artifacts"
+    }
+
+    let repository: RepositorySummary
+    private var service: SRHTService { repository.service }
+    private let client: SRHTClient
+
+    // MARK: - Commit log state
+
+    private(set) var commits: [CommitSummary] = []
+    private(set) var isLoadingCommits = false
+    private(set) var isLoadingMoreCommits = false
+    private var commitCursor: String?
+    private var hasMoreCommits = true
+
+    // MARK: - References state
+
+    private(set) var branches: [Reference] = []
+    private(set) var tags: [Reference] = []
+    private(set) var isLoadingRefs = false
+
+    // MARK: - README state
+
+    enum ReadmeContent {
+        case html(String)
+        case markdown(String)
+        case org(String)
+        case plainText(String)
+    }
+
+    private(set) var readmeContent: ReadmeContent?
+    private(set) var readmePath: String?
+    private(set) var isLoadingReadme = false
+    private(set) var readmeLoaded = false
+
+    // MARK: - Artifacts state
+
+    private(set) var referenceArtifacts: [ReferenceWithArtifacts] = []
+    private(set) var isLoadingArtifacts = false
+
+    // MARK: - Error
+
+    var error: String?
+
+    init(repository: RepositorySummary, client: SRHTClient) {
+        self.repository = repository
+        self.client = client
+    }
+
+    // MARK: - Commit log
+
+    private static let logQuery = """
+    query repoLog($rid: ID!, $cursor: Cursor) {
+        repository(rid: $rid) {
+            log(cursor: $cursor) {
+                results {
+                    id
+                    shortId
+                    author { name email time }
+                    message
+                }
+                cursor
+            }
+        }
+    }
+    """
+
+    func loadCommits() async {
+        guard !isLoadingCommits else { return }
+        isLoadingCommits = true
+        error = nil
+        commitCursor = nil
+        hasMoreCommits = true
+
+        do {
+            let page = try await fetchCommitPage(cursor: nil)
+            commits = page.results
+            commitCursor = page.cursor
+            hasMoreCommits = page.cursor != nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoadingCommits = false
+    }
+
+    func loadMoreCommitsIfNeeded(currentItem: CommitSummary) async {
+        guard let last = commits.last,
+              last.id == currentItem.id,
+              hasMoreCommits,
+              !isLoadingMoreCommits else {
+            return
+        }
+
+        isLoadingMoreCommits = true
+
+        do {
+            let page = try await fetchCommitPage(cursor: commitCursor)
+            commits.append(contentsOf: page.results)
+            commitCursor = page.cursor
+            hasMoreCommits = page.cursor != nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoadingMoreCommits = false
+    }
+
+    private func fetchCommitPage(cursor: String?) async throws -> LogPage {
+        var variables: [String: any Sendable] = ["rid": repository.rid]
+        if let cursor {
+            variables["cursor"] = cursor
+        }
+        let result: LogResponse
+        do {
+            result = try await client.execute(
+                service: service,
+                query: Self.logQuery,
+                variables: variables,
+                responseType: LogResponse.self
+            )
+        } catch {
+            if isMissingGitReferenceError(error) {
+                return LogPage(results: [], cursor: nil)
+            }
+            throw error
+        }
+        guard let repo = result.repository else {
+            return LogPage(results: [], cursor: nil)
+        }
+        return repo.log
+    }
+
+    // MARK: - References
+
+    private static let refsQuery = """
+    query refs($rid: ID!) {
+        repository(rid: $rid) {
+            references {
+                results { name target }
+                cursor
+            }
+        }
+    }
+    """
+
+    func loadReferences() async {
+        guard !isLoadingRefs else { return }
+        isLoadingRefs = true
+        error = nil
+
+        do {
+            let result = try await client.execute(
+                service: service,
+                query: Self.refsQuery,
+                variables: ["rid": repository.rid],
+                responseType: RefsResponse.self
+            )
+            let allRefs = result.repository?.references.results ?? []
+            branches = allRefs.filter { $0.name.hasPrefix("refs/heads/") }
+            tags = allRefs.filter { $0.name.hasPrefix("refs/tags/") }
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoadingRefs = false
+    }
+
+    // MARK: - README
+
+    private static let readmeQuery = """
+    query readme($rid: ID!) {
+        repository(rid: $rid) {
+            readme
+        }
+    }
+    """
+
+    private static func readmeFileQuery(filename: String) -> String {
+        """
+        query readmeFile($rid: ID!) {
+            repository(rid: $rid) {
+                readme: path(revspec: "HEAD", path: "\(filename)") {
+                    object {
+                        ... on TextBlob { text }
+                    }
+                }
+            }
+        }
+        """
+    }
+
+    private static let readmeFilenames = [
+        "README.md", "README.org", "README.txt", "README",
+        "readme.md", "readme.org"
+    ]
+
+    func loadReadme() async {
+        guard !isLoadingReadme, !readmeLoaded else { return }
+        isLoadingReadme = true
+        defer { isLoadingReadme = false }
+        error = nil
+
+        do {
+            // Step 1: Check the custom HTML readme set via the web UI
+            let result = try await client.execute(
+                service: service,
+                query: Self.readmeQuery,
+                variables: ["rid": repository.rid],
+                responseType: ReadmeResponse.self
+            )
+            if let html = result.repository?.readme, !html.isEmpty {
+                readmePath = nil
+                readmeContent = .html(html)
+                readmeLoaded = true
+                return
+            }
+
+            // Step 2: Try each README filename sequentially
+            for filename in Self.readmeFilenames {
+                let pathResult: PathResponse
+                do {
+                    pathResult = try await client.execute(
+                        service: service,
+                        query: Self.readmeFileQuery(filename: filename),
+                        variables: ["rid": repository.rid],
+                        responseType: PathResponse.self
+                    )
+                } catch {
+                    if isMissingGitReferenceError(error) {
+                        readmeContent = nil
+                        readmePath = nil
+                        readmeLoaded = true
+                        return
+                    }
+                    throw error
+                }
+                if let text = pathResult.repository?.readme?.object?.text, !text.isEmpty {
+                    readmePath = filename
+                    if filename.hasSuffix(".md") {
+                        readmeContent = .markdown(text)
+                    } else if filename.hasSuffix(".org") {
+                        readmeContent = .org(text)
+                    } else {
+                        readmeContent = .plainText(text)
+                    }
+                    readmeLoaded = true
+                    return
+                }
+            }
+
+            // Step 3: No readme found
+            readmeContent = nil
+            readmePath = nil
+            readmeLoaded = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func isMissingGitReferenceError(_ error: Error) -> Bool {
+        guard let srhtError = error as? SRHTError else { return false }
+        guard case .graphQLErrors(let errors) = srhtError else { return false }
+        return errors.contains { $0.message.localizedCaseInsensitiveContains("reference not found") }
+    }
+
+    // MARK: - Artifacts
+
+    private static let artifactsQuery = """
+    query artifacts($rid: ID!) {
+        repository(rid: $rid) {
+            references {
+                results {
+                    name
+                    artifacts {
+                        results {
+                            id
+                            filename
+                            checksum
+                            size
+                            url
+                        }
+                        cursor
+                    }
+                }
+                cursor
+            }
+        }
+    }
+    """
+
+    func loadArtifacts() async {
+        guard !isLoadingArtifacts else { return }
+        isLoadingArtifacts = true
+        error = nil
+
+        do {
+            let result = try await client.execute(
+                service: service,
+                query: Self.artifactsQuery,
+                variables: ["rid": repository.rid],
+                responseType: ArtifactsResponse.self
+            )
+            // Only include references that have at least one artifact.
+            referenceArtifacts = (result.repository?.references.results ?? [])
+                .filter { !$0.artifacts.results.isEmpty }
+                .map { ReferenceWithArtifacts(name: $0.name, artifacts: $0.artifacts.results) }
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoadingArtifacts = false
+    }
+}

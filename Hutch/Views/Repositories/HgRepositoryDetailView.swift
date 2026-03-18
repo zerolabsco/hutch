@@ -11,19 +11,46 @@ struct HgRepositoryDetailView: View {
     @State private var viewModel: HgRepositoryDetailViewModel?
     @State private var selectedTab: HgRepositoryDetailViewModel.Tab = .summary
     @State private var showSettings = false
+    @State private var isShowingRepositoryDetails = false
+    @State private var showBrowseRefPicker = false
+
+    private var shareURL: URL? {
+        guard let viewModel, let selectedFilePath = viewModel.selectedFilePath else { return nil }
+        return SRHTWebURL.file(
+            repository: repository,
+            revspec: viewModel.browseRevspec,
+            path: selectedFilePath
+        )
+    }
 
     var body: some View {
         Group {
             if let viewModel {
                 content(viewModel)
             } else {
-                ProgressView()
+                SRHTLoadingStateView(message: "Loading repository…")
             }
         }
         .navigationTitle(repository.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if selectedTab == .browse, let viewModel {
+                    Button {
+                        showBrowseRefPicker = true
+                    } label: {
+                        Label(
+                            browseRevspecLabel(viewModel.browseRevspec),
+                            systemImage: "arrow.triangle.branch"
+                        )
+                        .font(.subheadline)
+                    }
+                }
+
+                SRHTShareButton(url: SRHTWebURL.repository(repository), target: .repository) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+
                 Button {
                     showSettings = true
                 } label: {
@@ -40,6 +67,11 @@ struct HgRepositoryDetailView: View {
                     onDeleted?()
                 }
             )
+        }
+        .sheet(isPresented: $showBrowseRefPicker) {
+            if let viewModel {
+                HgBrowseRefPickerSheet(viewModel: viewModel, isPresented: $showBrowseRefPicker)
+            }
         }
         .task {
             if viewModel == nil {
@@ -82,82 +114,134 @@ struct HgRepositoryDetailView: View {
                 revisionsList(viewModel.bookmarks, emptyTitle: "No Bookmarks", emptyDescription: "This repository does not have any bookmarks.")
             }
         }
-        .alert("Error", isPresented: .constant(viewModel.error != nil)) {
-            Button("OK") { viewModel.error = nil }
-        } message: {
-            if let error = viewModel.error {
-                Text(error)
+        .srhtErrorBanner(error: Binding(
+            get: { viewModel.error },
+            set: { viewModel.error = $0 }
+        ))
+    }
+
+    @ViewBuilder
+    private func summaryTab(_ viewModel: HgRepositoryDetailViewModel) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                headerSection
+                metadataSection(viewModel)
+                repositoryDetailsSection(viewModel)
+                latestChangeSection(viewModel)
+                readmeSection(viewModel)
+            }
+            .padding()
+        }
+        .overlay {
+            if viewModel.isLoadingSummary, !viewModel.summaryLoaded, viewModel.tip == nil, viewModel.readmeContent == nil {
+                SRHTLoadingStateView(message: "Loading repository…")
+            } else if let error = viewModel.error, !viewModel.summaryLoaded, viewModel.tip == nil, viewModel.readmeContent == nil {
+                SRHTErrorStateView(
+                    title: "Couldn't Load Repository",
+                    message: error,
+                    retryAction: { await viewModel.loadSummary() }
+                )
+            }
+        }
+        .refreshable {
+            await viewModel.loadSummary()
+        }
+    }
+
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(repository.owner.canonicalName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(repository.name)
+                .font(.largeTitle.weight(.semibold))
+            if let description = repository.description, !description.isEmpty {
+                Text(description)
+                    .font(.body)
             }
         }
     }
 
     @ViewBuilder
-    private func summaryTab(_ viewModel: HgRepositoryDetailViewModel) -> some View {
-        if viewModel.isLoadingSummary && !viewModel.summaryLoaded {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    summaryCards(viewModel)
+    private func metadataSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SummaryMetadataRow(
+                icon: "arrow.triangle.branch",
+                title: viewModel.tip?.branch ?? repository.head?.name ?? repositoryVisibilityLabel(repository.visibility)
+            )
 
-                    if let readmeView = readmeContentView(viewModel) {
-                        readmeView
-                    } else {
-                        ContentUnavailableView(
-                            "No README",
-                            systemImage: "doc.text",
-                            description: Text("This repository does not have a README file.")
-                        )
-                    }
-                }
-                .padding()
-            }
-            .refreshable {
-                await viewModel.loadSummary()
+            if let readmePath = viewModel.readmePath {
+                SummaryMetadataRow(
+                    icon: "doc.text",
+                    title: readmePath
+                )
             }
         }
     }
 
-    private func summaryCards(_ viewModel: HgRepositoryDetailViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LabeledContent("Visibility", value: visibilityLabel(repository.visibility))
-            LabeledContent("Publishing", value: viewModel.nonPublishing ? "Non-publishing" : "Publishing")
-
-            if let description = repository.description, !description.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Description")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                    Text(description)
-                }
+    private func repositoryDetailsSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
+        DisclosureGroup(isExpanded: $isShowingRepositoryDetails) {
+            VStack(alignment: .leading, spacing: 12) {
+                SummaryDetailRow(label: "Visibility", value: repositoryVisibilityLabel(repository.visibility))
+                SummaryDetailRow(label: "Publishing", value: viewModel.nonPublishing ? "Non-publishing" : "Publishing")
+                SummaryDetailRow(label: "Read-only", value: repositoryCloneURLs(for: repository).readOnly, monospace: true)
+                SummaryDetailRow(label: "Read/write", value: repositoryCloneURLs(for: repository).readWrite, monospace: true)
+                SummaryDetailRow(label: "RID", value: repository.rid, monospace: true)
             }
+            .padding(.top, 8)
+        } label: {
+            Text("Repository Details")
+                .font(.subheadline.weight(.medium))
+        }
+    }
 
-            if let tip = viewModel.tip {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Tip")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                    Text(tip.title)
-                        .font(.headline)
-                    HStack {
-                        Text(tip.displayShortId)
-                            .font(.caption.monospaced())
-                        Spacer()
-                        Text(tip.author.time.relativeDescription)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(tip.author.name)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+    @ViewBuilder
+    private func latestChangeSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if viewModel.isLoadingSummary && viewModel.tip == nil {
+                SRHTLoadingStateView(message: "Loading latest change…")
+                    .frame(maxWidth: .infinity)
+            } else if let tip = viewModel.tip {
+                SummaryMetadataRow(
+                    icon: "arrow.trianglehead.clockwise",
+                    title: tip.title,
+                    subtitle: "\(tip.displayShortId) — \(tip.author)"
+                )
+            } else if let error = viewModel.error, !viewModel.summaryLoaded {
+                SRHTErrorStateView(
+                    title: "Couldn't Load Latest Change",
+                    message: error,
+                    retryAction: { await viewModel.loadSummary() }
+                )
+            } else {
+                ContentUnavailableView(
+                    "No Recent Revisions",
+                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                    description: Text("This repository does not have any revision history yet.")
+                )
             }
         }
-        .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func readmeSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
+        if viewModel.isLoadingSummary && !viewModel.summaryLoaded {
+            SRHTLoadingStateView(message: "Loading README…")
+        } else if let readmeView = readmeContentView(viewModel) {
+            readmeView
+        } else if let error = viewModel.error, !viewModel.summaryLoaded {
+            SRHTErrorStateView(
+                title: "Couldn't Load README",
+                message: error,
+                retryAction: { await viewModel.loadSummary() }
+            )
+        } else {
+            ContentUnavailableView(
+                "No README",
+                systemImage: "doc.text",
+                description: Text("This repository does not have a README file.")
+            )
+        }
     }
 
     @ViewBuilder
@@ -166,21 +250,31 @@ struct HgRepositoryDetailView: View {
             browseBreadcrumbs(viewModel)
             Divider()
 
-            if viewModel.isLoadingBrowse {
-                Spacer()
-                ProgressView()
-                Spacer()
+            if viewModel.isLoadingBrowse, viewModel.files.isEmpty, viewModel.selectedFilePath == nil {
+                SRHTLoadingStateView(message: "Loading files…")
             } else if let selectedFilePath = viewModel.selectedFilePath, let fileContent = viewModel.fileContent {
-                GeometryReader { geometry in
-                    ScrollView([.vertical, .horizontal]) {
-                        Text(fileContent)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(
-                                minWidth: geometry.size.width,
-                                minHeight: geometry.size.height,
-                                alignment: .topLeading
-                            )
-                            .padding()
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        SRHTShareButton(url: shareURL, target: .file) {
+                            Label("Share File", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+
+                    GeometryReader { geometry in
+                        ScrollView([.vertical, .horizontal]) {
+                            Text(fileContent)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(
+                                    minWidth: geometry.size.width,
+                                    minHeight: geometry.size.height,
+                                    alignment: .topLeading
+                                )
+                                .padding()
+                        }
                     }
                 }
                 .safeAreaInset(edge: .bottom) {
@@ -193,6 +287,12 @@ struct HgRepositoryDetailView: View {
                     .background(.bar)
                 }
                 .navigationTitle(selectedFilePath.split(separator: "/").last.map(String.init) ?? repository.name)
+            } else if let error = viewModel.error, viewModel.files.isEmpty {
+                SRHTErrorStateView(
+                    title: "Couldn't Load Files",
+                    message: error,
+                    retryAction: { await viewModel.loadBrowseRoot() }
+                )
             } else if viewModel.files.isEmpty {
                 ContentUnavailableView(
                     "No Files",
@@ -201,13 +301,7 @@ struct HgRepositoryDetailView: View {
                 )
             } else {
                 List(viewModel.files) { file in
-                    Label {
-                        Text(displayFileName(file.name))
-                            .font(.body.monospaced())
-                    } icon: {
-                        Image(systemName: file.isDirectory ? "folder.fill" : "doc")
-                            .foregroundStyle(file.isDirectory ? .blue : .secondary)
-                    }
+                    HgFileRow(file: file)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         Task { await viewModel.openFile(file) }
@@ -282,8 +376,14 @@ struct HgRepositoryDetailView: View {
         }
         .listStyle(.plain)
         .overlay {
-            if viewModel.isLoadingLog {
-                ProgressView()
+            if viewModel.isLoadingLog, viewModel.log.isEmpty {
+                SRHTLoadingStateView(message: "Loading revisions…")
+            } else if let error = viewModel.error, viewModel.log.isEmpty {
+                SRHTErrorStateView(
+                    title: "Couldn't Load Revisions",
+                    message: error,
+                    retryAction: { await viewModel.loadLog() }
+                )
             } else if viewModel.log.isEmpty {
                 ContentUnavailableView(
                     "No Revisions",
@@ -298,7 +398,7 @@ struct HgRepositoryDetailView: View {
     }
 
     @ViewBuilder
-    private func revisionsList(_ revisions: [HgRevision], emptyTitle: String, emptyDescription: String) -> some View {
+    private func revisionsList(_ revisions: [HgNamedRevision], emptyTitle: String, emptyDescription: String) -> some View {
         if revisions.isEmpty {
             ContentUnavailableView(
                 emptyTitle,
@@ -307,7 +407,7 @@ struct HgRepositoryDetailView: View {
             )
         } else {
             List(revisions) { revision in
-                revisionRow(revision)
+                namedRevisionRow(revision)
             }
             .listStyle(.plain)
         }
@@ -335,9 +435,7 @@ struct HgRepositoryDetailView: View {
             }
 
             HStack {
-                Text(revision.author.name)
-                Spacer()
-                Text(revision.author.time.relativeDescription)
+                Text(revision.author)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -345,60 +443,52 @@ struct HgRepositoryDetailView: View {
         .padding(.vertical, 4)
     }
 
-    @ViewBuilder
-    private func readmeContentView(_ viewModel: HgRepositoryDetailViewModel) -> AnyView? {
-        let imageURLResolver = makeImageURLResolver(viewModel)
+    private func namedRevisionRow(_ revision: HgNamedRevision) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(revision.name)
+                .font(.headline)
+            Spacer()
+            Text(revision.displayShortId)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 6)
+    }
 
+    private func readmeContentView(_ viewModel: HgRepositoryDetailViewModel) -> AnyView? {
         guard let content = viewModel.readmeContent else {
             return nil
         }
 
-        switch content {
-        case .html(let html):
-            return AnyView(
-                HTMLWebView(html: html, colorScheme: colorScheme)
-                    .frame(minHeight: 400)
+        return AnyView(
+            RenderedMarkupContentView(
+                content: sharedReadmeContent(from: content),
+                readmePath: viewModel.readmePath,
+                colorScheme: colorScheme,
+                ownerCanonicalName: repository.owner.canonicalName,
+                repositoryName: repository.name,
+                repositoryHost: "hg.sr.ht"
             )
-        case .markdown(let text):
-            return AnyView(
-                HTMLWebView(
-                    html: markdownToHTML(text, imageURLResolver: imageURLResolver),
-                    colorScheme: colorScheme
-                )
-                .frame(minHeight: 400)
-            )
-        case .org(let text):
-            return AnyView(
-                HTMLWebView(
-                    html: orgToHTML(text, imageURLResolver: imageURLResolver),
-                    colorScheme: colorScheme
-                )
-                .frame(minHeight: 400)
-            )
-        case .plainText(let text):
-            return AnyView(
-                Text(text)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
-        }
+        )
     }
 
-    private func makeImageURLResolver(_ viewModel: HgRepositoryDetailViewModel) -> (String) -> String? {
-        let owner = repository.owner.canonicalName
-        let repositoryName = repository.name
-        let readmePath = viewModel.readmePath
+    private func browseRevspecLabel(_ revspec: String) -> String {
+        if revspec == "tip" {
+            return "tip"
+        }
+        return revspec
+    }
 
-        return { source in
-            resolveRepositoryAssetURL(
-                source,
-                owner: owner,
-                repositoryName: repositoryName,
-                readmePath: readmePath
-            )?
-            .replacingOccurrences(of: "git.sr.ht", with: "hg.sr.ht")
+    private func sharedReadmeContent(from content: HgRepositoryDetailViewModel.ReadmeContent) -> RenderedMarkupContent {
+        switch content {
+        case .html(let html):
+            .html(html)
+        case .markdown(let text):
+            .markdown(text)
+        case .org(let text):
+            .org(text)
+        case .plainText(let text):
+            .plainText(text)
         }
     }
 
@@ -406,14 +496,144 @@ struct HgRepositoryDetailView: View {
         name.hasSuffix("/") ? String(name.dropLast()) : name
     }
 
-    private func visibilityLabel(_ visibility: Visibility) -> String {
-        switch visibility {
-        case .public:
-            return "Public"
-        case .unlisted:
-            return "Unlisted"
-        case .private:
-            return "Private"
+}
+
+private struct HgBrowseRefPickerSheet: View {
+    let viewModel: HgRepositoryDetailViewModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        Task {
+                            await viewModel.changeBrowseRevspec("tip")
+                            isPresented = false
+                        }
+                    } label: {
+                        refRow(
+                            title: "tip",
+                            systemImage: "arrow.triangle.branch",
+                            color: .blue,
+                            isSelected: viewModel.browseRevspec == "tip"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if !viewModel.branches.isEmpty {
+                    Section("Branches") {
+                        ForEach(viewModel.branches) { revision in
+                            Button {
+                                Task {
+                                    await viewModel.changeBrowseRevspec(revision.name)
+                                    isPresented = false
+                                }
+                            } label: {
+                                refRow(
+                                    title: revision.name,
+                                    systemImage: "arrow.triangle.branch",
+                                    color: .blue,
+                                    isSelected: viewModel.browseRevspec == revision.name
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if !viewModel.tags.isEmpty {
+                    Section("Tags") {
+                        ForEach(viewModel.tags) { revision in
+                            Button {
+                                Task {
+                                    await viewModel.changeBrowseRevspec(revision.name)
+                                    isPresented = false
+                                }
+                            } label: {
+                                refRow(
+                                    title: revision.name,
+                                    systemImage: "tag",
+                                    color: .orange,
+                                    isSelected: viewModel.browseRevspec == revision.name
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if !viewModel.bookmarks.isEmpty {
+                    Section("Bookmarks") {
+                        ForEach(viewModel.bookmarks) { revision in
+                            Button {
+                                Task {
+                                    await viewModel.changeBrowseRevspec(revision.name)
+                                    isPresented = false
+                                }
+                            } label: {
+                                refRow(
+                                    title: revision.name,
+                                    systemImage: "bookmark",
+                                    color: .purple,
+                                    isSelected: viewModel.browseRevspec == revision.name
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Select Ref")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+            }
         }
+    }
+
+    private func refRow(title: String, systemImage: String, color: Color, isSelected: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundStyle(color)
+
+            Text(title)
+                .font(.body.monospaced())
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tint)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+private struct HgFileRow: View {
+    let file: HgFile
+
+    var body: some View {
+        Label {
+            Text(displayName)
+                .font(.body.monospaced())
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: file.isDirectory ? "folder.fill" : "doc")
+                .foregroundStyle(file.isDirectory ? .blue : .secondary)
+        }
+    }
+
+    private var displayName: String {
+        file.name.hasSuffix("/") ? String(file.name.dropLast()) : file.name
     }
 }

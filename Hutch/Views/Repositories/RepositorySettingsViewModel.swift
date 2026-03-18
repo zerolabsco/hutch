@@ -63,6 +63,7 @@ final class RepositorySettingsViewModel {
 
     let repositoryId: Int
     let repositoryRid: String
+    let service: SRHTService
     private let client: SRHTClient
 
     // MARK: - Info fields
@@ -107,6 +108,7 @@ final class RepositorySettingsViewModel {
     ) {
         self.repositoryId = repository.id
         self.repositoryRid = repository.rid
+        self.service = repository.service
         self.client = client
         self.editedDescription = repository.description ?? ""
         self.editedVisibility = repository.visibility
@@ -143,7 +145,7 @@ final class RepositorySettingsViewModel {
                 "HEAD": editedHead
             ]
             _ = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.updateRepoMutation,
                 variables: ["id": repositoryId, "input": input],
                 responseType: UpdateRepoResponse.self
@@ -165,7 +167,7 @@ final class RepositorySettingsViewModel {
                 "name": editedName
             ]
             let result = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.updateRepoMutation,
                 variables: ["id": repositoryId, "input": input],
                 responseType: UpdateRepoResponse.self
@@ -207,6 +209,16 @@ final class RepositorySettingsViewModel {
     }
     """
 
+    private static let userLookupQuery = """
+    query userLookup($username: String!) {
+        user(username: $username) {
+            id
+            username
+            canonicalName
+        }
+    }
+    """
+
     func loadACLs() async {
         guard !isLoadingACLs else { return }
         isLoadingACLs = true
@@ -214,7 +226,7 @@ final class RepositorySettingsViewModel {
 
         do {
             let result = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.aclsQuery,
                 variables: ["rid": repositoryRid],
                 responseType: ACLResponse.self
@@ -234,7 +246,7 @@ final class RepositorySettingsViewModel {
 
         do {
             let result = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.updateACLMutation,
                 variables: [
                     "repoId": repositoryId,
@@ -262,7 +274,7 @@ final class RepositorySettingsViewModel {
 
         do {
             _ = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.deleteACLMutation,
                 variables: ["id": entry.id],
                 responseType: DeleteACLResponse.self
@@ -288,7 +300,7 @@ final class RepositorySettingsViewModel {
 
         do {
             _ = try await client.execute(
-                service: .git,
+                service: service,
                 query: Self.deleteRepoMutation,
                 variables: ["id": repositoryId],
                 responseType: DeleteRepoResponse.self

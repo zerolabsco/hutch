@@ -39,31 +39,30 @@ func repositoryVisibilityLabel(_ visibility: Visibility) -> String {
     }
 }
 
-struct RepositorySummaryCard<Content: View>: View {
+struct SummaryMetadataRow: View {
+    let icon: String
     let title: String
-    @ViewBuilder let content: Content
-
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
+    var subtitle: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.caption.weight(.semibold))
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
                 .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+                .frame(width: 18)
 
-            content
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
-struct RepositorySummaryField: View {
+struct SummaryDetailRow: View {
     let label: String
     let value: String
     var monospace: Bool = false
@@ -76,26 +75,6 @@ struct RepositorySummaryField: View {
             Text(value)
                 .font(monospace ? .system(.body, design: .monospaced) : .body)
                 .textSelection(.enabled)
-        }
-    }
-}
-
-struct RepositorySummaryListRow: View {
-    let label: String
-    let values: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if values.isEmpty {
-                Text("None")
-                    .foregroundStyle(.tertiary)
-            } else {
-                Text(values.joined(separator: ", "))
-            }
         }
     }
 }

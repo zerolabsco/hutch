@@ -1,16 +1,14 @@
 import SwiftUI
 
-struct RepositorySettingsView: View {
+struct HgRepositorySettingsView: View {
     let repository: RepositorySummary
-    let branches: [Reference]
     let client: SRHTClient
-    let onRenamed: (String) -> Void
     let onDeleted: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel: RepositorySettingsViewModel?
+    @State private var viewModel: HgRepositorySettingsViewModel?
     @State private var showDeleteConfirmation = false
-    @State private var pendingACLDeletion: ACLEntry?
+    @State private var pendingACLDeletion: HgACLEntry?
 
     var body: some View {
         NavigationStack {
@@ -31,25 +29,24 @@ struct RepositorySettingsView: View {
         }
         .task {
             if viewModel == nil {
-                let vm = RepositorySettingsViewModel(
-                    repository: repository,
-                    branches: branches,
-                    client: client
-                )
+                let vm = HgRepositorySettingsViewModel(repository: repository, client: client)
                 viewModel = vm
-                await vm.loadACLs()
+                async let info: () = vm.loadRepositoryInfo()
+                async let acls: () = vm.loadACLs()
+                _ = await (info, acls)
             }
         }
     }
 
     @ViewBuilder
-    private func settingsForm(_ viewModel: RepositorySettingsViewModel) -> some View {
+    private func settingsForm(_ viewModel: HgRepositorySettingsViewModel) -> some View {
         @Bindable var vm = viewModel
 
         Form {
             infoSection(viewModel)
-            renameSection(viewModel)
             accessSection(viewModel)
+            featuresSection(viewModel)
+            histeditSection(viewModel)
             deleteSection(viewModel)
         }
         .srhtErrorBanner(error: $vm.error)
@@ -93,10 +90,8 @@ struct RepositorySettingsView: View {
         }
     }
 
-    // MARK: - Info Section
-
     @ViewBuilder
-    private func infoSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+    private func infoSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
         Section("Info") {
             LabeledContent("Name") {
                 Text(repository.name)
@@ -110,15 +105,6 @@ struct RepositorySettingsView: View {
                 Text("Public").tag(Visibility.public)
                 Text("Unlisted").tag(Visibility.unlisted)
                 Text("Private").tag(Visibility.private)
-            }
-
-            if !viewModel.branches.isEmpty {
-                Picker("Default Branch", selection: Bindable(viewModel).editedHead) {
-                    ForEach(viewModel.branches, id: \.name) { branch in
-                        let name = branch.name.replacingOccurrences(of: "refs/heads/", with: "")
-                        Text(name).tag(name)
-                    }
-                }
             }
 
             Button {
@@ -136,47 +122,9 @@ struct RepositorySettingsView: View {
         }
     }
 
-    // MARK: - Rename Section
-
     @ViewBuilder
-    private func renameSection(_ viewModel: RepositorySettingsViewModel) -> some View {
-        Section {
-            TextField("New repository name", text: Bindable(viewModel).editedName)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-
-            Text("This will change the repository URL. Existing clones will be redirected but links may break.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Button {
-                Task {
-                    await viewModel.rename()
-                    if let newName = viewModel.updatedName {
-                        onRenamed(newName)
-                        dismiss()
-                    }
-                }
-            } label: {
-                if viewModel.isRenaming {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Rename Repository")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .disabled(viewModel.isRenaming || viewModel.editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } header: {
-            Text("Rename")
-        }
-    }
-
-    // MARK: - Access Section
-
-    @ViewBuilder
-    private func accessSection(_ viewModel: RepositorySettingsViewModel) -> some View {
-        Section {
+    private func accessSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
+        Section("Access") {
             if viewModel.isLoadingACLs {
                 HStack {
                     Spacer()
@@ -205,7 +153,6 @@ struct RepositorySettingsView: View {
                 }
             }
 
-            // Add ACL form
             HStack {
                 TextField("Username or ~username", text: Bindable(viewModel).newACLEntity)
                     .autocorrectionDisabled()
@@ -232,15 +179,48 @@ struct RepositorySettingsView: View {
             Text("Add a SourceHut user and choose read-only or read/write access.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        } header: {
-            Text("Access")
         }
     }
 
-    // MARK: - Delete Section
+    @ViewBuilder
+    private func featuresSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
+        Section("Features") {
+            Toggle("Hide this repository from public listings", isOn: Bindable(viewModel).editedNonPublishing)
+
+            Button {
+                Task { await viewModel.saveInfo() }
+            } label: {
+                if viewModel.isSavingInfo {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Save Changes")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .disabled(viewModel.isSavingInfo)
+        }
+    }
 
     @ViewBuilder
-    private func deleteSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+    private func histeditSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
+        Section("Histedit") {
+            TextField("Revision hash", text: Bindable(viewModel).histeditRevision)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .disabled(true)
+
+            Text("Removing revisions is not available through the public hg.sr.ht API, so Hutch can’t do this yet.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button("Remove Revision", role: .destructive) {}
+                .disabled(true)
+        }
+    }
+
+    @ViewBuilder
+    private func deleteSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
         Section {
             Button(role: .destructive) {
                 showDeleteConfirmation = true

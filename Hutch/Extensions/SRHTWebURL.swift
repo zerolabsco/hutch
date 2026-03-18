@@ -9,6 +9,41 @@ enum SRHTWebURL {
         )
     }
 
+    static func commit(repository: RepositorySummary, commitId: String) -> URL? {
+        userScopedURL(
+            host: "\(repository.service.rawValue).sr.ht",
+            ownerCanonicalName: repository.owner.canonicalName,
+            pathComponents: [repository.name, commitPathComponent(for: repository.service), commitId]
+        )
+    }
+
+    static func file(repository: RepositorySummary, revspec: String, path: String) -> URL? {
+        switch repository.service {
+        case .git:
+            return userScopedURL(
+                host: "git.sr.ht",
+                ownerCanonicalName: repository.owner.canonicalName,
+                pathComponents: [repository.name, "tree", revspec, "item"] + pathComponents(from: path)
+            )
+        case .hg:
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = "hg.sr.ht"
+
+            let ownerUsername = username(from: repository.owner.canonicalName)
+            let encodedRepository = repository.name.addingPercentEncoding(withAllowedCharacters: pathComponentCharacterSet) ?? repository.name
+            let encodedPath = path.split(separator: "/").map {
+                String($0).addingPercentEncoding(withAllowedCharacters: pathComponentCharacterSet) ?? String($0)
+            }.joined(separator: "/")
+
+            components.percentEncodedPath = "/~\(ownerUsername)/\(encodedRepository)/browse/\(encodedPath)"
+            components.queryItems = [URLQueryItem(name: "rev", value: revspec)]
+            return components.url
+        default:
+            return nil
+        }
+    }
+
     static func build(jobId: Int, ownerCanonicalName: String) -> URL? {
         userScopedURL(
             host: "builds.sr.ht",
@@ -35,7 +70,7 @@ enum SRHTWebURL {
 
     static func profile(canonicalName: String) -> URL? {
         userScopedURL(
-            host: "meta.sr.ht",
+            host: "sr.ht",
             ownerCanonicalName: canonicalName,
             pathComponents: []
         )
@@ -76,9 +111,22 @@ enum SRHTWebURL {
         return canonicalName
     }
 
+    private static func commitPathComponent(for service: SRHTService) -> String {
+        switch service {
+        case .hg:
+            return "rev"
+        default:
+            return "commit"
+        }
+    }
+
     private static let pathComponentCharacterSet: CharacterSet = {
         var characterSet = CharacterSet.urlPathAllowed
         characterSet.remove(charactersIn: "/")
         return characterSet
     }()
+
+    private static func pathComponents(from path: String) -> [String] {
+        path.split(separator: "/").map(String.init)
+    }
 }
