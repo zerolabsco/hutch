@@ -6,8 +6,6 @@ Sourcehut on iOS
 ## Table of Contents
 
 - [Introduction](#introduction)
-<!-- - [Features](#features)
-- [Screenshots](#screenshots) -->
 - [Installation](#installation)
 - [Usage](#usage)
 - [Contributing](#contributing)
@@ -17,40 +15,6 @@ Sourcehut on iOS
 ## Introduction
 
 **Hutch** is a native Swift client on iOS for [Sourcehut](https://sr.ht).
-
-<!-- TODO
-
-## Features
-
-- **Seamless Integration**: Effortlessly connect to your sr.ht account.
-- **Repository Access**: View and manage your repositories in one convenient
-  location.
-- **Ticket Management**: Create and track tickets associated with your projects.
-- **Profile Management**: Update your account description, keys, and
-  preferences.
-
-For a complete list of features, visit [here](http://example.com/features).
-
-## Roadmap
-
-- **Build Notifications**: Get real-time updates on your builds and status
-  changes.
-- **Dashboard Access**: View and manage your projects in one convenient
-  location.
-
-To see future planned features and updates, check out the project roadmap
-[here](http://example.com/roadmap).
-
-## Screenshots
-
-Here are some screenshots of the app in action:
-
-![Screenshot 1](https://img.cleberg.net/apps/hutch/screenshots/repositories.png)
-![Screenshot 2](https://img.cleberg.net/apps/hutch/screenshots/builds.png)
-![Screenshot 3](https://img.cleberg.net/apps/hutch/screenshots/tickets.png)
-![Screenshot 4](https://img.cleberg.net/apps/hutch/screenshots/settings.png)
-
--->
 
 ## Installation
 
