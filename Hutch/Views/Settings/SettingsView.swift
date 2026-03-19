@@ -695,7 +695,7 @@ private struct AboutView: View {
                 Link(destination: URL(string: "https://man.sr.ht")!) {
                     SwiftUI.Label("SourceHut Manuals", systemImage: "book")
                 }
-                Link(destination: URL(string: "https://git.sr.ht/~ccleberg/Hutch")!) {
+                Link(destination: URL(string: "https://sr.ht/~ccleberg/Hutch")!) {
                     SwiftUI.Label("Project Repository", systemImage: "folder")
                 }
             }
