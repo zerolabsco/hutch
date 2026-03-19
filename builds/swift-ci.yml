@@ -1,0 +1,35 @@
+image: swift:5.10
+
+packages:
+  - git
+  - ca-certificates
+
+sources:
+  - https://git.sr.ht/~ccleberg/Hutch
+
+tasks:
+  - security-secrets: |
+      set -euo pipefail
+      cd Hutch
+      VERSION=8.24.2
+      ARCHIVE="gitleaks_${VERSION}_linux_x64.tar.gz"
+      URL="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${ARCHIVE}"
+      curl -fsSLo /tmp/gitleaks.tar.gz "$URL"
+      tar -xzf /tmp/gitleaks.tar.gz -C /tmp
+      install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+      gitleaks git --redact --verbose .
+
+  - security-deps-lockfile: |
+      set -euo pipefail
+      cd Hutch
+      swift package resolve --only-use-versions-from-resolved-file
+
+  - test: |
+      set -euo pipefail
+      cd Hutch
+      swift test --parallel
+
+  - build: |
+      set -euo pipefail
+      cd Hutch
+      swift build -c release
