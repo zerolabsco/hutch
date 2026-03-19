@@ -27,6 +27,7 @@ enum RepositoryCreationService: String, CaseIterable, Identifiable, Sendable {
 final class RepositoryListViewModel {
 
     private(set) var repositories: [RepositorySummary] = []
+    private(set) var latestBuildStatuses: [String: RepositoryBuildStatus] = [:]
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isRefreshing = false
@@ -41,9 +42,11 @@ final class RepositoryListViewModel {
     private(set) var hasLoadedSearchIndex = false
     private var searchIndex: [RepositorySummary] = []
     private let client: SRHTClient
+    private var buildStatusTask: Task<Void, Never>?
 
     private static let gitCacheKey = "git.repositories"
     private static let hgCacheKey = "hg.repositories"
+    private static let buildsCacheKey = "builds.repository-status"
     private static let minimumRemoteSearchLength = 3
 
     init(client: SRHTClient) {
@@ -117,6 +120,20 @@ final class RepositoryListViewModel {
     }
     """
 
+    private static let buildsQuery = """
+    query jobs($cursor: Cursor) {
+        jobs(cursor: $cursor) {
+            results {
+                id
+                created
+                status
+                manifest
+            }
+            cursor
+        }
+    }
+    """
+
     // MARK: - Public API
 
     /// Fetch the first page of repositories. Shows cached data instantly if available,
@@ -168,6 +185,7 @@ final class RepositoryListViewModel {
             }
 
             repositories = filteredResults.sorted(by: repositorySortOrder)
+            scheduleBuildStatusRefresh()
         } catch {
             // Only show error if we have no cached data to fall back on
             if repositories.isEmpty {
@@ -245,6 +263,7 @@ final class RepositoryListViewModel {
             }
             repositories.insert(repository, at: 0)
             insertIntoSearchIndex(repository)
+            scheduleBuildStatusRefresh()
             return repository
         } catch {
             self.error = repositoryCreationErrorMessage(for: error)
@@ -304,6 +323,22 @@ final class RepositoryListViewModel {
 
     private struct CreateHGRepositoryResponse: Decodable, Sendable {
         let createRepository: HGRepositoryPayload
+    }
+
+    private struct BuildJobsResponse: Decodable, Sendable {
+        let jobs: BuildJobsPage
+    }
+
+    private struct BuildJobsPage: Decodable, Sendable {
+        let results: [BuildStatusPayload]
+        let cursor: String?
+    }
+
+    private struct BuildStatusPayload: Decodable, Sendable {
+        let id: Int
+        let created: Date
+        let status: JobStatus
+        let manifest: String?
     }
 
     private struct HGPage: Decodable, Sendable {
@@ -378,6 +413,10 @@ final class RepositoryListViewModel {
 
     private var repositoriesForSearchIndex: [RepositorySummary] {
         searchIndex
+    }
+
+    func latestBuildStatus(for repository: RepositorySummary) -> RepositoryBuildStatus {
+        latestBuildStatuses[Self.buildStatusCacheKey(for: repository)] ?? RepositoryBuildStatus.none
     }
 
     private func fetchPage(
@@ -514,7 +553,92 @@ final class RepositoryListViewModel {
             let sortedRepositories = cachedRepositories.sorted(by: repositorySortOrder)
             repositories = sortedRepositories
             updateSearchIndex(with: sortedRepositories)
+            scheduleBuildStatusRefresh()
         }
+    }
+
+    private func scheduleBuildStatusRefresh() {
+        let repositoriesSnapshot = repositories
+        buildStatusTask?.cancel()
+        buildStatusTask = Task { [weak self] in
+            guard let self else { return }
+            await self.loadLatestBuildStatuses(for: repositoriesSnapshot)
+        }
+    }
+
+    private func loadLatestBuildStatuses(for repositories: [RepositorySummary]) async {
+        let targetKeys = Set(repositories.map(Self.buildStatusCacheKey(for:)))
+        guard !targetKeys.isEmpty else {
+            await MainActor.run {
+                latestBuildStatuses = [:]
+            }
+            return
+        }
+
+        var resolvedStatuses: [String: (Date, RepositoryBuildStatus)] = [:]
+        var cursor: String?
+        var shouldUseCache = true
+
+        do {
+            while !Task.isCancelled {
+                let page = try await fetchBuildStatusPage(cursor: cursor, useCache: shouldUseCache)
+                shouldUseCache = false
+
+                for job in page.results {
+                    let jobStatus = Self.repositoryBuildStatus(for: job.status)
+                    guard let manifest = job.manifest else { continue }
+
+                    for key in Self.buildStatusKeys(in: manifest) where targetKeys.contains(key) {
+                        let existing = resolvedStatuses[key]
+                        if existing == nil || existing!.0 < job.created {
+                            resolvedStatuses[key] = (job.created, jobStatus)
+                        }
+                    }
+                }
+
+                if resolvedStatuses.count == targetKeys.count || page.cursor == nil {
+                    break
+                }
+                cursor = page.cursor
+            }
+
+            let finalStatuses = targetKeys.reduce(into: [String: RepositoryBuildStatus]()) { result, key in
+                result[key] = resolvedStatuses[key]?.1 ?? RepositoryBuildStatus.none
+            }
+
+            await MainActor.run {
+                guard repositories == self.repositories else { return }
+                latestBuildStatuses = finalStatuses
+            }
+        } catch {
+            // Build status is auxiliary data for the list. Leave the default gray state on failure.
+        }
+    }
+
+    private func fetchBuildStatusPage(cursor: String?, useCache: Bool) async throws -> BuildJobsPage {
+        var variables: [String: any Sendable] = [:]
+        if let cursor {
+            variables["cursor"] = cursor
+        }
+
+        if useCache && cursor == nil {
+            let result = try await client.executeAndCache(
+                service: .builds,
+                query: Self.buildsQuery,
+                variables: variables.isEmpty ? nil : variables,
+                responseType: BuildJobsResponse.self,
+                cacheKey: Self.buildsCacheKey
+            )
+            return result.jobs
+        }
+
+        let result = try await client.execute(
+            service: .builds,
+            query: Self.buildsQuery,
+            variables: variables.isEmpty ? nil : variables,
+            responseType: BuildJobsResponse.self
+        )
+        return result.jobs
     }
 
     private func fetchRepositories(for service: SRHTService, useCache: Bool) async throws -> [RepositorySummary] {
@@ -578,6 +702,67 @@ final class RepositoryListViewModel {
         return repositories.filter { repo in
             repo.name.lowercased().contains(lowercasedQuery) ||
             repo.description?.lowercased().contains(lowercasedQuery) ?? false
+        }
+    }
+
+    nonisolated static func buildStatusCacheKey(for repository: RepositorySummary) -> String {
+        buildStatusCacheKey(
+            service: repository.service,
+            ownerCanonicalName: repository.owner.canonicalName,
+            repositoryName: repository.name
+        )
+    }
+
+    nonisolated static func buildStatusCacheKey(
+        service: SRHTService,
+        ownerCanonicalName: String,
+        repositoryName: String
+    ) -> String {
+        "\(service.rawValue)|\(ownerCanonicalName.lowercased())|\(repositoryName.lowercased())"
+    }
+
+    nonisolated static func repositoryBuildStatus(for jobStatus: JobStatus) -> RepositoryBuildStatus {
+        switch jobStatus {
+        case .success:
+            .success
+        case .pending, .queued, .running:
+            .running
+        case .failed, .cancelled, .timeout:
+            .failed
+        }
+    }
+
+    nonisolated static func buildStatusKeys(in manifest: String) -> Set<String> {
+        let pattern = #"(?:https://|ssh://(?:git|hg)@|(?:git|hg)@)(git|hg)\.sr\.ht[:/]([~][^/\s]+)/([^\s"'#]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+
+        let nsRange = NSRange(manifest.startIndex..<manifest.endIndex, in: manifest)
+        return regex.matches(in: manifest, options: [], range: nsRange).reduce(into: Set<String>()) { result, match in
+            guard
+                let serviceRange = Range(match.range(at: 1), in: manifest),
+                let ownerRange = Range(match.range(at: 2), in: manifest),
+                let nameRange = Range(match.range(at: 3), in: manifest)
+            else {
+                return
+            }
+
+            let service: SRHTService = manifest[serviceRange].lowercased() == "hg" ? .hg : .git
+            let owner = String(manifest[ownerRange]).lowercased()
+            var name = String(manifest[nameRange]).lowercased()
+
+            if let suffixRange = name.range(of: ".git", options: [.backwards, .anchored]) {
+                name.removeSubrange(suffixRange)
+            }
+            name = name.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !name.isEmpty {
+                result.insert(buildStatusCacheKey(
+                    service: service,
+                    ownerCanonicalName: owner,
+                    repositoryName: name
+                ))
+            }
         }
     }
 }

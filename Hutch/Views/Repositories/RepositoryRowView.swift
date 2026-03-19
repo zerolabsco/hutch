@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RepositoryRowView: View {
     let repository: RepositorySummary
+    let buildStatus: RepositoryBuildStatus
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -20,6 +21,9 @@ struct RepositoryRowView: View {
                         .foregroundStyle(.cyan)
                 }
 
+                if buildStatus != .none {
+                    RepositoryBuildStatusIndicator(status: buildStatus)
+                }
                 VisibilityBadge(visibility: repository.visibility)
             }
 
@@ -50,6 +54,47 @@ struct RepositoryRowView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct RepositoryBuildStatusIndicator: View {
+    let status: RepositoryBuildStatus
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+            .overlay {
+                Circle()
+                    .strokeBorder(.primary.opacity(0.08))
+            }
+            .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var color: Color {
+        switch status {
+        case .success:
+            .green
+        case .failed:
+            .red
+        case .running:
+            .orange
+        case .none:
+            .clear
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch status {
+        case .success:
+            "Latest build succeeded"
+        case .failed:
+            "Latest build failed"
+        case .running:
+            "Latest build is running"
+        case .none:
+            "No recent builds"
+        }
     }
 }
 

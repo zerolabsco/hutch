@@ -28,6 +28,32 @@ struct RepositoryListViewModelTests {
         #expect(descriptionMatches.map(\.id) == [2])
     }
 
+    @Test
+    func buildStatusKeysParsesSourceHutRepositoryURLsFromManifest() {
+        let manifest = """
+        image: alpine/latest
+        sources:
+          - https://git.sr.ht/~owner/hutch
+          - ssh://hg@hg.sr.ht/~owner/wiki
+        tasks:
+          - echo "build"
+        """
+
+        let keys = RepositoryListViewModel.buildStatusKeys(in: manifest)
+
+        #expect(keys.contains("git|~owner|hutch"))
+        #expect(keys.contains("hg|~owner|wiki"))
+    }
+
+    @Test
+    func repositoryBuildStatusMapsJobStatesToRowStates() {
+        #expect(RepositoryListViewModel.repositoryBuildStatus(for: .success) == .success)
+        #expect(RepositoryListViewModel.repositoryBuildStatus(for: .running) == .running)
+        #expect(RepositoryListViewModel.repositoryBuildStatus(for: .queued) == .running)
+        #expect(RepositoryListViewModel.repositoryBuildStatus(for: .failed) == .failed)
+        #expect(RepositoryListViewModel.repositoryBuildStatus(for: .timeout) == .failed)
+    }
+
     @MainActor
     private func makeRepository(
         id: Int,

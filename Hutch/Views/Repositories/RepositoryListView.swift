@@ -63,7 +63,10 @@ struct RepositoryListView: View {
         List {
             ForEach(viewModel.repositories) { repo in
                 NavigationLink(value: repo) {
-                    RepositoryRowView(repository: repo)
+                    RepositoryRowView(
+                        repository: repo,
+                        buildStatus: viewModel.latestBuildStatus(for: repo)
+                    )
                 }
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 .task {

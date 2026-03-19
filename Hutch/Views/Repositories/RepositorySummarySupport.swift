@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum RepositoryBuildStatus: Sendable {
+    case success
+    case failed
+    case running
+    case none
+}
+
 struct RepositoryCloneURLs {
     let readOnly: String
     let readWrite: String

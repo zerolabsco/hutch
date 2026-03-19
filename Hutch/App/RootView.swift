@@ -6,13 +6,15 @@ struct RootView: View {
     @Environment(AppState.self) private var appState
 
     enum Tab: Hashable {
+        case home
         case repositories
         case builds
         case tickets
         case settings
     }
 
-    @State private var selectedTab: Tab = .repositories
+    @State private var selectedTab: Tab = .home
+    @State private var homePath = NavigationPath()
     @State private var repoPath = NavigationPath()
     @State private var buildsPath = NavigationPath()
     @State private var ticketsPath = NavigationPath()
@@ -47,6 +49,14 @@ struct RootView: View {
 
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
+            NavigationStack(path: $homePath) {
+                HomeView()
+            }
+            .tag(Tab.home)
+            .tabItem {
+                Label("Home", systemImage: "house")
+            }
+
             NavigationStack(path: $repoPath) {
                 RepositoryListView()
             }
@@ -106,10 +116,11 @@ struct RootView: View {
         case .launching:
             break
         case .unauthenticated:
+            homePath = NavigationPath()
             repoPath = NavigationPath()
             buildsPath = NavigationPath()
             ticketsPath = NavigationPath()
-            selectedTab = .repositories
+            selectedTab = .home
             isResolvingDeepLink = false
         case .authenticated:
             consumePendingDeepLinkIfPossible(appState.pendingDeepLink)
