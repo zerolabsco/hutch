@@ -1,8 +1,14 @@
 import SwiftUI
+import os
+
+private let inboxNavigationLogger = Logger(subsystem: "net.cleberg.Hutch", category: "InboxNavigation")
 
 struct InboxView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: InboxViewModel?
+    @State private var selectedThreadID: InboxThreadSummary.ID?
+    @State private var selectedThreadSnapshot: InboxThreadSummary?
+    @State private var isShowingThreadDetail = false
 
     var body: some View {
         Group {
@@ -28,9 +34,12 @@ struct InboxView: View {
 
         List {
             ForEach(viewModel.threads) { thread in
-                NavigationLink(value: thread) {
+                Button {
+                    selectThread(thread)
+                } label: {
                     InboxThreadRow(thread: thread)
                 }
+                .buttonStyle(.plain)
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                     readStateAction(for: thread, in: viewModel)
                 }
@@ -64,9 +73,37 @@ struct InboxView: View {
         .refreshable {
             await viewModel.loadThreads()
         }
-        .navigationDestination(for: InboxThreadSummary.self) { thread in
-            ThreadDetailView(thread: thread) {
-                viewModel.markThreadRead(thread)
+        .onChange(of: viewModel.threads) { _, threads in
+            syncSelectedThreadSnapshot(with: threads)
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { isShowingThreadDetail && selectedThread(for: viewModel) != nil },
+            set: { isPresented in
+                if !isPresented {
+                    clearSelection()
+                }
+                isShowingThreadDetail = isPresented
+            }
+        )) {
+            if let thread = selectedThread(for: viewModel) {
+                ThreadDetailView(thread: thread) {
+                    viewModel.markThreadRead(thread)
+                }
+                .onAppear {
+                    cacheSelectedThread(thread)
+                }
+                .onDisappear {
+                    handleThreadDetailDisappear(for: thread.id)
+                }
+            } else {
+                ContentUnavailableView(
+                    "Thread Unavailable",
+                    systemImage: "tray",
+                    description: Text("This thread could not be restored.")
+                )
+                .onAppear {
+                    inboxNavigationLogger.error("Inbox navigation destination missing thread snapshot")
+                }
             }
         }
     }
@@ -81,6 +118,48 @@ struct InboxView: View {
             Label("Mark as Read", systemImage: "envelope.open")
         }
         .tint(.blue)
+    }
+
+    private func selectThread(_ thread: InboxThreadSummary) {
+        cacheSelectedThread(thread)
+        isShowingThreadDetail = true
+        inboxNavigationLogger.debug(
+            "Inbox navigation triggered: threadID=\(thread.id, privacy: .public) subject=\(thread.subject, privacy: .public)"
+        )
+    }
+
+    private func cacheSelectedThread(_ thread: InboxThreadSummary) {
+        selectedThreadID = thread.id
+        selectedThreadSnapshot = thread
+    }
+
+    private func selectedThread(for viewModel: InboxViewModel) -> InboxThreadSummary? {
+        guard let selectedThreadID else { return selectedThreadSnapshot }
+        return viewModel.thread(withID: selectedThreadID) ?? (selectedThreadSnapshot?.id == selectedThreadID ? selectedThreadSnapshot : nil)
+    }
+
+    private func handleThreadDetailDisappear(for threadID: String) {
+        let isActiveSelection = selectedThreadID == threadID
+        inboxNavigationLogger.debug(
+            "Inbox thread detail disappeared: threadID=\(threadID, privacy: .public) activeSelection=\(isActiveSelection, privacy: .public)"
+        )
+        guard isActiveSelection else { return }
+        clearSelection()
+    }
+
+    private func syncSelectedThreadSnapshot(with threads: [InboxThreadSummary]) {
+        guard let selectedThreadID else { return }
+        guard let updatedThread = threads.first(where: { $0.id == selectedThreadID }) else { return }
+        selectedThreadSnapshot = updatedThread
+    }
+
+    private func clearSelection() {
+        if let selectedThreadID {
+            inboxNavigationLogger.debug("Inbox selection cleared: threadID=\(selectedThreadID, privacy: .public)")
+        }
+        selectedThreadID = nil
+        selectedThreadSnapshot = nil
+        isShowingThreadDetail = false
     }
 }
 

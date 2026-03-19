@@ -166,6 +166,10 @@ final class InboxViewModel {
         }
     }
 
+    func thread(withID id: InboxThreadSummary.ID) -> InboxThreadSummary? {
+        threads.first(where: { $0.id == id })
+    }
+
     private func fetchSubscriptions() async throws -> [InboxActivitySubscription] {
         var subscriptions: [InboxActivitySubscription] = []
         var cursor: String?
