@@ -3,6 +3,13 @@ import os
 
 private let logger = Logger(subsystem: "net.cleberg.Hutch", category: "SRHTClient")
 
+struct MultipartUploadFile: Sendable {
+    let variablePath: String
+    let fileData: Data
+    let fileName: String
+    let mimeType: String
+}
+
 /// Placeholder type for decoding GraphQL error responses when the data shape is unknown.
 private struct EmptyData: Decodable {}
 
@@ -282,6 +289,100 @@ final class SRHTClient: Sendable {
             #else
             logger.error("Decoding failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)")
             #endif
+            throw SRHTError.decodingError(error)
+        }
+
+        if let errors = graphQLResponse.errors, !errors.isEmpty {
+            throw SRHTError.graphQLErrors(errors)
+        }
+
+        guard let result = graphQLResponse.data else {
+            throw SRHTError.decodingError(
+                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
+            )
+        }
+
+        return result
+    }
+
+    func executeMultipartFiles<T: Decodable>(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable],
+        files: [MultipartUploadFile],
+        responseType: T.Type
+    ) async throws -> T {
+        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+            throw SRHTError.unauthorized
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        var request = URLRequest(url: service.url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let operationsBody = GraphQLRequestBody(
+            query: query,
+            variables: variables.mapValues { AnyCodable($0) }
+        )
+        let operationsData = try encoder.encode(operationsBody)
+
+        let mapDict = Dictionary(uniqueKeysWithValues: files.enumerated().map { index, file in
+            (String(index), ["variables.\(file.variablePath)"])
+        })
+        let mapData = try encoder.encode(mapDict)
+
+        var body = Data()
+
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"operations\"\r\n")
+        body.append("Content-Type: application/json\r\n\r\n")
+        body.append(operationsData)
+        body.append("\r\n")
+
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"map\"\r\n")
+        body.append("Content-Type: application/json\r\n\r\n")
+        body.append(mapData)
+        body.append("\r\n")
+
+        for (index, file) in files.enumerated() {
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"\(index)\"; filename=\"\(file.fileName)\"\r\n")
+            body.append("Content-Type: \(file.mimeType)\r\n\r\n")
+            body.append(file.fileData)
+            body.append("\r\n")
+        }
+
+        body.append("--\(boundary)--\r\n")
+        request.httpBody = body
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw SRHTError.networkError(error)
+        }
+
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 401 {
+                throw SRHTError.unauthorized
+            }
+            if !(200...299).contains(http.statusCode) {
+                if let gqlResponse = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
+                   let errors = gqlResponse.errors, !errors.isEmpty {
+                    throw SRHTError.graphQLErrors(errors)
+                }
+                throw SRHTError.httpError(http.statusCode)
+            }
+        }
+
+        let graphQLResponse: GraphQLResponse<T>
+        do {
+            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
+        } catch {
             throw SRHTError.decodingError(error)
         }
 

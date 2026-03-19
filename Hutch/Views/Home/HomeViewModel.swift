@@ -33,6 +33,36 @@ private struct HomeTrackerTicketsPage: Decodable, Sendable {
     let results: [HomeTicketPayload]
 }
 
+private struct HomeInboxSubscriptionsResponse: Decodable, Sendable {
+    let subscriptions: HomeInboxSubscriptionPage
+}
+
+private struct HomeInboxSubscriptionPage: Decodable, Sendable {
+    let results: [HomeInboxSubscription]
+    let cursor: String?
+}
+
+private struct HomeInboxSubscription: Decodable, Sendable {
+    let list: InboxMailingListReference?
+}
+
+private struct HomeInboxListThreadsResponse: Decodable, Sendable {
+    let list: HomeInboxMailingListThreads
+}
+
+private struct HomeInboxMailingListThreads: Decodable, Sendable {
+    let threads: HomeInboxThreadPage
+}
+
+private struct HomeInboxThreadPage: Decodable, Sendable {
+    let results: [HomeInboxThreadPayload]
+}
+
+private struct HomeInboxThreadPayload: Decodable, Sendable {
+    let updated: Date
+    let subject: String
+}
+
 private struct HomeTicketPayload: Decodable, Sendable {
     let id: Int
     let title: String
@@ -106,9 +136,12 @@ struct HomeBuildItem: Identifiable, Hashable, Sendable {
 @Observable
 @MainActor
 final class HomeViewModel {
+    private(set) var projects: [Project] = []
     private(set) var failedBuilds: [HomeBuildItem] = []
     private(set) var assignedTickets: [HomeAssignedTicket] = []
     private(set) var recentBuilds: [HomeBuildItem] = []
+    private(set) var hasUnreadInboxThreads = false
+    private(set) var isLoadingProjects = false
     private(set) var isLoadingFailedBuilds = false
     private(set) var isLoadingAssignedTickets = false
     private(set) var isLoadingRecentBuilds = false
@@ -118,7 +151,10 @@ final class HomeViewModel {
 
     private let currentUser: User
     private let client: SRHTClient
+    private let projectService: ProjectService
     private let ticketFetchConcurrencyLimit = 6
+    private let inboxUnreadConcurrencyLimit = 4
+    private let inboxUnreadThreadPreviewLimit = 10
 
     private static let jobsQuery = """
     query jobs {
@@ -177,12 +213,45 @@ final class HomeViewModel {
     }
     """
 
+    private static let inboxSubscriptionsQuery = """
+    query inboxSubscriptions($cursor: Cursor) {
+        subscriptions(cursor: $cursor) {
+            results {
+                ... on MailingListSubscription {
+                    list {
+                        id
+                        rid
+                        name
+                        owner { canonicalName }
+                    }
+                }
+            }
+            cursor
+        }
+    }
+    """
+
+    private static let inboxListThreadsQuery = """
+    query inboxListThreads($rid: ID!) {
+        list(rid: $rid) {
+            threads {
+                results {
+                    updated
+                    subject
+                }
+            }
+        }
+    }
+    """
+
     init(currentUser: User, client: SRHTClient) {
         self.currentUser = currentUser
         self.client = client
+        self.projectService = ProjectService(client: client)
     }
 
     func loadDashboard() async {
+        isLoadingProjects = true
         isLoadingFailedBuilds = true
         isLoadingAssignedTickets = true
         isLoadingRecentBuilds = true
@@ -190,8 +259,19 @@ final class HomeViewModel {
         assignedTicketsError = nil
         recentBuildsError = nil
 
+        async let projectsTask = loadProjects()
         async let jobsTask = loadRecentJobs()
         async let assignedTicketsTask = loadAssignedTickets()
+        async let inboxUnreadTask = loadInboxUnreadState()
+
+        let projectsResult = await projectsTask
+        switch projectsResult {
+        case .success(let projects):
+            self.projects = projects
+        case .failure:
+            self.projects = []
+        }
+        isLoadingProjects = false
 
         let recentJobsResult = await jobsTask
 
@@ -222,6 +302,16 @@ final class HomeViewModel {
             self.assignedTicketsError = error.localizedDescription
         }
         isLoadingAssignedTickets = false
+
+        hasUnreadInboxThreads = (await inboxUnreadTask) ?? false
+    }
+
+    private func loadProjects() async -> Result<[Project], Error> {
+        do {
+            return .success(try await projectService.fetchProjects())
+        } catch {
+            return .failure(error)
+        }
     }
 
     private func loadRecentJobs() async -> Result<[HomeJobPayload], Error> {
@@ -234,6 +324,100 @@ final class HomeViewModel {
             return .success(response.jobs.results)
         } catch {
             return .failure(error)
+        }
+    }
+
+    private func loadInboxUnreadState() async -> Bool? {
+        do {
+            return try await fetchHasUnreadInboxThreads()
+        } catch {
+            return nil
+        }
+    }
+
+    private func fetchHasUnreadInboxThreads() async throws -> Bool {
+        let mailingLists = try await fetchInboxMailingLists()
+        guard !mailingLists.isEmpty else { return false }
+
+        var startIndex = mailingLists.startIndex
+        while startIndex < mailingLists.endIndex {
+            let endIndex = mailingLists.index(
+                startIndex,
+                offsetBy: inboxUnreadConcurrencyLimit,
+                limitedBy: mailingLists.endIndex
+            ) ?? mailingLists.endIndex
+            let batch = Array(mailingLists[startIndex..<endIndex])
+
+            let batchHasUnread = await withTaskGroup(of: Bool.self) { group in
+                for mailingList in batch {
+                    group.addTask {
+                        (try? await self.fetchHasUnreadThreads(for: mailingList)) ?? false
+                    }
+                }
+
+                for await hasUnread in group {
+                    if hasUnread {
+                        group.cancelAll()
+                        return true
+                    }
+                }
+                return false
+            }
+
+            if batchHasUnread {
+                return true
+            }
+
+            startIndex = endIndex
+        }
+
+        return false
+    }
+
+    private func fetchInboxMailingLists() async throws -> [InboxMailingListReference] {
+        var subscriptions: [HomeInboxSubscription] = []
+        var cursor: String?
+
+        while true {
+            var variables: [String: any Sendable] = [:]
+            if let cursor {
+                variables["cursor"] = cursor
+            }
+
+            let response = try await client.execute(
+                service: .lists,
+                query: Self.inboxSubscriptionsQuery,
+                variables: variables.isEmpty ? nil : variables,
+                responseType: HomeInboxSubscriptionsResponse.self
+            )
+
+            subscriptions.append(contentsOf: response.subscriptions.results)
+            guard let nextCursor = response.subscriptions.cursor else {
+                break
+            }
+            cursor = nextCursor
+        }
+
+        var seen = Set<String>()
+        return subscriptions.compactMap(\.list).filter { seen.insert($0.rid).inserted }
+    }
+
+    private func fetchHasUnreadThreads(for mailingList: InboxMailingListReference) async throws -> Bool {
+        let response = try await client.execute(
+            service: .lists,
+            query: Self.inboxListThreadsQuery,
+            variables: ["rid": mailingList.rid],
+            responseType: HomeInboxListThreadsResponse.self
+        )
+
+        return response.list.threads.results.prefix(inboxUnreadThreadPreviewLimit).contains { thread in
+            let normalizedSubject = thread.subject
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: #"^(?:(?:re|fwd?)\s*:\s*)+"#, with: "", options: [.regularExpression, .caseInsensitive])
+                .lowercased()
+            let threadID = "\(mailingList.rid)#\(normalizedSubject)"
+            return InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: thread.updated)
         }
     }
 

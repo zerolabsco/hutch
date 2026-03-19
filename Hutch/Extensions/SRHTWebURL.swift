@@ -76,6 +76,14 @@ enum SRHTWebURL {
         )
     }
 
+    static func paste(ownerCanonicalName: String, pasteId: String) -> URL? {
+        userScopedURL(
+            host: "paste.sr.ht",
+            ownerCanonicalName: ownerCanonicalName,
+            pathComponents: [pasteId]
+        )
+    }
+
     private static func userScopedURL(
         host: String,
         ownerCanonicalName: String,

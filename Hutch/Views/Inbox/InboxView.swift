@@ -51,9 +51,9 @@ struct InboxView: View {
                 )
             } else if viewModel.threads.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
-                    "No Threads",
+                    "Inbox Zero",
                     systemImage: "tray",
-                    description: Text("Patch threads will appear here.")
+                    description: Text("Unread threads will appear here.")
                 )
             }
         }
@@ -75,19 +75,16 @@ struct InboxView: View {
     private func readStateAction(for thread: InboxThreadSummary, in viewModel: InboxViewModel) -> some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
-                viewModel.toggleThreadReadState(thread)
+                viewModel.markThreadRead(thread)
             }
         } label: {
-            Label(
-                thread.isUnread ? "Mark as Read" : "Mark as Unread",
-                systemImage: thread.isUnread ? "envelope.open" : "envelope.badge"
-            )
+            Label("Mark as Read", systemImage: "envelope.open")
         }
-        .tint(thread.isUnread ? .blue : .gray)
+        .tint(.blue)
     }
 }
 
-private struct InboxThreadRow: View {
+struct InboxThreadRow: View {
     let thread: InboxThreadSummary
 
     var body: some View {

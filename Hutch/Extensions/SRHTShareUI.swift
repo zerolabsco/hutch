@@ -9,6 +9,7 @@ enum SRHTShareTarget: String {
     case tracker = "tracker"
     case ticket = "ticket"
     case profile = "profile"
+    case paste = "paste"
 
     var fallbackMessage: String {
         "This \(rawValue) does not have a valid web URL to share."

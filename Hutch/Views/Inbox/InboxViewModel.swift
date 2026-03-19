@@ -127,7 +127,9 @@ final class InboxViewModel {
             let subscriptions = try await fetchSubscriptions()
             let mailingLists = deduplicateMailingLists(subscriptions.compactMap(\.list))
             let fetchedThreads = try await fetchThreads(for: mailingLists)
-            threads = fetchedThreads.sorted { lhs, rhs in
+            threads = fetchedThreads
+                .filter(\.isUnread)
+                .sorted { lhs, rhs in
                 if lhs.lastActivityAt == rhs.lastActivityAt {
                     return lhs.subject.localizedCaseInsensitiveCompare(rhs.subject) == .orderedAscending
                 }
@@ -145,7 +147,7 @@ final class InboxViewModel {
         inboxListLogger.debug(
             "Inbox mark read: key=\(thread.id, privacy: .public) latestActivityAt=\(thread.lastActivityAt.ISO8601Format(), privacy: .public) storedLastViewedAt=\(viewedAt.ISO8601Format(), privacy: .public)"
         )
-        updateThread(thread, isUnread: false)
+        threads.removeAll { $0.id == thread.id }
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
@@ -329,6 +331,10 @@ final class InboxViewModel {
     private func updateThread(_ thread: InboxThreadSummary, isUnread: Bool) {
         guard let index = threads.firstIndex(where: { $0.id == thread.id }) else { return }
         let current = threads[index]
+        if !isUnread {
+            threads.remove(at: index)
+            return
+        }
         threads[index] = InboxThreadSummary(
             rootEmailID: current.rootEmailID,
             rootMessageID: current.rootMessageID,

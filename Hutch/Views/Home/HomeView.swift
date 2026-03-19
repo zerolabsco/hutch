@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: HomeViewModel?
     private let previewLimit = 4
+    private let projectPreviewLimit = 3
 
     var body: some View {
         Group {
@@ -14,6 +15,15 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Home")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    InboxView()
+                } label: {
+                    HomeInboxToolbarIcon(hasUnreadThreads: viewModel?.hasUnreadInboxThreads == true)
+                }
+            }
+        }
         .task {
             if viewModel == nil, let currentUser = appState.currentUser {
                 let vm = HomeViewModel(currentUser: currentUser, client: appState.client)
@@ -26,16 +36,17 @@ struct HomeView: View {
     @ViewBuilder
     private func content(_ viewModel: HomeViewModel) -> some View {
         List {
+            projectsSection(viewModel)
             assignedTicketsSection(viewModel)
             recentBuildsSection(viewModel)
         }
         .listStyle(.insetGrouped)
         .overlay {
-            if viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&
-                viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty {
+            if viewModel.isLoadingProjects && viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&
+                viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty {
                 SRHTLoadingStateView(message: "Loading Home…")
-            } else if !viewModel.isLoadingAssignedTickets && !viewModel.isLoadingRecentBuilds &&
-                        viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
+            } else if !viewModel.isLoadingProjects && !viewModel.isLoadingAssignedTickets && !viewModel.isLoadingRecentBuilds &&
+                        viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
                         viewModel.assignedTicketsError == nil && viewModel.recentBuildsError == nil {
                 ContentUnavailableView(
                     "All Clear",
@@ -46,6 +57,25 @@ struct HomeView: View {
         }
         .refreshable {
             await viewModel.loadDashboard()
+        }
+    }
+
+    @ViewBuilder
+    private func projectsSection(_ viewModel: HomeViewModel) -> some View {
+        if !viewModel.projects.isEmpty {
+            Section {
+                ForEach(viewModel.projects.prefix(projectPreviewLimit)) { project in
+                    NavigationLink {
+                        ProjectDetailView(project: project)
+                    } label: {
+                        HomeProjectRow(project: project)
+                    }
+                }
+            } header: {
+                HomeSectionHeader("Projects") {
+                    HomeProjectsListView(viewModel: viewModel)
+                }
+            }
         }
     }
 
@@ -121,6 +151,77 @@ struct HomeView: View {
         }
     }
 
+}
+
+private struct HomeInboxToolbarIcon: View {
+    let hasUnreadThreads: Bool
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
+
+            if hasUnreadThreads {
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 9, height: 9)
+                    .offset(x: 4, y: -2)
+            }
+        }
+        .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
+    }
+}
+
+private struct HomeProjectRow: View {
+    let project: Project
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(project.name)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+
+            if let description = project.description, !description.isEmpty {
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let summary = project.resourceSummary {
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct HomeProjectsListView: View {
+    let viewModel: HomeViewModel
+
+    var body: some View {
+        List {
+            ForEach(viewModel.projects) { project in
+                NavigationLink {
+                    ProjectDetailView(project: project)
+                } label: {
+                    HomeProjectRow(project: project)
+                }
+            }
+        }
+        .navigationTitle("Projects")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await viewModel.loadDashboard()
+        }
+        .overlay {
+            if viewModel.isLoadingProjects && viewModel.projects.isEmpty {
+                SRHTLoadingStateView(message: "Loading projects…")
+            }
+        }
+    }
 }
 
 private struct HomeBuildRow: View {

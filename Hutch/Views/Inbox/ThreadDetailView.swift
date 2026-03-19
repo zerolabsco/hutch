@@ -8,10 +8,29 @@ private let inboxReplyLogger = Logger(subsystem: "net.cleberg.Hutch", category: 
 struct ThreadDetailView: View {
     let thread: InboxThreadSummary
     let onViewed: () -> Void
+    var onMarkRead: (() -> Void)? = nil
+    var onMarkUnread: (() -> Void)? = nil
 
     @Environment(AppState.self) private var appState
     @State private var viewModel: ThreadViewModel?
     @State private var replySuccessMessage: String?
+    @State private var loadedThreadID: String?
+    @State private var hasMarkedCurrentThreadViewed = false
+    @State private var suppressAutoMarkViewed = false
+    @State private var isUnread: Bool
+
+    init(
+        thread: InboxThreadSummary,
+        onViewed: @escaping () -> Void,
+        onMarkRead: (() -> Void)? = nil,
+        onMarkUnread: (() -> Void)? = nil
+    ) {
+        self.thread = thread
+        self.onViewed = onViewed
+        self.onMarkRead = onMarkRead
+        self.onMarkUnread = onMarkUnread
+        self._isUnread = State(initialValue: thread.isUnread)
+    }
 
     var body: some View {
         Group {
@@ -23,13 +42,21 @@ struct ThreadDetailView: View {
         }
         .navigationTitle("Thread")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if viewModel == nil {
-                onViewed()
-                let vm = ThreadViewModel(summary: thread, client: appState.client)
-                viewModel = vm
-                await vm.loadThread()
-            }
+        .task(id: thread.id) {
+            guard loadedThreadID != thread.id else { return }
+            let vm = ThreadViewModel(summary: thread, client: appState.client)
+            viewModel = vm
+            loadedThreadID = thread.id
+            hasMarkedCurrentThreadViewed = false
+            suppressAutoMarkViewed = false
+            isUnread = thread.isUnread
+            await vm.loadThread()
+        }
+        .onChange(of: viewModel?.thread?.id) { _, threadID in
+            guard threadID != nil, !hasMarkedCurrentThreadViewed, !suppressAutoMarkViewed else { return }
+            hasMarkedCurrentThreadViewed = true
+            isUnread = false
+            onViewed()
         }
         .sheet(item: Binding(
             get: { viewModel?.composeDraft },
@@ -109,8 +136,23 @@ struct ThreadDetailView: View {
         .listStyle(.plain)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Reply") {
-                    viewModel.prepareReply()
+                HStack {
+                    if onMarkRead != nil || onMarkUnread != nil {
+                        Button(isUnread ? "Mark Read" : "Mark Unread") {
+                            suppressAutoMarkViewed = !isUnread
+                            if isUnread {
+                                onMarkRead?()
+                                isUnread = false
+                            } else {
+                                onMarkUnread?()
+                                isUnread = true
+                            }
+                        }
+                    }
+
+                    Button("Reply") {
+                        viewModel.prepareReply()
+                    }
                 }
             }
         }

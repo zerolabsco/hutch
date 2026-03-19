@@ -5,7 +5,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @State private var homePath = NavigationPath()
-    @State private var inboxPath = NavigationPath()
+    @State private var morePath = NavigationPath()
     @State private var repoPath = NavigationPath()
     @State private var buildsPath = NavigationPath()
     @State private var ticketsPath = NavigationPath()
@@ -34,6 +34,9 @@ struct RootView: View {
         .onChange(of: appState.authPhase) { _, newPhase in
             handleAuthPhaseChange(newPhase)
         }
+        .onChange(of: appState.pendingTabNavigation) { _, newValue in
+            consumePendingTabNavigationIfPossible(newValue)
+        }
     }
 
     // MARK: - Tab View
@@ -48,14 +51,6 @@ struct RootView: View {
             .tag(AppState.Tab.home)
             .tabItem {
                 Label("Home", systemImage: "house")
-            }
-
-            NavigationStack(path: $inboxPath) {
-                InboxView()
-            }
-            .tag(AppState.Tab.inbox)
-            .tabItem {
-                Label("Inbox", systemImage: "tray")
             }
 
             NavigationStack(path: $repoPath) {
@@ -78,12 +73,6 @@ struct RootView: View {
                 Label("Tickets", systemImage: "ticket")
             }
 
-            SettingsView()
-                .tag(AppState.Tab.settings)
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-
             NavigationStack(path: $buildsPath) {
                 BuildListView()
                     // Int destination used by deep links (hutch://builds/<id>).
@@ -95,6 +84,14 @@ struct RootView: View {
             .tag(AppState.Tab.builds)
             .tabItem {
                 Label("Builds", systemImage: "hammer")
+            }
+
+            NavigationStack(path: $morePath) {
+                MoreNavigationRoot()
+            }
+            .tag(AppState.Tab.more)
+            .tabItem {
+                Label("More", systemImage: "ellipsis.circle")
             }
         }
         .overlay {
@@ -118,7 +115,7 @@ struct RootView: View {
             break
         case .unauthenticated:
             homePath = NavigationPath()
-            inboxPath = NavigationPath()
+            morePath = NavigationPath()
             repoPath = NavigationPath()
             buildsPath = NavigationPath()
             ticketsPath = NavigationPath()
@@ -133,6 +130,12 @@ struct RootView: View {
         guard appState.isAuthenticated, let link else { return }
         handleDeepLink(link)
         appState.pendingDeepLink = nil
+    }
+
+    private func consumePendingTabNavigationIfPossible(_ target: AppState.TabNavigationTarget?) {
+        guard appState.isAuthenticated, let target else { return }
+        handleTabNavigation(target)
+        appState.pendingTabNavigation = nil
     }
 
     private func handleDeepLink(_ link: DeepLink) {
@@ -154,6 +157,36 @@ struct RootView: View {
 
         case .ticket(let owner, let tracker, let ticketId):
             resolveTicketLink(owner: owner, tracker: tracker, ticketId: ticketId)
+        }
+    }
+
+    private func handleTabNavigation(_ target: AppState.TabNavigationTarget) {
+        switch target {
+        case .repository(let repository):
+            repoPath = NavigationPath()
+            appState.selectedTab = .repositories
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                repoPath.append(repository)
+            }
+
+        case .tracker(let tracker):
+            ticketsPath = NavigationPath()
+            appState.selectedTab = .tickets
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                ticketsPath.append(tracker)
+            }
+
+        case .mailingList(let mailingList):
+            morePath = NavigationPath()
+            appState.selectedTab = .more
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                morePath.append(MoreRoute.lists)
+                try? await Task.sleep(for: .milliseconds(100))
+                morePath.append(MoreRoute.mailingList(mailingList))
+            }
         }
     }
 
@@ -195,6 +228,51 @@ struct RootView: View {
                 // Silently fail
             }
         }
+    }
+}
+
+enum MoreDestination: Hashable {
+    case lists
+    case pastes
+    case settings
+}
+
+enum MoreRoute: Hashable {
+    case lists
+    case pastes
+    case settings
+    case mailingList(InboxMailingListReference)
+    case thread(InboxThreadSummary)
+}
+
+private struct MoreNavigationRoot: View {
+    var body: some View {
+        MoreView()
+            .navigationDestination(for: MoreRoute.self) { route in
+                switch route {
+                case .lists:
+                    MailingListListView()
+                case .pastes:
+                    PasteListView()
+                case .settings:
+                    SettingsView()
+                case .mailingList(let mailingList):
+                    MailingListDetailView(mailingList: mailingList)
+                case .thread(let thread):
+                    ThreadDetailView(
+                        thread: thread,
+                        onViewed: {
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+                        },
+                        onMarkRead: {
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+                        },
+                        onMarkUnread: {
+                            InboxReadStateStore.markUnread(for: thread.id)
+                        }
+                    )
+                }
+            }
     }
 }
 

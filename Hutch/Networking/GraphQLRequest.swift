@@ -34,6 +34,8 @@ struct AnyCodable: Sendable, Encodable {
             try container.encode(v)
         case let v as Bool:
             try container.encode(v)
+        case let v as [String?]:
+            try container.encode(v)
         case let v as [any Sendable]:
             try container.encode(v.map { AnyCodable($0) })
         case let v as [String: any Sendable]:

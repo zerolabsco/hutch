@@ -150,7 +150,7 @@ struct MailComposeDraft: Sendable {
 
 extension MailComposeDraft: Identifiable {}
 
-struct InboxMailingListReference: Decodable, Sendable, Hashable {
+struct InboxMailingListReference: Decodable, Sendable, Hashable, Identifiable {
     let id: Int
     let rid: String
     let name: String

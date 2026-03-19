@@ -12,21 +12,19 @@ struct SettingsView: View {
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let viewModel {
-                    settingsContent(viewModel)
-                } else {
-                    SRHTLoadingStateView(message: "Loading profile…")
-                }
+        Group {
+            if let viewModel {
+                settingsContent(viewModel)
+            } else {
+                SRHTLoadingStateView(message: "Loading profile…")
             }
-            .navigationTitle("Settings")
-            .task {
-                if viewModel == nil {
-                    let vm = SettingsViewModel(client: appState.client)
-                    viewModel = vm
-                    await vm.loadProfile()
-                }
+        }
+        .navigationTitle("Settings")
+        .task {
+            if viewModel == nil {
+                let vm = SettingsViewModel(client: appState.client)
+                viewModel = vm
+                await vm.loadProfile()
             }
         }
     }
