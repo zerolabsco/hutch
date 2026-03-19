@@ -6,6 +6,8 @@ enum SRHTError: LocalizedError, Sendable {
     case graphQLErrors([GraphQLError])
     /// The HTTP response had a non-2xx status code.
     case httpError(Int)
+    /// The client refused to send credentials to an unexpected URL.
+    case invalidAuthenticatedURL(URL)
     /// The response data could not be decoded.
     case decodingError(any Error)
     /// A networking error from URLSession (timeout, DNS, connectivity, etc.).
@@ -20,6 +22,8 @@ enum SRHTError: LocalizedError, Sendable {
             return "GraphQL error: \(messages)"
         case .httpError(let code):
             return "Server returned HTTP \(code)."
+        case .invalidAuthenticatedURL(let url):
+            return "Refused to authenticate request to unexpected URL: \(url.absoluteString)"
         case .decodingError(let error):
             return "Failed to decode response: \(error.localizedDescription)"
         case .networkError(let error):

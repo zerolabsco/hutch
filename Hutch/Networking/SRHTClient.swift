@@ -435,6 +435,9 @@ final class SRHTClient: Sendable {
         guard let token = _token.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
+        guard Self.isTrustedAuthenticatedTextURL(url) else {
+            throw SRHTError.invalidAuthenticatedURL(url)
+        }
 
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -511,6 +514,17 @@ final class SRHTClient: Sendable {
 }
 
 // MARK: - Data Helper
+
+private extension SRHTClient {
+    static func isTrustedAuthenticatedTextURL(_ url: URL) -> Bool {
+        guard url.scheme?.localizedCaseInsensitiveCompare("https") == .orderedSame,
+              let host = url.host?.lowercased() else {
+            return false
+        }
+
+        return host.hasSuffix(".sr.ht")
+    }
+}
 
 private extension Data {
     mutating func append(_ string: String) {

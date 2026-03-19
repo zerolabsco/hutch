@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "06A589A5-80C7-41FE-911F-03518252CBDD",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Hutch.xcodeproj",
+      "identifier" : "8B4B28D02F6704280045FA19",
+      "name" : "Hutch"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Hutch.xcodeproj",
+        "identifier" : "8B8182B62F6B73F3000AE049",
+        "name" : "HutchTests"
+      }
+    }
+  ],
+  "version" : 1
+}
