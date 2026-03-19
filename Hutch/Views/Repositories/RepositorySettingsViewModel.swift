@@ -153,7 +153,7 @@ final class RepositorySettingsViewModel {
     }
     """
 
-    func saveInfo() async {
+    func saveInfo() async -> Bool {
         isSavingInfo = true
         defer { isSavingInfo = false }
         error = nil
@@ -172,8 +172,10 @@ final class RepositorySettingsViewModel {
                 variables: ["id": repositoryId, "input": input],
                 responseType: UpdateRepoInfoResponse.self
             )
+            return true
         } catch {
             self.error = error.userFacingMessage
+            return false
         }
     }
 

@@ -1108,7 +1108,11 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
         if let cachedHeight = HTMLWebViewCoordinator.heightCache.object(forKey: wrapped as NSString)?.doubleValue {
             let height = CGFloat(cachedHeight)
             if abs(dynamicHeight - height) > 0.5 {
-                dynamicHeight = height
+                DispatchQueue.main.async {
+                    if abs(self.dynamicHeight - height) > 0.5 {
+                        self.dynamicHeight = height
+                    }
+                }
             }
         }
 

@@ -9,6 +9,7 @@ struct HgRepositorySettingsView: View {
     @State private var viewModel: HgRepositorySettingsViewModel?
     @State private var showDeleteConfirmation = false
     @State private var pendingACLDeletion: HgACLEntry?
+    @State private var saveResultAlert: SaveResultAlert?
 
     var body: some View {
         NavigationStack {
@@ -88,6 +89,13 @@ struct HgRepositorySettingsView: View {
                 Text("\(entry.entity.canonicalName) will lose \(entry.mode) access to this repository.")
             }
         }
+        .alert(item: $saveResultAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     @ViewBuilder
@@ -108,7 +116,13 @@ struct HgRepositorySettingsView: View {
             }
 
             Button {
-                Task { await viewModel.saveInfo() }
+                Task {
+                    let didSave = await viewModel.saveInfo()
+                    saveResultAlert = SaveResultAlert(
+                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
+                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
+                    )
+                }
             } label: {
                 if viewModel.isSavingInfo {
                     ProgressView()
@@ -188,7 +202,13 @@ struct HgRepositorySettingsView: View {
             Toggle("Hide this repository from public listings", isOn: Bindable(viewModel).editedNonPublishing)
 
             Button {
-                Task { await viewModel.saveInfo() }
+                Task {
+                    let didSave = await viewModel.saveInfo()
+                    saveResultAlert = SaveResultAlert(
+                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
+                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
+                    )
+                }
             } label: {
                 if viewModel.isSavingInfo {
                     ProgressView()
@@ -235,5 +255,12 @@ struct HgRepositorySettingsView: View {
             }
             .disabled(viewModel.isDeleting)
         }
+    }
+
+    private struct SaveResultAlert: Identifiable {
+        let title: String
+        let message: String
+
+        var id: String { "\(title)-\(message)" }
     }
 }

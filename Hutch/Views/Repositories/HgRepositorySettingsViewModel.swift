@@ -168,7 +168,7 @@ final class HgRepositorySettingsViewModel {
         }
     }
 
-    func saveInfo() async {
+    func saveInfo() async -> Bool {
         isSavingInfo = true
         defer { isSavingInfo = false }
         error = nil
@@ -185,8 +185,10 @@ final class HgRepositorySettingsViewModel {
                 variables: ["id": repositoryId, "input": input],
                 responseType: HgUpdateRepositoryResponse.self
             )
+            return true
         } catch {
             self.error = error.userFacingMessage
+            return false
         }
     }
 

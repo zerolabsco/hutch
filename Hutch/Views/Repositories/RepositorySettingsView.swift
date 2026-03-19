@@ -11,6 +11,7 @@ struct RepositorySettingsView: View {
     @State private var viewModel: RepositorySettingsViewModel?
     @State private var showDeleteConfirmation = false
     @State private var pendingACLDeletion: ACLEntry?
+    @State private var saveResultAlert: SaveResultAlert?
 
     var body: some View {
         NavigationStack {
@@ -91,6 +92,13 @@ struct RepositorySettingsView: View {
                 Text("\(entry.entity.canonicalName) will lose \(entry.mode) access to this repository.")
             }
         }
+        .alert(item: $saveResultAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     // MARK: - Info Section
@@ -122,7 +130,13 @@ struct RepositorySettingsView: View {
             }
 
             Button {
-                Task { await viewModel.saveInfo() }
+                Task {
+                    let didSave = await viewModel.saveInfo()
+                    saveResultAlert = SaveResultAlert(
+                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
+                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
+                    )
+                }
             } label: {
                 if viewModel.isSavingInfo {
                     ProgressView()
@@ -255,5 +269,12 @@ struct RepositorySettingsView: View {
             }
             .disabled(viewModel.isDeleting)
         }
+    }
+
+    private struct SaveResultAlert: Identifiable {
+        let title: String
+        let message: String
+
+        var id: String { "\(title)-\(message)" }
     }
 }
