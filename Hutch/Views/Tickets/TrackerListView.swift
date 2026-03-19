@@ -124,9 +124,16 @@ private struct CreateTrackerSheet: View {
     let onCreated: (TrackerSummary) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Bindable var viewModelBindable: TrackerListViewModel
     @State private var name = ""
     @State private var description = ""
     @State private var visibility: Visibility = .public
+
+    init(viewModel: TrackerListViewModel, onCreated: @escaping (TrackerSummary) -> Void) {
+        self.viewModel = viewModel
+        self._viewModelBindable = Bindable(viewModel)
+        self.onCreated = onCreated
+    }
 
     var body: some View {
         NavigationStack {
@@ -143,12 +150,30 @@ private struct CreateTrackerSheet: View {
                         Text("Private").tag(Visibility.private)
                     }
                 }
+
+                if let error = viewModel.error {
+                    Section {
+                        Label {
+                            Text(error)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                        }
+                        .foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle("New Tracker")
             .navigationBarTitleDisplayMode(.inline)
+            .onDisappear {
+                viewModelBindable.error = nil
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        viewModelBindable.error = nil
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {

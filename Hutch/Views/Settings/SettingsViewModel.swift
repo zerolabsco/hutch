@@ -24,7 +24,7 @@ private struct CreateSSHKeyResponse: Decodable, Sendable {
 }
 
 private struct DeleteSSHKeyResponse: Decodable, Sendable {
-    let deleteSSHKey: DeleteResult
+    let deleteSSHKey: DeleteResult?
 }
 
 private struct CreatePGPKeyResponse: Decodable, Sendable {
@@ -32,7 +32,7 @@ private struct CreatePGPKeyResponse: Decodable, Sendable {
 }
 
 private struct DeletePGPKeyResponse: Decodable, Sendable {
-    let deletePGPKey: DeleteResult
+    let deletePGPKey: DeleteResult?
 }
 
 private struct DeleteResult: Decodable, Sendable {
