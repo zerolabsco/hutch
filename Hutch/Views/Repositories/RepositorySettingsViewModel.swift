@@ -6,12 +6,20 @@ private struct UpdateRepoResponse: Decodable, Sendable {
     let updateRepository: UpdatedRepo
 }
 
+private struct UpdateRepoInfoResponse: Decodable, Sendable {
+    let updateRepository: UpdatedRepoInfo
+}
+
 private struct UpdatedRepo: Decodable, Sendable {
-    let id: Int
-    let rid: String
+    let id: Int?
+    let rid: String?
     let name: String
     let description: String?
-    let visibility: Visibility
+    let visibility: Visibility?
+}
+
+private struct UpdatedRepoInfo: Decodable, Sendable {
+    let id: Int
 }
 
 private struct ACLResponse: Decodable, Sendable {
@@ -71,6 +79,7 @@ final class RepositorySettingsViewModel {
     var editedDescription: String
     var editedVisibility: Visibility
     var editedHead: String
+    private let originalEditedHead: String
     var isSavingInfo = false
 
     // MARK: - Rename fields
@@ -116,11 +125,14 @@ final class RepositorySettingsViewModel {
         self.branches = branches
 
         // Extract branch name from HEAD reference
+        let initialEditedHead: String
         if let head = repository.head?.name {
-            self.editedHead = head.replacingOccurrences(of: "refs/heads/", with: "")
+            initialEditedHead = head.replacingOccurrences(of: "refs/heads/", with: "")
         } else {
-            self.editedHead = "main"
+            initialEditedHead = "main"
         }
+        self.editedHead = initialEditedHead
+        self.originalEditedHead = initialEditedHead
     }
 
     // MARK: - Update Repository Info
@@ -133,22 +145,32 @@ final class RepositorySettingsViewModel {
     }
     """
 
+    private static let updateRepoInfoMutation = """
+    mutation updateRepository($id: Int!, $input: RepoInput!) {
+        updateRepository(id: $id, input: $input) {
+            id
+        }
+    }
+    """
+
     func saveInfo() async {
         isSavingInfo = true
         defer { isSavingInfo = false }
         error = nil
 
         do {
-            let input: [String: any Sendable] = [
+            var input: [String: any Sendable] = [
                 "description": editedDescription,
-                "visibility": editedVisibility.rawValue,
-                "HEAD": editedHead
+                "visibility": editedVisibility.rawValue
             ]
+            if let headReference = selectedHeadReferenceForSave() {
+                input["HEAD"] = headReference
+            }
             _ = try await client.execute(
                 service: service,
-                query: Self.updateRepoMutation,
+                query: Self.updateRepoInfoMutation,
                 variables: ["id": repositoryId, "input": input],
-                responseType: UpdateRepoResponse.self
+                responseType: UpdateRepoInfoResponse.self
             )
         } catch {
             self.error = error.localizedDescription
@@ -238,8 +260,9 @@ final class RepositorySettingsViewModel {
     }
 
     func addACL() async {
-        let entity = newACLEntity.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !entity.isEmpty else { return }
+        let rawEntity = newACLEntity.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawEntity.isEmpty else { return }
+        let entity = Self.gitCanonicalEntity(from: rawEntity)
         isAddingACL = true
         defer { isAddingACL = false }
         error = nil
@@ -265,6 +288,33 @@ final class RepositorySettingsViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    static func gitCanonicalEntity(from input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+        let username = trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+        return "~\(username)"
+    }
+
+    static func gitHeadReference(from input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+        if trimmed.hasPrefix("refs/") {
+            return trimmed
+        }
+        return "refs/heads/\(trimmed)"
+    }
+
+    func selectedHeadReferenceForSave() -> String? {
+        let normalizedEditedHead = editedHead.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedEditedHead != originalEditedHead else {
+            return nil
+        }
+
+        return branches.first {
+            $0.name.replacingOccurrences(of: "refs/heads/", with: "") == normalizedEditedHead
+        }?.name
     }
 
     func deleteACL(_ entry: ACLEntry) async {
