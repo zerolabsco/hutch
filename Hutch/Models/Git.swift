@@ -113,7 +113,7 @@ struct GitTree: Codable, Sendable {
 struct GitTextBlob: Codable, Sendable {
     let id: String?
     let shortId: String?
-    let text: String
+    let text: String?
     let size: Int?
 }
 
@@ -134,14 +134,16 @@ struct GitTreeEntryPage: Codable, Sendable {
 extension GitObject: Codable {
     private enum CodingKeys: String, CodingKey {
         case type, id, shortId, entries, text, size, content
+        case typename = "__typename"
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decodeIfPresent(String.self, forKey: .type)
+        let typename = try container.decodeIfPresent(String.self, forKey: .typename)
 
-        switch type {
-        case "TREE":
+        switch type ?? typename {
+        case "TREE", "Tree":
             let tree = GitTree(
                 id: try container.decodeIfPresent(String.self, forKey: .id),
                 shortId: try container.decodeIfPresent(String.self, forKey: .shortId),
@@ -149,13 +151,12 @@ extension GitObject: Codable {
             )
             self = .tree(tree)
 
-        case "BLOB":
-            // TextBlob has a "text" key; BinaryBlob does not
-            if container.contains(.text) {
+        case "BLOB", "TextBlob", "BinaryBlob":
+            if typename == "TextBlob" || container.contains(.text) {
                 let blob = GitTextBlob(
                     id: try container.decodeIfPresent(String.self, forKey: .id),
                     shortId: try container.decodeIfPresent(String.self, forKey: .shortId),
-                    text: try container.decode(String.self, forKey: .text),
+                    text: try container.decodeIfPresent(String.self, forKey: .text),
                     size: try container.decodeIfPresent(Int.self, forKey: .size)
                 )
                 self = .textBlob(blob)
@@ -184,12 +185,14 @@ extension GitObject: Codable {
             try container.encodeIfPresent(tree.entries, forKey: .entries)
         case .textBlob(let blob):
             try container.encode("BLOB", forKey: .type)
+            try container.encode("TextBlob", forKey: .typename)
             try container.encodeIfPresent(blob.id, forKey: .id)
             try container.encodeIfPresent(blob.shortId, forKey: .shortId)
-            try container.encode(blob.text, forKey: .text)
+            try container.encodeIfPresent(blob.text, forKey: .text)
             try container.encodeIfPresent(blob.size, forKey: .size)
         case .binaryBlob(let blob):
             try container.encode("BLOB", forKey: .type)
+            try container.encode("BinaryBlob", forKey: .typename)
             try container.encodeIfPresent(blob.id, forKey: .id)
             try container.encodeIfPresent(blob.shortId, forKey: .shortId)
             try container.encodeIfPresent(blob.size, forKey: .size)

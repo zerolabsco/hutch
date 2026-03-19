@@ -96,6 +96,7 @@ final class FileTreeViewModel {
                             mode
                             object {
                                 type
+                                __typename
                                 id
                                 shortId
                                 ... on Tree {
@@ -110,12 +111,10 @@ final class FileTreeViewModel {
                                     }
                                 }
                                 ... on TextBlob {
-                                    text
                                     size
                                 }
                                 ... on BinaryBlob {
                                     size
-                                    content
                                 }
                             }
                         }
@@ -142,6 +141,7 @@ final class FileTreeViewModel {
                             mode
                             object {
                                 type
+                                __typename
                                 id
                                 shortId
                                 ... on Tree {
@@ -156,12 +156,10 @@ final class FileTreeViewModel {
                                     }
                                 }
                                 ... on TextBlob {
-                                    text
                                     size
                                 }
                                 ... on BinaryBlob {
                                     size
-                                    content
                                 }
                             }
                         }
@@ -187,6 +185,7 @@ final class FileTreeViewModel {
                             mode
                             object {
                                 type
+                                __typename
                                 id
                                 shortId
                                 ... on Tree {
@@ -201,12 +200,10 @@ final class FileTreeViewModel {
                                     }
                                 }
                                 ... on TextBlob {
-                                    text
                                     size
                                 }
                                 ... on BinaryBlob {
                                     size
-                                    content
                                 }
                             }
                         }
@@ -321,16 +318,23 @@ final class FileTreeViewModel {
             // Otherwise fetch the subtree (handles pagination)
             await loadSubtree(name: entry.name, treeId: objectSHA)
 
-        case .textBlob:
-            viewingEntry = entry
-            viewingObject = object
-
-        case .binaryBlob(let blob):
-            if blob.content != nil || blob.size != nil {
+        case .textBlob(let blob):
+            if blob.text != nil {
                 viewingEntry = entry
                 viewingObject = object
             } else if let blobId = blob.id {
                 await loadBlob(entry: entry, blobId: blobId)
+            }
+
+        case .binaryBlob(let blob):
+            if blob.content != nil {
+                viewingEntry = entry
+                viewingObject = object
+            } else if let blobId = blob.id {
+                await loadBlob(entry: entry, blobId: blobId)
+            } else {
+                viewingEntry = entry
+                viewingObject = object
             }
 
         case .unknown:

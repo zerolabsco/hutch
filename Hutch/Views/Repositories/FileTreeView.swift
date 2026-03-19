@@ -235,7 +235,7 @@ private struct FileTreeContentView: View {
 
             GeometryReader { geometry in
                 ScrollView([.vertical, .horizontal]) {
-                    Text(blob.text)
+                    Text(blob.text ?? "")
                         .font(.system(.body, design: .monospaced))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: true, vertical: false)
