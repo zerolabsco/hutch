@@ -104,7 +104,11 @@ final class BuildDetailViewModel {
                 variables: ["id": jobId],
                 responseType: JobDetailResponse.self
             )
-            job = result.job
+            var loadedJob = result.job
+            loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
+                task.withOrdinal(index)
+            }
+            job = loadedJob
         } catch {
             self.error = error.localizedDescription
         }
@@ -113,19 +117,20 @@ final class BuildDetailViewModel {
     }
 
     func loadTaskLog(task: BuildTask) async {
+        let cacheKey = task.logCacheKey
         guard let log = task.log,
               let logURL = URL(string: log.fullURL),
-              !loadingTaskLogs.contains(task.name),
-              taskLogs[task.name] == nil else { return }
-        loadingTaskLogs.insert(task.name)
+              !loadingTaskLogs.contains(cacheKey),
+              taskLogs[cacheKey] == nil else { return }
+        loadingTaskLogs.insert(cacheKey)
 
         do {
-            taskLogs[task.name] = try await client.fetchText(url: logURL)
+            taskLogs[cacheKey] = try await client.fetchText(url: logURL)
         } catch {
             self.error = error.localizedDescription
         }
 
-        loadingTaskLogs.remove(task.name)
+        loadingTaskLogs.remove(cacheKey)
     }
 
     func cancelJob() async {

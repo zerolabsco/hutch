@@ -1,6 +1,10 @@
 import PhotosUI
 import SwiftUI
 
+private let settingsBioMarkdownOptions = AttributedString.MarkdownParsingOptions(
+    interpretedSyntax: .inlineOnlyPreservingWhitespace
+)
+
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
@@ -163,13 +167,7 @@ struct SettingsView: View {
                     Text("Bio")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    RenderedMarkupContentView(
-                        content: .markdown(bio),
-                        readmePath: nil,
-                        colorScheme: colorScheme,
-                        ownerCanonicalName: "",
-                        repositoryName: ""
-                    )
+                    SettingsBioView(markdown: bio)
                 }
             }
 
@@ -422,6 +420,27 @@ struct SettingsView: View {
             }
         }
     }
+}
+
+private struct SettingsBioView: View {
+    let markdown: String
+
+    var body: some View {
+        Text(settingsBioAttributedString(markdown))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tint(.accentColor)
+            .textSelection(.enabled)
+    }
+}
+
+func settingsBioAttributedString(_ markdown: String) -> AttributedString {
+    guard let attributed = try? AttributedString(
+        markdown: markdown,
+        options: settingsBioMarkdownOptions
+    ) else {
+        return AttributedString(markdown)
+    }
+    return attributed
 }
 
 // MARK: - Edit Profile Sheet
@@ -695,7 +714,7 @@ private struct AboutView: View {
                 Link(destination: URL(string: "https://man.sr.ht")!) {
                     SwiftUI.Label("SourceHut Manuals", systemImage: "book")
                 }
-                Link(destination: URL(string: "https://git.sr.ht/~ccleberg/Hutch")!) {
+                Link(destination: URL(string: "https://sr.ht/~ccleberg/Hutch")!) {
                     SwiftUI.Label("Project Repository", systemImage: "folder")
                 }
             }

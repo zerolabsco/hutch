@@ -312,13 +312,13 @@ private struct TaskLogSection: View {
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
-            if viewModel.loadingTaskLogs.contains(task.name) {
+            if viewModel.loadingTaskLogs.contains(task.logCacheKey) {
                 HStack {
                     Spacer()
                     ProgressView("Loading log…")
                     Spacer()
                 }
-            } else if let logText = viewModel.taskLogs[task.name] {
+            } else if let logText = viewModel.taskLogs[task.logCacheKey] {
                 ScrollView(.horizontal, showsIndicators: false) {
                     Text(logText)
                         .font(.caption2.monospaced())

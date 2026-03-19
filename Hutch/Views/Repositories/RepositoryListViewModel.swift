@@ -38,10 +38,13 @@ final class RepositoryListViewModel {
     private(set) var hasMore = false
     private(set) var isSearching = false
     private(set) var isCreatingRepository = false
+    private(set) var hasLoadedSearchIndex = false
+    private var searchIndex: [RepositorySummary] = []
     private let client: SRHTClient
 
     private static let gitCacheKey = "git.repositories"
     private static let hgCacheKey = "hg.repositories"
+    private static let minimumRemoteSearchLength = 3
 
     init(client: SRHTClient) {
         self.client = client
@@ -147,22 +150,23 @@ final class RepositoryListViewModel {
 
         do {
             var filteredResults: [RepositorySummary]
-            
+
             if isSearch {
-                // For search queries, fetch all repositories from both services.
-                filteredResults = try await fetchAllRepositories()
-                
-                // Perform client-side filtering
-                let lowercasedQuery = query.lowercased()
-                filteredResults = filteredResults.filter { repo in
-                    repo.name.lowercased().contains(lowercasedQuery) ||
-                    repo.description?.lowercased().contains(lowercasedQuery) ?? false
+                if hasLoadedSearchIndex || repositories.isEmpty == false {
+                    filteredResults = Self.filterRepositories(repositoriesForSearchIndex, matching: query)
+                } else if Self.shouldRefreshSearchIndex(for: query) {
+                    let repositories = try await fetchAllRepositories(useCache: true)
+                    updateSearchIndex(with: repositories)
+                    filteredResults = Self.filterRepositories(repositoriesForSearchIndex, matching: query)
+                } else {
+                    filteredResults = []
                 }
             } else {
                 let repositories = try await fetchAllRepositories(useCache: true)
+                updateSearchIndex(with: repositories)
                 filteredResults = repositories
             }
-            
+
             repositories = filteredResults.sorted(by: repositorySortOrder)
         } catch {
             // Only show error if we have no cached data to fall back on
@@ -240,6 +244,7 @@ final class RepositoryListViewModel {
                 repository = result.createRepository.repositorySummary(service: .hg)
             }
             repositories.insert(repository, at: 0)
+            insertIntoSearchIndex(repository)
             return repository
         } catch {
             self.error = repositoryCreationErrorMessage(for: error)
@@ -369,6 +374,10 @@ final class RepositoryListViewModel {
 
     private struct HGTipReference: Decodable, Sendable {
         let branch: String
+    }
+
+    private var repositoriesForSearchIndex: [RepositorySummary] {
+        searchIndex
     }
 
     private func fetchPage(
@@ -502,7 +511,9 @@ final class RepositoryListViewModel {
             return []
         }
         if !cachedRepositories.isEmpty {
-            repositories = cachedRepositories.sorted(by: repositorySortOrder)
+            let sortedRepositories = cachedRepositories.sorted(by: repositorySortOrder)
+            repositories = sortedRepositories
+            updateSearchIndex(with: sortedRepositories)
         }
     }
 
@@ -544,5 +555,38 @@ final class RepositoryListViewModel {
             return lhs.service.rawValue < rhs.service.rawValue
         }
         return lhs.updated > rhs.updated
+    }
+
+    private func updateSearchIndex(with repositories: [RepositorySummary]) {
+        searchIndex = repositories.sorted(by: repositorySortOrder)
+        hasLoadedSearchIndex = !searchIndex.isEmpty
+    }
+
+    private func insertIntoSearchIndex(_ repository: RepositorySummary) {
+        let updatedRepositories = (repositoriesForSearchIndex + [repository])
+            .uniqued(on: \.id)
+            .sorted(by: repositorySortOrder)
+        updateSearchIndex(with: updatedRepositories)
+    }
+
+    static func shouldRefreshSearchIndex(for query: String) -> Bool {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).count >= Self.minimumRemoteSearchLength
+    }
+
+    static func filterRepositories(_ repositories: [RepositorySummary], matching query: String) -> [RepositorySummary] {
+        let lowercasedQuery = query.lowercased()
+        return repositories.filter { repo in
+            repo.name.lowercased().contains(lowercasedQuery) ||
+            repo.description?.lowercased().contains(lowercasedQuery) ?? false
+        }
+    }
+}
+
+private extension Array {
+    func uniqued<ID: Hashable>(on keyPath: KeyPath<Element, ID>) -> [Element] {
+        var seenIDs: Set<ID> = []
+        return filter { element in
+            seenIDs.insert(element[keyPath: keyPath]).inserted
+        }
     }
 }

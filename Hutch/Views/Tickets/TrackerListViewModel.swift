@@ -139,7 +139,7 @@ final class TrackerListViewModel {
             trackers.insert(tracker, at: 0)
             return tracker
         } catch {
-            self.error = "Couldn’t create the tracker. \(error.localizedDescription)"
+            self.error = trackerCreationErrorMessage(for: error)
             return nil
         }
     }
@@ -162,5 +162,22 @@ final class TrackerListViewModel {
 
     private struct CreateTrackerResponse: Decodable, Sendable {
         let createTracker: TrackerSummary
+    }
+
+    private func trackerCreationErrorMessage(for error: Error) -> String {
+        let message: String
+
+        if let srhtError = error as? SRHTError {
+            switch srhtError {
+            case .graphQLErrors(let errors):
+                message = errors.map(\.message).joined(separator: "\n")
+            default:
+                message = srhtError.localizedDescription
+            }
+        } else {
+            message = error.localizedDescription
+        }
+
+        return "Couldn’t create the tracker. \(message)"
     }
 }

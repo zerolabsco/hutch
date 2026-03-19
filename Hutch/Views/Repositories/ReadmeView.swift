@@ -387,14 +387,20 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
         let alt = nsText.substring(with: match.range(at: 1))
         let source = nsText.substring(with: match.range(at: 2))
         let resolvedSource = imageURLResolver?(source) ?? source
-        return #"<img src="\#(resolvedSource)" alt="\#(escapeHTMLAttribute(alt))">"#
+        guard let sanitizedSource = sanitizedReadmeImageURLString(resolvedSource) else {
+            return escapeHTML(alt)
+        }
+        return #"<img src="\#(sanitizedSource)" alt="\#(escapeHTMLAttribute(alt))">"#
     }
     // Links: [text](url)
-    result = result.replacingOccurrences(
-        of: #"\[([^\]]+)\]\(([^)]+)\)"#,
-        with: #"<a href="$2">$1</a>"#,
-        options: .regularExpression
-    )
+    result = replaceMatches(in: result, pattern: #"\[([^\]]+)\]\(([^)]+)\)"#) { match, nsText in
+        let label = nsText.substring(with: match.range(at: 1))
+        let rawURL = nsText.substring(with: match.range(at: 2))
+        guard let sanitizedURL = sanitizedReadmeLinkURLString(rawURL) else {
+            return label
+        }
+        return #"<a href="\#(sanitizedURL)">\#(label)</a>"#
+    }
     // Bold: **text**
     result = result.replacingOccurrences(
         of: #"\*\*(.+?)\*\*"#,
@@ -676,7 +682,10 @@ nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((St
         ) {
             return imageHTML
         }
-        return #"<a href="\#(url)">\#(label)</a>"#
+        guard let sanitizedURL = sanitizedReadmeLinkURLString(url) else {
+            return label
+        }
+        return #"<a href="\#(sanitizedURL)">\#(label)</a>"#
     }
     result = protectMatches(
         in: result,
@@ -691,7 +700,10 @@ nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((St
         ) {
             return imageHTML
         }
-        return #"<a href="\#(url)">\#(url)</a>"#
+        guard let sanitizedURL = sanitizedReadmeLinkURLString(url) else {
+            return url
+        }
+        return #"<a href="\#(sanitizedURL)">\#(url)</a>"#
     }
     result = protectMatches(
         in: result,
@@ -740,6 +752,57 @@ nonisolated func escapeHTML(_ text: String) -> String {
 
 nonisolated private func escapeHTMLAttribute(_ text: String) -> String {
     escapeHTML(text).replacingOccurrences(of: "'", with: "&#39;")
+}
+
+nonisolated func sanitizedReadmeLinkURLString(_ rawURL: String) -> String? {
+    sanitizeReadmeURLString(
+        rawURL,
+        allowedSchemes: ["http", "https", "mailto"],
+        allowsFragmentOnly: true
+    )
+}
+
+nonisolated func sanitizedReadmeImageURLString(_ rawURL: String) -> String? {
+    sanitizeReadmeURLString(
+        rawURL,
+        allowedSchemes: ["http", "https"],
+        allowsFragmentOnly: false
+    )
+}
+
+nonisolated func isAllowedReadmeNavigationURL(_ url: URL) -> Bool {
+    guard let scheme = url.scheme?.lowercased() else {
+        return false
+    }
+    if scheme == "about" || scheme == "data" {
+        return true
+    }
+    guard let sanitizedURL = sanitizedReadmeLinkURLString(url.absoluteString) else {
+        return false
+    }
+    return sanitizedURL == escapeHTMLAttribute(url.absoluteString)
+}
+
+nonisolated private func sanitizeReadmeURLString(
+    _ rawURL: String,
+    allowedSchemes: Set<String>,
+    allowsFragmentOnly: Bool
+) -> String? {
+    let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedURL.isEmpty else { return nil }
+
+    if allowsFragmentOnly, trimmedURL.hasPrefix("#"), trimmedURL.count > 1 {
+        return escapeHTMLAttribute(trimmedURL)
+    }
+
+    guard let components = URLComponents(string: trimmedURL),
+          let scheme = components.scheme?.lowercased(),
+          allowedSchemes.contains(scheme),
+          let sanitizedURL = components.url?.absoluteString else {
+        return nil
+    }
+
+    return escapeHTMLAttribute(sanitizedURL)
 }
 
 nonisolated private func isOrgTableLine(_ line: String) -> Bool {
@@ -899,6 +962,7 @@ struct HTMLWebView: View {
     let html: String
     let colorScheme: ColorScheme
     var style: HTMLWebViewStyle = .readme
+    @Environment(\.openURL) private var openURL
     @State private var contentHeight: CGFloat = 1
     @State private var loadError: String?
     @State private var reloadToken = 0
@@ -921,6 +985,7 @@ struct HTMLWebView: View {
                     html: html,
                     colorScheme: colorScheme,
                     style: style,
+                    openURL: openURL,
                     dynamicHeight: $contentHeight,
                     loadError: $loadError,
                     reloadToken: reloadToken
@@ -956,6 +1021,7 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
     let html: String
     let colorScheme: ColorScheme
     let style: HTMLWebViewStyle
+    let openURL: OpenURLAction
     @Binding var dynamicHeight: CGFloat
     @Binding var loadError: String?
     let reloadToken: Int
@@ -966,12 +1032,13 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = false
         config.websiteDataStore = HTMLWebViewCoordinator.websiteDataStore
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.clipsToBounds = false
+        webView.allowsLinkPreview = false
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.clipsToBounds = false
@@ -1088,6 +1155,31 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
         handleLoadFailure(error)
     }
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
+    ) {
+        guard let requestURL = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        if navigationAction.navigationType == .linkActivated {
+            if isAllowedReadmeNavigationURL(requestURL) {
+                parent.openURL(requestURL)
+            }
+            decisionHandler(.cancel)
+            return
+        }
+
+        if isAllowedReadmeNavigationURL(requestURL) {
+            decisionHandler(.allow)
+        } else {
+            decisionHandler(.cancel)
+        }
+    }
+
     private func handleLoadFailure(_ error: Error) {
         let nsError = error as NSError
         guard nsError.code != NSURLErrorCancelled else { return }
@@ -1097,28 +1189,15 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
     }
 
     private func updateHeight(for webView: WKWebView) {
-        let script = """
-        Math.max(
-            document.body.scrollHeight,
-            document.body.offsetHeight,
-            document.documentElement.scrollHeight,
-            document.documentElement.offsetHeight,
-            Math.ceil(document.body.getBoundingClientRect().height),
-            Math.ceil(document.documentElement.getBoundingClientRect().height)
-        )
-        """
-
-        webView.evaluateJavaScript(script) { [weak self] result, _ in
-            guard let value = result as? Double, value > 0 else { return }
-            let height = ceil(value) + 4
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if let html = self.lastHTML {
-                    Self.heightCache.setObject(NSNumber(value: Double(height)), forKey: html as NSString)
-                }
-                if abs(self.parent.dynamicHeight - height) > 0.5 {
-                    self.parent.dynamicHeight = height
-                }
+        webView.layoutIfNeeded()
+        let height = ceil(max(webView.scrollView.contentSize.height, webView.sizeThatFits(.zero).height)) + 4
+        guard height > 0 else { return }
+        DispatchQueue.main.async {
+            if let html = self.lastHTML {
+                Self.heightCache.setObject(NSNumber(value: Double(height)), forKey: html as NSString)
+            }
+            if abs(self.parent.dynamicHeight - height) > 0.5 {
+                self.parent.dynamicHeight = height
             }
         }
     }

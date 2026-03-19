@@ -71,10 +71,7 @@ struct TicketDetailView: View {
                 if ticket.status == .resolved {
                     Button {
                         Task {
-                            await viewModel.updateStatus(
-                                status: .reported,
-                                resolution: .unresolved
-                            )
+                            await viewModel.updateStatus(status: .reported)
                         }
                     } label: {
                         SwiftUI.Label("Reopen", systemImage: "arrow.uturn.backward")

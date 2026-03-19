@@ -34,10 +34,33 @@ enum TaskStatus: String, Codable, Sendable {
 
 /// A single task within a build job.
 struct BuildTask: Codable, Sendable, Identifiable {
-    var id: String { name }
+    private(set) var ordinal: Int?
     let name: String
     let status: TaskStatus
     let log: BuildLog?
+
+    var id: String {
+        if let ordinal {
+            return "\(ordinal):\(name)"
+        }
+        return [name, log?.fullURL, status.rawValue]
+            .compactMap { $0 }
+            .joined(separator: "::")
+    }
+
+    var logCacheKey: String {
+        id
+    }
+
+    func withOrdinal(_ ordinal: Int) -> BuildTask {
+        var task = self
+        task.ordinal = ordinal
+        return task
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, status, log
+    }
 }
 
 // MARK: - Job Summary (for list view)
@@ -90,7 +113,7 @@ struct JobDetail: Codable, Sendable {
     let visibility: Visibility?
     let image: String?
     let manifest: String?
-    let tasks: [BuildTask]
+    var tasks: [BuildTask]
     let log: BuildLog?
     let owner: Entity
 }

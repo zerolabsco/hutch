@@ -130,6 +130,19 @@ final class TicketDetailViewModel {
         return lhs.created < rhs.created
     }
 
+    static func statusUpdateInput(
+        status: TicketStatus,
+        resolution: TicketResolution?
+    ) -> [String: any Sendable] {
+        var input: [String: any Sendable] = [
+            "status": status.rawValue
+        ]
+        if status == .resolved, let resolution {
+            input["resolution"] = resolution.rawValue
+        }
+        return input
+    }
+
     init(ownerUsername: String, trackerName: String, trackerId: Int, trackerRid: String, ticketId: Int, client: SRHTClient) {
         self.ownerUsername = ownerUsername
         self.trackerName = trackerName
@@ -360,16 +373,13 @@ final class TicketDetailViewModel {
 
     // MARK: - Ticket Actions
 
-    func updateStatus(status: TicketStatus, resolution: TicketResolution) async {
+    func updateStatus(status: TicketStatus, resolution: TicketResolution? = nil) async {
         guard !isPerformingAction else { return }
         isPerformingAction = true
         error = nil
 
         do {
-            let input: [String: any Sendable] = [
-                "status": status.rawValue,
-                "resolution": resolution.rawValue
-            ]
+            let input = Self.statusUpdateInput(status: status, resolution: resolution)
             _ = try await client.execute(
                 service: .todo,
                 query: Self.updateStatusMutation,
