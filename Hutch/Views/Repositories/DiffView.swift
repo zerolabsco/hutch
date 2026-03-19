@@ -9,14 +9,23 @@ struct DiffView: View {
     let diff: String
 
     var body: some View {
-        let lines = diff.components(separatedBy: "\n")
+        let lines = normalizedDiff.components(separatedBy: "\n")
 
-        LazyVStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 DiffLineView(line: line)
             }
         }
-        .font(.caption.monospaced())
+        .font(.system(.caption, design: .monospaced))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var normalizedDiff: String {
+        diff
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
     }
 }
 
@@ -27,7 +36,6 @@ private struct DiffLineView: View {
         Text(line.isEmpty ? " " : line)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
-            .padding(.vertical, 1)
             .background(backgroundColor)
             .foregroundStyle(foregroundColor)
             .fontWeight(isHeader ? .semibold : .regular)
@@ -47,9 +55,9 @@ private struct DiffLineView: View {
         switch kind {
         case .added:      .green.opacity(0.15)
         case .removed:    .red.opacity(0.15)
-        case .hunk:       .gray.opacity(0.12)
-        case .fileHeader: .gray.opacity(0.08)
-        case .meta:       .gray.opacity(0.05)
+        case .hunk:       .clear
+        case .fileHeader: .clear
+        case .meta:       .clear
         case .context:    .clear
         }
     }

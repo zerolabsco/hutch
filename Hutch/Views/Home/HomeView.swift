@@ -115,8 +115,8 @@ struct HomeView: View {
                 }
             }
         } header: {
-            HomeSectionHeader("Recent Builds") {
-                BuildListView()
+            HomeSectionActionHeader("Recent Builds") {
+                appState.selectedTab = .builds
             }
         }
     }
@@ -238,6 +238,27 @@ private struct HomeSectionHeader<Destination: View>: View {
                     .font(.caption.weight(.medium))
             }
             .buttonStyle(.plain)
+        }
+        .textCase(nil)
+    }
+}
+
+private struct HomeSectionActionHeader: View {
+    let title: String
+    let action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button("See All", action: action)
+                .font(.caption.weight(.medium))
+                .buttonStyle(.plain)
         }
         .textCase(nil)
     }

@@ -7,6 +7,15 @@ import WebKit
 @MainActor
 final class AppState {
 
+    enum Tab: Hashable {
+        case home
+        case inbox
+        case repositories
+        case builds
+        case tickets
+        case settings
+    }
+
     enum AuthPhase {
         /// App just launched, checking for an existing token.
         case launching
@@ -24,6 +33,8 @@ final class AppState {
     var isAuthenticated: Bool {
         authPhase == .authenticated && currentUser != nil
     }
+
+    var selectedTab: Tab = .home
 
     // MARK: - Current user (populated after successful validation)
 
@@ -94,6 +105,7 @@ final class AppState {
         await clearWebData()
         clearWebContentRenderCaches()
         authPhase = .unauthenticated
+        selectedTab = .home
     }
 
     func resetAppData() async {
@@ -108,6 +120,7 @@ final class AppState {
         clearWebContentRenderCaches()
 
         authPhase = .unauthenticated
+        selectedTab = .home
     }
 
     // MARK: - Deep link resolution
@@ -208,6 +221,7 @@ final class AppState {
         client.responseCache.clear()
         currentUser = nil
         pendingDeepLink = nil
+        selectedTab = .home
     }
 
     private func clearWebData() async {

@@ -4,17 +4,8 @@ import SwiftUI
 /// full-screen sheet for token entry on first launch.
 struct RootView: View {
     @Environment(AppState.self) private var appState
-
-    enum Tab: Hashable {
-        case home
-        case repositories
-        case builds
-        case tickets
-        case settings
-    }
-
-    @State private var selectedTab: Tab = .home
     @State private var homePath = NavigationPath()
+    @State private var inboxPath = NavigationPath()
     @State private var repoPath = NavigationPath()
     @State private var buildsPath = NavigationPath()
     @State private var ticketsPath = NavigationPath()
@@ -48,19 +39,29 @@ struct RootView: View {
     // MARK: - Tab View
 
     private var tabContent: some View {
-        TabView(selection: $selectedTab) {
+        @Bindable var appState = appState
+
+        return TabView(selection: $appState.selectedTab) {
             NavigationStack(path: $homePath) {
                 HomeView()
             }
-            .tag(Tab.home)
+            .tag(AppState.Tab.home)
             .tabItem {
                 Label("Home", systemImage: "house")
+            }
+
+            NavigationStack(path: $inboxPath) {
+                InboxView()
+            }
+            .tag(AppState.Tab.inbox)
+            .tabItem {
+                Label("Inbox", systemImage: "tray")
             }
 
             NavigationStack(path: $repoPath) {
                 RepositoryListView()
             }
-            .tag(Tab.repositories)
+            .tag(AppState.Tab.repositories)
             .tabItem {
                 Label("Repositories", systemImage: "book.closed")
             }
@@ -73,7 +74,7 @@ struct RootView: View {
                         BuildDetailView(jobId: jobId)
                     }
             }
-            .tag(Tab.builds)
+            .tag(AppState.Tab.builds)
             .tabItem {
                 Label("Builds", systemImage: "hammer")
             }
@@ -85,13 +86,13 @@ struct RootView: View {
                         TicketDetailView(ownerUsername: target.ownerUsername, trackerName: target.trackerName, trackerId: target.trackerId, trackerRid: target.trackerRid, ticketId: target.ticketId)
                     }
             }
-            .tag(Tab.tickets)
+            .tag(AppState.Tab.tickets)
             .tabItem {
                 Label("Tickets", systemImage: "ticket")
             }
 
             SettingsView()
-                .tag(Tab.settings)
+                .tag(AppState.Tab.settings)
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
@@ -117,10 +118,11 @@ struct RootView: View {
             break
         case .unauthenticated:
             homePath = NavigationPath()
+            inboxPath = NavigationPath()
             repoPath = NavigationPath()
             buildsPath = NavigationPath()
             ticketsPath = NavigationPath()
-            selectedTab = .home
+            appState.selectedTab = .home
             isResolvingDeepLink = false
         case .authenticated:
             consumePendingDeepLinkIfPossible(appState.pendingDeepLink)
@@ -143,7 +145,7 @@ struct RootView: View {
         case .build(let jobId):
             // Reset the builds navigation and push the detail
             buildsPath = NavigationPath()
-            selectedTab = .builds
+            appState.selectedTab = .builds
             // Defer the push slightly so the tab switch takes effect
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
@@ -162,7 +164,7 @@ struct RootView: View {
             do {
                 let summary = try await appState.resolveRepository(owner: owner, name: repo)
                 repoPath = NavigationPath()
-                selectedTab = .repositories
+                appState.selectedTab = .repositories
                 try? await Task.sleep(for: .milliseconds(100))
                 repoPath.append(summary)
             } catch {
@@ -178,7 +180,7 @@ struct RootView: View {
             do {
                 let trackerSummary = try await appState.resolveTracker(owner: owner, name: tracker)
                 ticketsPath = NavigationPath()
-                selectedTab = .tickets
+                appState.selectedTab = .tickets
                 try? await Task.sleep(for: .milliseconds(100))
                 ticketsPath.append(trackerSummary)
                 try? await Task.sleep(for: .milliseconds(100))
