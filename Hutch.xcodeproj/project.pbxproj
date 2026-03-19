@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8B2F89622F69DEA900FC0253 /* TODO.md in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89612F69DEA900FC0253 /* TODO.md */; };
 		8B2F89662F69DEB900FC0253 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89632F69DEB900FC0253 /* LICENSE */; };
 		8B2F89672F69DEB900FC0253 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89642F69DEB900FC0253 /* README.md */; };
 		8B2F89682F69DEB900FC0253 /* SECURITY.md in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89652F69DEB900FC0253 /* SECURITY.md */; };
@@ -24,7 +23,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		8B2F89612F69DEA900FC0253 /* TODO.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = TODO.md; sourceTree = "<group>"; };
 		8B2F89632F69DEB900FC0253 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		8B2F89642F69DEB900FC0253 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		8B2F89652F69DEB900FC0253 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SECURITY.md; sourceTree = "<group>"; };
@@ -86,7 +84,6 @@
 				8B2F89632F69DEB900FC0253 /* LICENSE */,
 				8B2F89642F69DEB900FC0253 /* README.md */,
 				8B2F89652F69DEB900FC0253 /* SECURITY.md */,
-				8B2F89612F69DEA900FC0253 /* TODO.md */,
 				8B4B28D32F6704280045FA19 /* Hutch */,
 				8B8182B82F6B73F3000AE049 /* HutchTests */,
 				8B4B28D22F6704280045FA19 /* Products */,
@@ -194,7 +191,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8B2F89622F69DEA900FC0253 /* TODO.md in Resources */,
 				8B2F89662F69DEB900FC0253 /* LICENSE in Resources */,
 				8B2F89672F69DEB900FC0253 /* README.md in Resources */,
 				8B2F89682F69DEB900FC0253 /* SECURITY.md in Resources */,

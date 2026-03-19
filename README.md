@@ -1,58 +1,88 @@
-# Hutch for Sourcehut
-Sourcehut on iOS
+# Hutch
+iOS client for SourceHut.
 
 [![builds.sr.ht status](https://builds.sr.ht/~ccleberg/Hutch.svg)](https://builds.sr.ht/~ccleberg/Hutch?)
 
-## Table of Contents
+## Overview
 
-- [Introduction](#introduction)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+Hutch is a native SwiftUI app for browsing and managing SourceHut services on iPhone and iPad. It uses SourceHut's GraphQL APIs and stores your personal access token in the iOS keychain.
 
-## Introduction
+The app currently includes:
 
-**Hutch** is a native Swift client on iOS for [Sourcehut](https://sr.ht).
+- Home dashboard with assigned tickets, recent builds, and projects
+- Repository browsing for Git and Mercurial repositories
+- Repository details including README, references, commits, diffs, files, artifacts, and settings
+- Tracker and ticket browsing, ticket detail views, and tracker creation
+- Build job browsing, build detail views, and build submission
+- Inbox and mailing list reading flows
+- Paste browsing, creation, and detail views
+- Profile and account settings, including SSH keys, PGP keys, and personal access token management
+- Deep links for repositories, tickets, and build jobs
 
-## Installation
+Some SourceHut services are still browser-only from within Hutch. Unsupported areas currently open in Safari instead of rendering in-app.
 
-To get started with Hutch, follow these steps:
+## Requirements
 
-1. Clone the repository: `git clone
-   https://git.sr.ht/~ccleberg/Hutch`
+- Xcode with current iOS SDK support
+- iOS Simulator or physical iOS device
+- A SourceHut account
+- A SourceHut personal access token
+
+## Getting Started
+
+1. Clone the repository:
+
+   ```sh
+   git clone https://git.sr.ht/~ccleberg/Hutch
+   ```
+
 2. Open the project in Xcode.
-3. Run the app on your device or simulator.
+3. Build and run the app on a simulator or device.
+4. On first launch, create or paste a SourceHut personal access token.
 
-## Usage
+You can create a token at:
 
-Provide instructions on how to use the app. You might include:
+- `https://meta.sr.ht/oauth/personal-access-tokens`
 
-- **Step 1**: To login, use a PAT in Sourcehut's portal:
-  https://meta.sr.ht/oauth2/personal-token
-- **Step 2**: Navigate the app the same way you'd navigate Sourcehut.
-- **Step 3**: If something doesn't work as expected, send us an email!
+## Using Hutch
+
+After signing in with a valid token, Hutch presents five primary areas:
+
+- `Home`: dashboard for projects, assigned tickets, recent builds, and inbox access
+- `Repositories`: browse, search, create, and manage repositories
+- `Tickets`: browse trackers, create trackers, and view ticket details
+- `Builds`: inspect build jobs and submit new builds
+- `More`: lists, pastes, settings, and external links for unsupported services
+
+Authentication notes:
+
+- Hutch validates the token against `meta.sr.ht` before saving it
+- The token is stored in the iOS keychain
+- `Reset App Data` removes saved token data, caches, cookies, and local web data from the device
+
+## Development
+
+The project is an Xcode app with tests under `HutchTests`.
+
+Typical workflow:
+
+1. Open the workspace or project in Xcode.
+2. Select the Hutch app scheme.
+3. Build the app.
+4. Run the test plan in `Hutch/HutchTests.xctestplan`.
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
+Contributions are welcome. Keep changes scoped, include tests when behavior changes, and open a pull request with a clear summary of the user-facing impact.
 
-1. Fork the repository.
-2. Create a new branch for your feature (`git checkout -b feature-xyz`).
-3. Make your changes.
-4. Commit your changes and push to the branch.
-5. Open a pull request.
+## Security
+
+If you discover a security issue, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-This project is licensed under the GPL 3.0 or later License. See the
-[LICENSE](LICENSE) file for more information.
+This project is licensed under the GPL 3.0 or later. See [LICENSE](LICENSE).
 
 ## Contact
 
-For questions or feedback, please reach out to [hello@cleberg.net].
-
----
-
-Thank you for checking out **Hutch**! We hope you find it useful and enjoyable.
+Questions or feedback: hello@cleberg.net
