@@ -4,7 +4,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hutch — native sourcehut client for iPhone</title>
+  <title>Hutch — native SourceHut client for iOS</title>
+  <meta name="description"
+    content="Hutch is a native iOS client for SourceHut with support for repositories, builds, tickets, mailing lists, projects, and more." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -16,51 +18,124 @@
           <img class="app-icon" src="https://img.cleberg.net/apps/hutch/logo/hutch_light.png" alt="Hutch icon" />
           <div>
             <h1>Hutch</h1>
-            <p class="subtitle">A native sourcehut client for iPhone</p>
+            <p class="subtitle">A native SourceHut client for iOS</p>
           </div>
         </a>
 
         <div class="hero-actions">
-          <a href="#" class="store-link">
+          <a href="#" class="store-link" aria-label="Download Hutch on the App Store">
             <img src="storebutton.svg" class="store-img" alt="Download on the App Store" />
           </a>
 
-          <nav class="header-links">
+          <nav class="header-links" aria-label="Hutch links">
             <a href="https://sr.ht/~ccleberg/Hutch/">Source Code</a>
             <span>·</span>
             <a href="mailto:hello@cleberg.net">Email</a>
           </nav>
         </div>
       </div>
+
+      <div class="intro-copy">
+        <p class="lede">SourceHut workflows, built for mobile.</p>
+        <p>Hutch is a fast, native iOS app for working with SourceHut when you are away from your desk. It focuses on
+          the things that matter on mobile: triaging work, reviewing patches, monitoring builds, following discussions,
+          and managing repositories and tickets without a browser.</p>
+      </div>
     </header>
 
     <main>
+      <div class="info-banner">
+        Hutch is currently under review by Apple and not yet available for download.
+        This page will be updated with the App Store link once approved.
+      </div>
       <section class="content-grid">
         <div>
           <h2>Why it exists</h2>
-          <p>Built for people who prefer simple tools, plain text, and fast workflows.</p>
-          <p>Sourcehut is popular because of its simplicity and effectiveness, and I wanted an app that inherited those
-            traits.</p>
+          <p>SourceHut is intentionally simple, efficient, and workflow-focused. Hutch brings that same philosophy to
+            iOS with an interface designed for quick decisions and real work on the go.</p>
+          <p>Instead of treating mobile as a stripped-down viewer, Hutch is meant to be a practical client for reading,
+            responding, creating, and managing work across the SourceHut ecosystem.</p>
         </div>
 
         <div>
           <h2>What it does</h2>
-          <ul>
-            <li>Browse repositories</li>
-            <li>Monitor builds and logs</li>
-            <li>Manage trackers and tickets</li>
-            <li>Git + Mercurial support</li>
-            <li>Profile & key management</li>
+          <ul class="feature-list">
+            <li>Review patch threads and browse mailing lists</li>
+            <li>Manage trackers, tickets, assignees, labels, and comments</li>
+            <li>Browse Git and Mercurial repositories, files, refs, commits, and diffs</li>
+            <li>Submit, monitor, retry, and inspect builds and logs</li>
+            <li>Follow projects linking repositories, trackers, and lists</li>
+            <li>Manage profile settings, SSH keys, PGP keys, and access tokens</li>
           </ul>
         </div>
       </section>
 
       <section class="screenshots">
         <h2>Interface</h2>
-        <div class="shot-grid">
-          <img src="https://img.cleberg.net/apps/hutch/screenshots/code.webp">
-          <img src="https://img.cleberg.net/apps/hutch/screenshots/builds.webp">
-          <img src="https://img.cleberg.net/apps/hutch/screenshots/todo.webp">
+        <p class="section-intro">From patch review to trackers, builds, repositories, and project organization, Hutch is
+          built to make SourceHut feel at home on iOS.</p>
+        <div class="shot-scroll" aria-label="Hutch screenshots">
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/01_patch.jpg" alt="Patch review screenshot"
+              loading="lazy" />
+            <figcaption>Review patches anywhere</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/02_thread.jpg" alt="Threaded inbox screenshot"
+              loading="lazy" />
+            <figcaption>Stay on top of discussions</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/03_builds.jpg" alt="Builds screenshot"
+              loading="lazy" />
+            <figcaption>Monitor builds in real time</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/04_tickets.jpg" alt="Tickets screenshot"
+              loading="lazy" />
+            <figcaption>Manage issues on the go</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/05_repo.jpg" alt="Repository diff screenshot"
+              loading="lazy" />
+            <figcaption>Explore your code</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/06_projects.jpg" alt="Projects screenshot"
+              loading="lazy" />
+            <figcaption>Everything in one place</figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img src="https://img.cleberg.net/apps/hutch/screenshots/iOS/07_actions.jpg"
+              alt="Build submission screenshot" loading="lazy" />
+            <figcaption>Take action instantly</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="feature-sections">
+        <div class="feature-panel">
+          <h2>Major features</h2>
+          <ul class="feature-list">
+            <li>Home dashboard with projects, assigned tickets, recent builds, and inbox shortcuts</li>
+            <li>Unread-first inbox with thread detail, patch rendering, and reply via Apple Mail</li>
+            <li>Git and Mercurial repository browsing, settings, ACLs, and creation flows</li>
+            <li>Tracker and ticket workflows including comments, assignees, resolutions, and labels</li>
+            <li>Build submission, build history, log viewing, cancellation, and rebuild flows</li>
+            <li>Project views linking repositories, trackers, and mailing lists into one hub</li>
+          </ul>
+        </div>
+
+        <div class="feature-panel">
+          <h2>Built for SourceHut users</h2>
+          <ul class="feature-list">
+            <li>Native Swift interface with no analytics, ads, or tracking SDKs</li>
+            <li>Deep links for repositories, tickets, and builds via <code>hutch://</code></li>
+            <li>Share actions across repositories, files, commits, tickets, builds, and profiles</li>
+            <li>Pull-to-refresh, loading states, empty states, and error overlays across major screens</li>
+            <li>Keychain-backed authentication with secure SourceHut personal access tokens</li>
+            <li>Profile management including avatars, SSH keys, PGP keys, and token/grant viewing</li>
+          </ul>
         </div>
       </section>
 
@@ -80,7 +155,7 @@
       </section>
     </main>
 
-    <footer>
+    <footer class="site-footer">
       © 2026 <a href="https://cleberg.net">Christian Cleberg</a>
     </footer>
   </div>

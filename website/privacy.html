@@ -17,12 +17,12 @@
                         alt="Hutch icon" />
                     <div>
                         <h1>Hutch</h1>
-                        <p class="subtitle">A native sourcehut client for iPhone</p>
+                        <p class="subtitle">A native SourceHut client for iPhone</p>
                     </div>
                 </a>
 
                 <div class="hero-actions">
-                    <a href="#" class="store-link">
+                    <a href="#" class="store-link" aria-label="Download Hutch on the App Store">
                         <img src="storebutton.svg" class="store-img" alt="Download on the App Store" />
                     </a>
 
@@ -40,12 +40,12 @@
                 <h2>Privacy Policy</h2>
 
                 <p><strong>Hutch</strong><br>
-                    Last updated: March 17, 2026</p>
+                    Last updated: March 20, 2026</p>
 
                 <h3>Overview</h3>
                 <p>
-                    Hutch is a client for SourceHut. This app allows users to browse repositories,
-                    tickets, and builds using their own SourceHut account.
+                    Hutch is a native client for SourceHut on iPhone. It lets users work with repositories,
+                    projects, mailing lists, tickets, and builds using their own SourceHut account.
                 </p>
 
                 <h3>Data Collection</h3>
@@ -53,8 +53,8 @@
                     Hutch does not collect, store, or transmit personal data to the developer.
                 </p>
                 <p>
-                    All data displayed in the app is retrieved directly from SourceHut using
-                    user-provided authentication credentials.
+                    All data shown in the app is retrieved directly from SourceHut using credentials provided by the
+                    user.
                 </p>
 
                 <h3>Authentication</h3>
@@ -62,16 +62,19 @@
                     Hutch uses a SourceHut Personal Access Token (PAT) provided by the user.
                 </p>
                 <p>
-                    The token is stored securely on-device and is used only to authenticate requests
+                    The token is stored securely on-device using iOS secure storage and is used only to authenticate
+                    requests
                     to SourceHut. The developer does not have access to this token.
                 </p>
 
                 <h3>Data Usage</h3>
                 <p>The app communicates with SourceHut servers to:</p>
                 <ul>
-                    <li>fetch repositories, files, and commits</li>
-                    <li>retrieve and update tickets</li>
-                    <li>submit and monitor builds</li>
+                    <li>fetch repositories, files, commits, and project metadata</li>
+                    <li>retrieve and update trackers, tickets, labels, and comments</li>
+                    <li>read mailing lists, inbox threads, and patch discussions</li>
+                    <li>submit, inspect, cancel, and rebuild build jobs</li>
+                    <li>manage profile data, avatars, SSH keys, PGP keys, and access tokens</li>
                 </ul>
                 <p>
                     No data is transmitted to any servers operated by the developer.
@@ -79,7 +82,11 @@
 
                 <h3>Third-Party Services</h3>
                 <p>
-                    Hutch communicates with SourceHut services (sr.ht) to retrieve user data.
+                    Hutch communicates with SourceHut services (sr.ht) to retrieve and update user data.
+                </p>
+                <p>
+                    When replying to mailing list threads, Hutch can hand the message off to Apple Mail using the iOS
+                    Mail composer.
                 </p>
                 <p>
                     No analytics, advertising, or tracking SDKs are used.
@@ -87,15 +94,17 @@
 
                 <h3>User-Generated Content</h3>
                 <p>
-                    The app displays content from SourceHut, including repositories, tickets, and
-                    builds. This content is accessed based on the user’s authentication and
-                    permissions.
+                    Hutch displays and edits content from SourceHut, including repositories, tickets, mailing list
+                    threads,
+                    and builds. This content is accessed based on the user’s authentication and permissions.
                 </p>
 
                 <h3>Device Permissions</h3>
                 <p>
-                    Hutch does not request access to sensitive device data such as location,
-                    contacts, camera, or microphone.
+                    Hutch may request access to Photos when the user chooses to upload a profile avatar.
+                </p>
+                <p>
+                    Hutch does not request access to location, contacts, camera, or microphone.
                 </p>
 
                 <h3>Changes to This Policy</h3>
@@ -112,7 +121,7 @@
         </main>
 
         <footer class="site-footer">
-      © 2026 <a href="https://cleberg.net">Christian Cleberg</a>
+            © 2026 <a href="https://cleberg.net">Christian Cleberg</a>
         </footer>
     </div>
 </body>
