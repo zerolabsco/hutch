@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RepositoryRowView: View {
     let repository: RepositorySummary
@@ -54,7 +55,33 @@ struct RepositoryRowView: View {
             }
         }
         .padding(.vertical, 2)
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = httpsCloneURL(for: repository)
+            } label: {
+                Label("Copy HTTPS URL", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                UIPasteboard.general.string = sshCloneURL(for: repository)
+            } label: {
+                Label("Copy SSH URL", systemImage: "terminal")
+            }
+        }
     }
+}
+
+private func httpsCloneURL(for repository: RepositorySummary) -> String {
+    let host = "\(repository.service.rawValue).sr.ht"
+    let owner = repository.owner.canonicalName
+    return "https://\(host)/\(owner)/\(repository.name)"
+}
+
+private func sshCloneURL(for repository: RepositorySummary) -> String {
+    let host = "\(repository.service.rawValue).sr.ht"
+    let user = repository.service == .hg ? "hg" : "git"
+    let owner = repository.owner.canonicalName
+    return "\(user)@\(host):\(owner)/\(repository.name)"
 }
 
 private struct RepositoryBuildStatusIndicator: View {
