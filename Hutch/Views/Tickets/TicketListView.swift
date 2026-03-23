@@ -108,6 +108,11 @@ struct TicketListView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search tickets"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.tickets.isEmpty {
                 SRHTLoadingStateView(message: "Loading tickets…")
@@ -117,6 +122,9 @@ struct TicketListView: View {
                     message: error,
                     retryAction: { await viewModel.loadTickets() }
                 )
+            } else if !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      viewModel.filteredTickets.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.filteredTickets.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "No Tickets",

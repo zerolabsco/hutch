@@ -31,6 +31,7 @@ final class BuildListViewModel {
     private(set) var isRefreshing = false
     private(set) var isSubmitting = false
     var error: String?
+    var searchText = ""
 
     private var cursor: String?
     private var hasMore = true
@@ -40,6 +41,17 @@ final class BuildListViewModel {
 
     init(client: SRHTClient) {
         self.client = client
+    }
+
+    var filteredJobs: [JobSummary] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return jobs }
+        return jobs.filter {
+            String($0.id).contains(q) ||
+            $0.tags.contains { $0.lowercased().contains(q) } ||
+            ($0.note?.lowercased().contains(q) == true) ||
+            ($0.image?.lowercased().contains(q) == true)
+        }
     }
 
     // MARK: - Query
@@ -68,6 +80,12 @@ final class BuildListViewModel {
         submit(manifest: $manifest, tags: $tags, note: $note, secrets: $secrets, execute: $execute, visibility: $visibility) {
             id
         }
+    }
+    """
+
+    private static let cancelMutation = """
+    mutation cancel($id: Int!) {
+        cancel(jobId: $id) { id }
     }
     """
 

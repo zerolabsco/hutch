@@ -62,6 +62,7 @@ final class InboxViewModel {
     private(set) var threads: [InboxThreadSummary] = []
     private(set) var isLoading = false
     var error: String?
+    var searchText = ""
 
     private let client: SRHTClient
     private let listThreadFetchLimit = 10
@@ -162,6 +163,16 @@ final class InboxViewModel {
 
     func thread(withID id: InboxThreadSummary.ID) -> InboxThreadSummary? {
         threads.first(where: { $0.id == id })
+    }
+
+    var filteredThreads: [InboxThreadSummary] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return threads }
+        return threads.filter {
+            $0.displaySubject.lowercased().contains(q) ||
+            $0.listName.lowercased().contains(q) ||
+            $0.latestSender.canonicalName.lowercased().contains(q)
+        }
     }
 
     private func fetchSubscriptions() async throws -> [InboxActivitySubscription] {

@@ -9,6 +9,7 @@ final class PasteListViewModel {
     private(set) var isRefreshing = false
     private(set) var isCreatingPaste = false
     var error: String?
+    var searchText = ""
 
     private var cursor: String?
     private var hasMore = true
@@ -16,6 +17,17 @@ final class PasteListViewModel {
 
     init(service: PasteService) {
         self.service = service
+    }
+
+    var filteredPastes: [Paste] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return pastes }
+        return pastes.filter {
+            $0.files.contains {
+                ($0.filename?.lowercased().contains(q) == true) ||
+                $0.hash.lowercased().hasPrefix(q)
+            }
+        }
     }
 
     func loadPastes() async {

@@ -114,6 +114,58 @@ struct InboxViewModelTests {
     }
 
     @Test
+    func mailingListThreadFilterMatchesSubjectAndSender() {
+        let baseList = InboxMailingListReference(
+            id: 1,
+            rid: "list",
+            name: "hutch-devel",
+            owner: Entity(canonicalName: "~owner")
+        )
+        let threads = [
+            InboxThreadSummary(
+                rootEmailID: 10,
+                rootMessageID: "message-1",
+                threadRootEmailIDs: [10],
+                threadRootMessageIDs: ["message-1"],
+                listID: baseList.id,
+                listRID: baseList.rid,
+                listName: baseList.name,
+                listOwner: baseList.owner,
+                subject: "Re: [PATCH] add search",
+                latestSender: Entity(canonicalName: "~alice"),
+                lastActivityAt: Date(timeIntervalSince1970: 100),
+                messageCount: 1,
+                repo: "hutch",
+                containsPatch: true,
+                isUnread: true
+            ),
+            InboxThreadSummary(
+                rootEmailID: 11,
+                rootMessageID: "message-2",
+                threadRootEmailIDs: [11],
+                threadRootMessageIDs: ["message-2"],
+                listID: baseList.id,
+                listRID: baseList.rid,
+                listName: baseList.name,
+                listOwner: baseList.owner,
+                subject: "Release planning",
+                latestSender: Entity(canonicalName: "~bob"),
+                lastActivityAt: Date(timeIntervalSince1970: 200),
+                messageCount: 2,
+                repo: "hutch",
+                containsPatch: false,
+                isUnread: true
+            )
+        ]
+
+        let subjectMatches = MailingListDetailViewModel.filterThreads(threads, matching: "search")
+        let senderMatches = MailingListDetailViewModel.filterThreads(threads, matching: "~bob")
+
+        #expect(subjectMatches.map(\.rootEmailID) == [10])
+        #expect(senderMatches.map(\.rootEmailID) == [11])
+    }
+
+    @Test
     func segmentsPatchBodyAndTreatsSignatureAsPlainText() {
         let body = """
         From: Christian Cleberg <hello@cleberg.net>

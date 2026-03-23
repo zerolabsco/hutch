@@ -32,6 +32,7 @@ final class MailingListDetailViewModel {
     private(set) var threads: [InboxThreadSummary] = []
     private(set) var isLoading = false
     var error: String?
+    var searchText = ""
 
     private let mailingList: InboxMailingListReference
     private let client: SRHTClient
@@ -59,6 +60,10 @@ final class MailingListDetailViewModel {
     init(mailingList: InboxMailingListReference, client: SRHTClient) {
         self.mailingList = mailingList
         self.client = client
+    }
+
+    var filteredThreads: [InboxThreadSummary] {
+        Self.filterThreads(threads, matching: searchText)
     }
 
     func loadThreads() async {
@@ -187,6 +192,30 @@ final class MailingListDetailViewModel {
             return lhs.lastActivityAt > rhs.lastActivityAt
         }
     }
+
+    nonisolated static func filterThreads(
+        _ threads: [InboxThreadSummary],
+        matching query: String
+    ) -> [InboxThreadSummary] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return threads }
+        return threads.filter {
+            normalizedSubject(from: $0.subject).contains(q) ||
+            $0.latestSender.canonicalName.lowercased().contains(q)
+        }
+    }
+
+    private nonisolated static func normalizedSubject(from subject: String) -> String {
+        subject
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(
+                of: #"^(?:(?:re|fwd?)\s*:\s*)+"#,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .lowercased()
+    }
 }
 
 struct MailingListDetailView: View {
@@ -225,7 +254,7 @@ struct MailingListDetailView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.threads) { thread in
+            ForEach(viewModel.filteredThreads) { thread in
                 NavigationLink(value: MoreRoute.thread(thread)) {
                     InboxThreadRow(thread: thread)
                 }
@@ -249,6 +278,11 @@ struct MailingListDetailView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search messages"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.threads.isEmpty {
                 SRHTLoadingStateView(message: "Loading mailing list…")
@@ -258,6 +292,8 @@ struct MailingListDetailView: View {
                     message: error,
                     retryAction: { await viewModel.loadThreads() }
                 )
+            } else if !viewModel.threads.isEmpty, viewModel.filteredThreads.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.threads.isEmpty {
                 ContentUnavailableView(
                     "No Threads",

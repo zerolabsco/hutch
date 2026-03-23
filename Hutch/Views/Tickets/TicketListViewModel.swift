@@ -35,23 +35,40 @@ final class TicketListViewModel {
     let ownerUsername: String
     let trackerName: String
     let trackerId: Int
+    let trackerRid: String
 
     private(set) var tickets: [TicketSummary] = []
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isCreatingTicket = false
+    private(set) var isPerformingAction = false
+    private(set) var trackerLabels: [TicketLabel] = []
     var error: String?
-    var filter: TicketFilter = .open
+    var filter: TicketFilter = .open {
+        didSet {
+            UserDefaults.standard.set(filter.rawValue, forKey: filterDefaultsKey)
+        }
+    }
+    var searchText = ""
 
     private var cursor: String?
     private var hasMore = true
     private let client: SRHTClient
 
-    init(ownerUsername: String, trackerName: String, trackerId: Int, client: SRHTClient) {
+    private var filterDefaultsKey: String {
+        "ticketFilter_\(trackerRid)"
+    }
+
+    init(ownerUsername: String, trackerName: String, trackerId: Int, trackerRid: String, client: SRHTClient) {
         self.ownerUsername = ownerUsername
         self.trackerName = trackerName
         self.trackerId = trackerId
+        self.trackerRid = trackerRid
         self.client = client
+        if let raw = UserDefaults.standard.string(forKey: filterDefaultsKey),
+           let restored = TicketFilter(rawValue: raw) {
+            self.filter = restored
+        }
     }
 
     // MARK: - Query
@@ -93,17 +110,70 @@ final class TicketListViewModel {
     }
     """
 
+    private static let updateStatusMutation = """
+    mutation updateTicketStatus($trackerId: Int!, $ticketId: Int!, $input: UpdateStatusInput!) {
+        updateTicketStatus(trackerId: $trackerId, ticketId: $ticketId, input: $input) {
+            eventType: __typename
+        }
+    }
+    """
+
+    private static let assignUserMutation = """
+    mutation assignUser($trackerId: Int!, $ticketId: Int!, $userId: Int!) {
+        assignUser(trackerId: $trackerId, ticketId: $ticketId, userId: $userId) { id }
+    }
+    """
+
+    private static let unassignUserMutation = """
+    mutation unassignUser($trackerId: Int!, $ticketId: Int!, $userId: Int!) {
+        unassignUser(trackerId: $trackerId, ticketId: $ticketId, userId: $userId) { id }
+    }
+    """
+
+    private static let labelTicketMutation = """
+    mutation labelTicket($trackerId: Int!, $ticketId: Int!, $labelId: Int!) {
+        labelTicket(trackerId: $trackerId, ticketId: $ticketId, labelId: $labelId) { id }
+    }
+    """
+
+    private static let unlabelTicketMutation = """
+    mutation unlabelTicket($trackerId: Int!, $ticketId: Int!, $labelId: Int!) {
+        unlabelTicket(trackerId: $trackerId, ticketId: $ticketId, labelId: $labelId) { id }
+    }
+    """
+
+    private static let trackerLabelsQuery = """
+    query trackerLabels($owner: String!, $tracker: String!) {
+        user(username: $owner) {
+            tracker(name: $tracker) {
+                labels {
+                    results { id name backgroundColor foregroundColor }
+                }
+            }
+        }
+    }
+    """
+
     // MARK: - Computed
 
     /// Tickets filtered by the selected status filter.
     var filteredTickets: [TicketSummary] {
+        let statusFiltered: [TicketSummary]
         switch filter {
         case .open:
-            tickets.filter { $0.status.isOpen }
+            statusFiltered = tickets.filter { $0.status.isOpen }
         case .resolved:
-            tickets.filter { !$0.status.isOpen }
+            statusFiltered = tickets.filter { !$0.status.isOpen }
         case .all:
-            tickets
+            statusFiltered = tickets
+        }
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return statusFiltered }
+        return statusFiltered.filter {
+            String($0.id).contains(q) ||
+            $0.title.lowercased().contains(q) ||
+            $0.submitter.canonicalName.lowercased().contains(q) ||
+            $0.labels.contains { $0.name.lowercased().contains(q) }
         }
     }
 

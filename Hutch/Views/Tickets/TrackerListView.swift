@@ -65,7 +65,7 @@ struct TrackerListView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.trackers) { tracker in
+            ForEach(viewModel.filteredTrackers) { tracker in
                 NavigationLink(value: tracker) {
                     TrackerRowView(tracker: tracker)
                 }
@@ -84,6 +84,11 @@ struct TrackerListView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search trackers"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.trackers.isEmpty {
                 SRHTLoadingStateView(message: "Loading trackers…")
@@ -93,6 +98,8 @@ struct TrackerListView: View {
                     message: error,
                     retryAction: { await viewModel.loadTrackers() }
                 )
+            } else if !viewModel.trackers.isEmpty, viewModel.filteredTrackers.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.trackers.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "No Trackers",

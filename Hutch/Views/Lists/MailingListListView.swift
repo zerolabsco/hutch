@@ -6,6 +6,7 @@ final class MailingListListViewModel {
     private(set) var mailingLists: [InboxMailingListReference] = []
     private(set) var isLoading = false
     var error: String?
+    var searchText = ""
 
     private let client: SRHTClient
 
@@ -29,6 +30,15 @@ final class MailingListListViewModel {
 
     init(client: SRHTClient) {
         self.client = client
+    }
+
+    var filteredMailingLists: [InboxMailingListReference] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return mailingLists }
+        return mailingLists.filter {
+            $0.name.lowercased().contains(q) ||
+            $0.owner.canonicalName.lowercased().contains(q)
+        }
     }
 
     func loadMailingLists() async {
@@ -120,7 +130,7 @@ struct MailingListListView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.mailingLists, id: \.rid) { mailingList in
+            ForEach(viewModel.filteredMailingLists, id: \.rid) { mailingList in
                 NavigationLink(value: MoreRoute.mailingList(mailingList)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(mailingList.name)
@@ -134,6 +144,11 @@ struct MailingListListView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search lists"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.mailingLists.isEmpty {
                 SRHTLoadingStateView(message: "Loading mailing lists…")
@@ -143,6 +158,8 @@ struct MailingListListView: View {
                     message: error,
                     retryAction: { await viewModel.loadMailingLists() }
                 )
+            } else if !viewModel.mailingLists.isEmpty, viewModel.filteredMailingLists.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.mailingLists.isEmpty {
                 ContentUnavailableView(
                     "No Mailing Lists",

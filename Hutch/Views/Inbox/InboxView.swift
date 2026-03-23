@@ -30,7 +30,7 @@ struct InboxView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.threads) { thread in
+            ForEach(viewModel.filteredThreads) { thread in
                 Button {
                     selectThread(thread)
                 } label: {
@@ -45,6 +45,11 @@ struct InboxView: View {
                 }
             }
         }
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search inbox"
+        )
         .listStyle(.plain)
         .overlay {
             if viewModel.isLoading, viewModel.threads.isEmpty {
@@ -55,6 +60,8 @@ struct InboxView: View {
                     message: error,
                     retryAction: { await viewModel.loadThreads() }
                 )
+            } else if !viewModel.threads.isEmpty, viewModel.filteredThreads.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.threads.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "Inbox Zero",

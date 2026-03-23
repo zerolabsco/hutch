@@ -87,6 +87,11 @@ struct PasteListView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search pastes"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.pastes.isEmpty {
                 SRHTLoadingStateView(message: "Loading pastes…")
@@ -96,6 +101,8 @@ struct PasteListView: View {
                     message: error,
                     retryAction: { await viewModel.loadPastes() }
                 )
+            } else if !viewModel.pastes.isEmpty, viewModel.filteredPastes.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.pastes.isEmpty {
                 ContentUnavailableView(
                     "No Pastes",

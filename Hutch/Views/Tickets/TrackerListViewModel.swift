@@ -22,6 +22,7 @@ final class TrackerListViewModel {
     private(set) var isLoadingMore = false
     private(set) var isCreatingTracker = false
     var error: String?
+    var searchText = ""
 
     private var cursor: String?
     private var hasMore = true
@@ -29,6 +30,16 @@ final class TrackerListViewModel {
 
     init(client: SRHTClient) {
         self.client = client
+    }
+
+    var filteredTrackers: [TrackerSummary] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return trackers }
+        return trackers.filter {
+            $0.name.lowercased().contains(q) ||
+            ($0.description?.lowercased().contains(q) == true) ||
+            $0.owner.canonicalName.lowercased().contains(q)
+        }
     }
 
     // MARK: - Query

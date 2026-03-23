@@ -64,9 +64,21 @@ struct BuildListView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.jobs) { job in
+            ForEach(viewModel.filteredJobs) { job in
                 NavigationLink(value: job) {
                     BuildRowView(job: job)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if swipeActionsEnabled, job.status.isCancellable {
+                        Button {
+                            Task {
+                                await viewModel.cancelJob(job)
+                            }
+                        } label: {
+                            Label("Cancel", systemImage: "xmark.circle")
+                        }
+                        .tint(.red)
+                    }
                 }
                 .task {
                     await viewModel.loadMoreIfNeeded(currentItem: job)
@@ -83,6 +95,11 @@ struct BuildListView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search builds"
+        )
         .overlay {
             if viewModel.isLoading, viewModel.jobs.isEmpty {
                 SRHTLoadingStateView(message: "Loading builds…")
@@ -92,6 +109,8 @@ struct BuildListView: View {
                     message: error,
                     retryAction: { await viewModel.loadJobs() }
                 )
+            } else if !viewModel.jobs.isEmpty, viewModel.filteredJobs.isEmpty {
+                ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.jobs.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "No Builds",
