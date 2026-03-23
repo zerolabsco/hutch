@@ -19,6 +19,48 @@ private struct TicketsPage: Decodable, Sendable {
     let cursor: String?
 }
 
+private struct AssignmentMutationResponse: Decodable, Sendable {
+    struct EventRef: Decodable, Sendable {
+        let id: Int
+    }
+
+    let assignUser: EventRef?
+    let unassignUser: EventRef?
+}
+
+private struct LabelMutationResponse: Decodable, Sendable {
+    struct EventRef: Decodable, Sendable {
+        let id: Int
+    }
+
+    let labelTicket: EventRef?
+    let unlabelTicket: EventRef?
+}
+
+private struct TrackerLabelsResponse: Decodable, Sendable {
+    let user: UserTrackerLabelsWrapper
+}
+
+private struct UserTrackerLabelsWrapper: Decodable, Sendable {
+    let tracker: TrackerLabelsWrapper
+}
+
+private struct TrackerLabelsWrapper: Decodable, Sendable {
+    let labels: LabelsPage
+}
+
+private struct LabelsPage: Decodable, Sendable {
+    let results: [TicketLabel]
+}
+
+private struct UpdateStatusResponse: Decodable, Sendable {
+    let updateTicketStatus: MutationEventRef
+}
+
+private struct MutationEventRef: Decodable, Sendable {
+    let eventType: String
+}
+
 // MARK: - Filter
 
 enum TicketFilter: String, CaseIterable, Sendable {
@@ -260,7 +302,232 @@ final class TicketListViewModel {
         }
     }
 
+    func resolveTicket(_ ticket: TicketSummary) async {
+        let input: [String: any Sendable] = [
+            "status": TicketStatus.resolved.rawValue,
+            "resolution": TicketResolution.fixed.rawValue
+        ]
+        await performStatusUpdate(ticket: ticket, input: input)
+    }
+
+    func reopenTicket(_ ticket: TicketSummary) async {
+        let input: [String: any Sendable] = [
+            "status": TicketStatus.reported.rawValue
+        ]
+        await performStatusUpdate(ticket: ticket, input: input)
+    }
+
+    func assignToMe(ticket: TicketSummary, user: User) async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+
+        let original = tickets
+        if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
+            let entity = Entity(canonicalName: user.canonicalName)
+            let updated = TicketSummary(
+                id: ticket.id,
+                title: ticket.title,
+                status: ticket.status,
+                resolution: ticket.resolution,
+                created: ticket.created,
+                submitter: ticket.submitter,
+                labels: ticket.labels,
+                assignees: ticket.assignees + [entity]
+            )
+            tickets[index] = updated
+        }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.assignUserMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticket.id,
+                    "userId": user.id
+                ],
+                responseType: AssignmentMutationResponse.self
+            )
+        } catch {
+            tickets = original
+            self.error = error.userFacingMessage
+        }
+
+        isPerformingAction = false
+    }
+
+    func unassignFromMe(ticket: TicketSummary, user: User) async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+
+        let original = tickets
+        if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
+            let filtered = ticket.assignees.filter { assignee in
+                !Self.matchesAssignee(assignee, user: user)
+            }
+            let updated = TicketSummary(
+                id: ticket.id,
+                title: ticket.title,
+                status: ticket.status,
+                resolution: ticket.resolution,
+                created: ticket.created,
+                submitter: ticket.submitter,
+                labels: ticket.labels,
+                assignees: filtered
+            )
+            tickets[index] = updated
+        }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.unassignUserMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticket.id,
+                    "userId": user.id
+                ],
+                responseType: AssignmentMutationResponse.self
+            )
+        } catch {
+            tickets = original
+            self.error = error.userFacingMessage
+        }
+
+        isPerformingAction = false
+    }
+
+    func loadTrackerLabels() async {
+        do {
+            let result = try await client.execute(
+                service: .todo,
+                query: Self.trackerLabelsQuery,
+                variables: [
+                    "owner": ownerUsername,
+                    "tracker": trackerName
+                ],
+                responseType: TrackerLabelsResponse.self
+            )
+            trackerLabels = result.user.tracker.labels.results
+        } catch {
+            self.error = error.userFacingMessage
+        }
+    }
+
+    func labelTicket(_ ticket: TicketSummary, label: TicketLabel) async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+
+        let original = tickets
+        if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
+            let updated = TicketSummary(
+                id: ticket.id,
+                title: ticket.title,
+                status: ticket.status,
+                resolution: ticket.resolution,
+                created: ticket.created,
+                submitter: ticket.submitter,
+                labels: ticket.labels + [label],
+                assignees: ticket.assignees
+            )
+            tickets[index] = updated
+        }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.labelTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticket.id,
+                    "labelId": label.id
+                ],
+                responseType: LabelMutationResponse.self
+            )
+        } catch {
+            tickets = original
+            self.error = error.userFacingMessage
+        }
+
+        isPerformingAction = false
+    }
+
+    func unlabelTicket(_ ticket: TicketSummary, label: TicketLabel) async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+
+        let original = tickets
+        if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
+            let filtered = ticket.labels.filter { $0.id != label.id }
+            let updated = TicketSummary(
+                id: ticket.id,
+                title: ticket.title,
+                status: ticket.status,
+                resolution: ticket.resolution,
+                created: ticket.created,
+                submitter: ticket.submitter,
+                labels: filtered,
+                assignees: ticket.assignees
+            )
+            tickets[index] = updated
+        }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.unlabelTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticket.id,
+                    "labelId": label.id
+                ],
+                responseType: LabelMutationResponse.self
+            )
+        } catch {
+            tickets = original
+            self.error = error.userFacingMessage
+        }
+
+        isPerformingAction = false
+    }
+
+    func ticket(withId ticketId: Int) -> TicketSummary? {
+        tickets.first(where: { $0.id == ticketId })
+    }
+
     // MARK: - Private
+
+    private func performStatusUpdate(ticket: TicketSummary, input: [String: any Sendable]) async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+
+        do {
+            let variables: [String: any Sendable] = [
+                "trackerId": trackerId,
+                "ticketId": ticket.id,
+                "input": input
+            ]
+            let result = try await client.execute(
+                service: .todo,
+                query: Self.updateStatusMutation,
+                variables: variables,
+                responseType: UpdateStatusResponse.self
+            )
+            _ = result.updateTicketStatus
+            if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
+                tickets[index] = updatedTicket(from: ticket, input: input)
+            }
+        } catch {
+            self.error = error.userFacingMessage
+        }
+
+        isPerformingAction = false
+    }
 
     private func fetchPage(cursor: String?) async throws -> TicketsPage {
         var variables: [String: any Sendable] = [
@@ -281,5 +548,43 @@ final class TicketListViewModel {
 
     private struct SubmitTicketResponse: Decodable, Sendable {
         let submitTicket: TicketSummary
+    }
+
+    private static func matchesAssignee(_ entity: Entity, user: User) -> Bool {
+        let assigneeCanonical = normalizedCanonicalName(entity.canonicalName)
+        let userCanonical = normalizedCanonicalName(user.canonicalName)
+        if assigneeCanonical == userCanonical {
+            return true
+        }
+        return normalizedUsername(entity.canonicalName) == normalizedUsername(user.username)
+    }
+
+    private static func normalizedCanonicalName(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("~") {
+            return trimmed
+        }
+        return "~\(trimmed)"
+    }
+
+    private static func normalizedUsername(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    private func updatedTicket(from ticket: TicketSummary, input: [String: any Sendable]) -> TicketSummary {
+        let updatedStatus = (input["status"] as? String).flatMap(TicketStatus.init(rawValue:)) ?? ticket.status
+        let updatedResolution = (input["resolution"] as? String).flatMap(TicketResolution.init(rawValue:))
+
+        return TicketSummary(
+            id: ticket.id,
+            title: ticket.title,
+            status: updatedStatus,
+            resolution: updatedStatus == .resolved ? updatedResolution : nil,
+            created: ticket.created,
+            submitter: ticket.submitter,
+            labels: ticket.labels,
+            assignees: ticket.assignees
+        )
     }
 }

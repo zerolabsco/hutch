@@ -137,15 +137,12 @@ struct HomeBuildItem: Identifiable, Hashable, Sendable {
 @MainActor
 final class HomeViewModel {
     private(set) var projects: [Project] = []
-    private(set) var failedBuilds: [HomeBuildItem] = []
-    private(set) var assignedTickets: [HomeAssignedTicket] = []
-    private(set) var recentBuilds: [HomeBuildItem] = []
+    var assignedTickets: [HomeAssignedTicket] = []
+    var recentBuilds: [HomeBuildItem] = []
     private(set) var hasUnreadInboxThreads = false
     private(set) var isLoadingProjects = false
-    private(set) var isLoadingFailedBuilds = false
     private(set) var isLoadingAssignedTickets = false
     private(set) var isLoadingRecentBuilds = false
-    private(set) var failedBuildsError: String?
     private(set) var assignedTicketsError: String?
     private(set) var recentBuildsError: String?
 
@@ -244,6 +241,26 @@ final class HomeViewModel {
     }
     """
 
+    private static let updateTicketStatusMutation = """
+    mutation updateTicketStatus($trackerId: Int!, $ticketId: Int!, $input: UpdateStatusInput!) {
+        updateTicketStatus(trackerId: $trackerId, ticketId: $ticketId, input: $input) {
+            eventType: __typename
+        }
+    }
+    """
+
+    private static let unassignUserMutation = """
+    mutation unassignUser($trackerId: Int!, $ticketId: Int!, $userId: Int!) {
+        unassignUser(trackerId: $trackerId, ticketId: $ticketId, userId: $userId) { id }
+    }
+    """
+
+    private static let cancelBuildMutation = """
+    mutation cancel($id: Int!) {
+        cancel(jobId: $id) { id }
+    }
+    """
+
     init(currentUser: User, client: SRHTClient) {
         self.currentUser = currentUser
         self.client = client
@@ -252,10 +269,8 @@ final class HomeViewModel {
 
     func loadDashboard() async {
         isLoadingProjects = true
-        isLoadingFailedBuilds = true
         isLoadingAssignedTickets = true
         isLoadingRecentBuilds = true
-        failedBuildsError = nil
         assignedTicketsError = nil
         recentBuildsError = nil
 
@@ -279,16 +294,11 @@ final class HomeViewModel {
         case .success(let recentJobs):
             let buildItems = Self.buildItems(from: recentJobs)
             self.recentBuilds = buildItems
-            self.failedBuilds = Self.failedBuilds(from: buildItems)
-            self.failedBuildsError = nil
             self.recentBuildsError = nil
         case .failure(let error):
             self.recentBuilds = []
-            self.failedBuilds = []
-            self.failedBuildsError = error.userFacingMessage
             self.recentBuildsError = error.userFacingMessage
         }
-        isLoadingFailedBuilds = false
         isLoadingRecentBuilds = false
 
         let assignedTicketsResult = await assignedTicketsTask
@@ -304,6 +314,70 @@ final class HomeViewModel {
         isLoadingAssignedTickets = false
 
         hasUnreadInboxThreads = (await inboxUnreadTask) ?? false
+    }
+
+    func resolveTicket(_ ticket: HomeAssignedTicket) async {
+        let input: [String: any Sendable] = [
+            "status": TicketStatus.resolved.rawValue,
+            "resolution": TicketResolution.fixed.rawValue
+        ]
+        await performTicketStatusUpdate(ticket: ticket, input: input)
+    }
+
+    func reopenTicket(_ ticket: HomeAssignedTicket) async {
+        let input: [String: any Sendable] = [
+            "status": TicketStatus.reported.rawValue
+        ]
+        await performTicketStatusUpdate(ticket: ticket, input: input)
+    }
+
+    func unassignFromMe(_ ticket: HomeAssignedTicket) async {
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.unassignUserMutation,
+                variables: [
+                    "trackerId": ticket.trackerId,
+                    "ticketId": ticket.ticket.id,
+                    "userId": currentUser.id
+                ],
+                responseType: UnassignResponse.self
+            )
+            assignedTickets.removeAll { $0.id == ticket.id }
+        } catch {
+        }
+    }
+
+    func cancelBuild(_ build: HomeBuildItem) async {
+        guard build.job.status.isCancellable else { return }
+
+        do {
+            _ = try await client.execute(
+                service: .builds,
+                query: Self.cancelBuildMutation,
+                variables: ["id": build.job.id],
+                responseType: CancelBuildResponse.self
+            )
+            if let index = recentBuilds.firstIndex(where: { $0.id == build.id }) {
+                let updatedJob = JobSummary(
+                    id: build.job.id,
+                    created: build.job.created,
+                    updated: build.job.updated,
+                    status: .cancelled,
+                    note: build.job.note,
+                    tags: build.job.tags,
+                    visibility: build.job.visibility,
+                    image: build.job.image,
+                    tasks: build.job.tasks
+                )
+                recentBuilds[index] = HomeBuildItem(
+                    job: updatedJob,
+                    repositoryName: build.repositoryName,
+                    repositoryOwner: build.repositoryOwner
+                )
+            }
+        } catch {
+        }
     }
 
     private func loadProjects() async -> Result<[Project], Error> {
@@ -521,6 +595,26 @@ final class HomeViewModel {
         }
     }
 
+    private func performTicketStatusUpdate(
+        ticket: HomeAssignedTicket,
+        input: [String: any Sendable]
+    ) async {
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.updateTicketStatusMutation,
+                variables: [
+                    "trackerId": ticket.trackerId,
+                    "ticketId": ticket.ticket.id,
+                    "input": input
+                ],
+                responseType: StatusEventResponse.self
+            )
+            assignedTickets.removeAll { $0.id == ticket.id }
+        } catch {
+        }
+    }
+
     nonisolated static func buildItems(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {
         jobs.map { job in
             let repository = primaryRepositoryReference(in: job.manifest)
@@ -532,8 +626,8 @@ final class HomeViewModel {
         }
     }
 
-    nonisolated static func failedBuilds(from builds: [HomeBuildItem]) -> [HomeBuildItem] {
-        builds.filter { build in
+    nonisolated static func failedBuilds(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {
+        buildItems(from: jobs).filter { build in
             switch build.job.status {
             case .failed, .timeout:
                 true
@@ -541,10 +635,6 @@ final class HomeViewModel {
                 false
             }
         }
-    }
-
-    nonisolated static func failedBuilds(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {
-        failedBuilds(from: buildItems(from: jobs))
     }
 
     nonisolated static func matchesCurrentUserAssignee(_ entity: Entity, currentUser: User) -> Bool {
@@ -597,6 +687,30 @@ final class HomeViewModel {
             return String(trimmed.dropFirst())
         }
         return trimmed
+    }
+
+    private struct StatusEventResponse: Decodable, Sendable {
+        struct EventRef: Decodable, Sendable {
+            let eventType: String
+        }
+
+        let updateTicketStatus: EventRef
+    }
+
+    private struct UnassignResponse: Decodable, Sendable {
+        struct EventRef: Decodable, Sendable {
+            let id: Int
+        }
+
+        let unassignUser: EventRef
+    }
+
+    private struct CancelBuildResponse: Decodable, Sendable {
+        struct CancelResult: Decodable, Sendable {
+            let id: Int
+        }
+
+        let cancel: CancelResult
     }
 }
 struct HomeJobPayload: Decodable, Sendable {

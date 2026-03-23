@@ -194,6 +194,35 @@ final class BuildListViewModel {
         }
     }
 
+    func cancelJob(_ job: JobSummary) async {
+        guard job.status.isCancellable else { return }
+
+        do {
+            _ = try await client.execute(
+                service: .builds,
+                query: Self.cancelMutation,
+                variables: ["id": job.id],
+                responseType: CancelResponse.self
+            )
+            if let index = jobs.firstIndex(where: { $0.id == job.id }) {
+                let updated = JobSummary(
+                    id: job.id,
+                    created: job.created,
+                    updated: job.updated,
+                    status: .cancelled,
+                    note: job.note,
+                    tags: job.tags,
+                    visibility: job.visibility,
+                    image: job.image,
+                    tasks: job.tasks
+                )
+                jobs[index] = updated
+            }
+        } catch {
+            self.error = error.userFacingMessage
+        }
+    }
+
     // MARK: - Private
 
     private func fetchPage(cursor: String?, useCache: Bool) async throws -> JobsPage {
@@ -234,5 +263,13 @@ final class BuildListViewModel {
             cursor = page.cursor
             hasMore = page.cursor != nil
         }
+    }
+
+    private struct CancelResponse: Decodable, Sendable {
+        struct CancelResult: Decodable, Sendable {
+            let id: Int
+        }
+
+        let cancel: CancelResult
     }
 }

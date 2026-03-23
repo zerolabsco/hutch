@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @State private var viewModel: HomeViewModel?
     private let previewLimit = 4
@@ -109,6 +110,23 @@ struct HomeView: View {
                     } label: {
                         HomeAssignedTicketRow(ticket: ticket)
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if swipeActionsEnabled {
+                            ticketLeadingSwipeAction(ticket, viewModel: viewModel)
+                        }
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if swipeActionsEnabled {
+                            Button {
+                                Task {
+                                    await viewModel.unassignFromMe(ticket)
+                                }
+                            } label: {
+                                Label("Unassign Me", systemImage: "person.badge.minus")
+                            }
+                            .tint(.orange)
+                        }
+                    }
                 }
             }
         } header: {
@@ -142,12 +160,51 @@ struct HomeView: View {
                     } label: {
                         HomeBuildRow(build: build)
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if swipeActionsEnabled, build.job.status.isCancellable {
+                            Button {
+                                Task {
+                                    await viewModel.cancelBuild(build)
+                                }
+                            }
+                            label: {
+                                Label("Cancel", systemImage: "xmark.circle")
+                            }
+                            .tint(.red)
+                        }
+                    }
                 }
             }
         } header: {
             HomeSectionActionHeader("Recent Builds") {
                 appState.selectedTab = .builds
             }
+        }
+    }
+
+    @ViewBuilder
+    private func ticketLeadingSwipeAction(
+        _ ticket: HomeAssignedTicket,
+        viewModel: HomeViewModel
+    ) -> some View {
+        if ticket.ticket.status.isOpen {
+            Button {
+                Task {
+                    await viewModel.resolveTicket(ticket)
+                }
+            } label: {
+                Label("Resolve", systemImage: "checkmark.circle")
+            }
+            .tint(.green)
+        } else {
+            Button {
+                Task {
+                    await viewModel.reopenTicket(ticket)
+                }
+            } label: {
+                Label("Reopen", systemImage: "arrow.uturn.backward")
+            }
+            .tint(.blue)
         }
     }
 
@@ -367,6 +424,7 @@ private struct HomeSectionActionHeader: View {
 
 private struct HomeAssignedTicketsListView: View {
     let viewModel: HomeViewModel
+    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
 
     var body: some View {
         List {
@@ -381,6 +439,35 @@ private struct HomeAssignedTicketsListView: View {
                     )
                 } label: {
                     HomeAssignedTicketRow(ticket: ticket)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if swipeActionsEnabled {
+                        if ticket.ticket.status.isOpen {
+                            Button {
+                                Task { await viewModel.resolveTicket(ticket) }
+                            } label: {
+                                Label("Resolve", systemImage: "checkmark.circle")
+                            }
+                            .tint(.green)
+                        } else {
+                            Button {
+                                Task { await viewModel.reopenTicket(ticket) }
+                            } label: {
+                                Label("Reopen", systemImage: "arrow.uturn.backward")
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if swipeActionsEnabled {
+                        Button {
+                            Task { await viewModel.unassignFromMe(ticket) }
+                        } label: {
+                            Label("Unassign Me", systemImage: "person.badge.minus")
+                        }
+                        .tint(.orange)
+                    }
                 }
             }
 

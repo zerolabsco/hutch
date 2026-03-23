@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BuildListView: View {
+    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @State private var viewModel: BuildListViewModel?
     @State private var showSubmitSheet = false

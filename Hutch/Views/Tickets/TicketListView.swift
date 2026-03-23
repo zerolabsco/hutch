@@ -6,10 +6,12 @@ struct TicketListView: View {
     let trackerId: Int
     let trackerRid: String
 
+    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @State private var viewModel: TicketListViewModel?
     @State private var showCreateTicketSheet = false
     @State private var createdTicket: TicketSummary?
+    @State private var labelEditorTicket: LabelEditorTicket?
 
     var body: some View {
         Group {
@@ -45,6 +47,15 @@ struct TicketListView: View {
                 }
             }
         }
+        .sheet(item: $labelEditorTicket) { item in
+            if let viewModel {
+                TicketLabelsSheet(
+                    ticketId: item.id,
+                    viewModel: viewModel
+                )
+                .presentationDetents([.medium])
+            }
+        }
         .navigationDestination(isPresented: Binding(
             get: { createdTicket != nil },
             set: { isPresented in
@@ -63,6 +74,7 @@ struct TicketListView: View {
                     ownerUsername: ownerUsername,
                     trackerName: trackerName,
                     trackerId: trackerId,
+                    trackerRid: trackerRid,
                     client: appState.client
                 )
                 viewModel = vm
@@ -92,6 +104,16 @@ struct TicketListView: View {
             ForEach(viewModel.filteredTickets) { ticket in
                 NavigationLink(value: ticket) {
                     TicketRowView(ticket: ticket)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if swipeActionsEnabled {
+                        ticketLeadingSwipeAction(ticket, viewModel: viewModel)
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if swipeActionsEnabled {
+                        ticketTrailingSwipeActions(ticket, viewModel: viewModel)
+                    }
                 }
                 .task {
                     await viewModel.loadMoreIfNeeded(currentItem: ticket)
@@ -144,6 +166,106 @@ struct TicketListView: View {
             TicketDetailView(ownerUsername: ownerUsername, trackerName: trackerName, trackerId: trackerId, trackerRid: trackerRid, ticketId: ticket.id)
         }
     }
+
+    @ViewBuilder
+    private func ticketLeadingSwipeAction(
+        _ ticket: TicketSummary,
+        viewModel: TicketListViewModel
+    ) -> some View {
+        if ticket.status.isOpen {
+            Button {
+                Task {
+                    await resolveTicket(ticket, viewModel: viewModel)
+                }
+            } label: {
+                Label("Resolve", systemImage: "checkmark.circle")
+            }
+            .tint(.green)
+        } else {
+            Button {
+                Task {
+                    await reopenTicket(ticket, viewModel: viewModel)
+                }
+            } label: {
+                Label("Reopen", systemImage: "arrow.uturn.backward")
+            }
+            .tint(.blue)
+        }
+    }
+
+    private func resolveTicket(_ ticket: TicketSummary, viewModel: TicketListViewModel) async {
+        await viewModel.resolveTicket(ticket)
+    }
+
+    private func reopenTicket(_ ticket: TicketSummary, viewModel: TicketListViewModel) async {
+        await viewModel.reopenTicket(ticket)
+    }
+
+    @ViewBuilder
+    private func ticketTrailingSwipeActions(
+        _ ticket: TicketSummary,
+        viewModel: TicketListViewModel
+    ) -> some View {
+        Button {
+            labelEditorTicket = LabelEditorTicket(id: ticket.id)
+            Task { await viewModel.loadTrackerLabels() }
+        } label: {
+            Label("Edit Labels", systemImage: "tag")
+        }
+        .tint(.purple)
+
+        if let currentUser = appState.currentUser {
+            let isAssigned = ticket.assignees.contains { assignee in
+                matchesAssignee(assignee, user: currentUser)
+            }
+
+            if isAssigned {
+                Button {
+                    Task {
+                        await viewModel.unassignFromMe(ticket: ticket, user: currentUser)
+                    }
+                } label: {
+                    Label("Unassign Me", systemImage: "person.badge.minus")
+                }
+                .tint(.orange)
+            } else {
+                Button {
+                    Task {
+                        await viewModel.assignToMe(ticket: ticket, user: currentUser)
+                    }
+                } label: {
+                    Label("Assign Me", systemImage: "person.badge.plus")
+                }
+                .tint(.cyan)
+            }
+        }
+    }
+
+    private func matchesAssignee(_ entity: Entity, user: User) -> Bool {
+        let assigneeCanonical = normalizedCanonicalName(entity.canonicalName)
+        let userCanonical = normalizedCanonicalName(user.canonicalName)
+        if assigneeCanonical == userCanonical {
+            return true
+        }
+        return normalizedUsername(entity.canonicalName) == normalizedUsername(user.username)
+    }
+
+    private func normalizedCanonicalName(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("~") {
+            return trimmed
+        }
+        return "~\(trimmed)"
+    }
+
+    private func normalizedUsername(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+}
+
+private struct LabelEditorTicket: Identifiable {
+    let id: Int
 }
 
 private struct CreateTicketSheet: View {
@@ -188,6 +310,92 @@ private struct CreateTicketSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct TicketLabelsSheet: View {
+    let ticketId: Int
+    let viewModel: TicketListViewModel
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let ticket = viewModel.ticket(withId: ticketId) {
+                    if viewModel.trackerLabels.isEmpty {
+                        if viewModel.isPerformingAction {
+                            ProgressView()
+                        } else {
+                            ContentUnavailableView(
+                                "No Labels",
+                                systemImage: "tag",
+                                description: Text("This tracker has no labels defined.")
+                            )
+                        }
+                    } else {
+                        List {
+                            ForEach(viewModel.trackerLabels) { label in
+                                TicketListLabelToggleRow(
+                                    label: label,
+                                    isApplied: ticket.labels.contains(where: { $0.id == label.id }),
+                                    isLoading: viewModel.isPerformingAction
+                                ) { shouldApply in
+                                    Task {
+                                        if shouldApply {
+                                            await viewModel.labelTicket(ticket, label: label)
+                                        } else {
+                                            await viewModel.unlabelTicket(ticket, label: label)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Ticket Unavailable",
+                        systemImage: "ticket",
+                        description: Text("This ticket is no longer in the current list.")
+                    )
+                }
+            }
+            .navigationTitle("Labels")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task {
+                if viewModel.trackerLabels.isEmpty {
+                    await viewModel.loadTrackerLabels()
+                }
+            }
+        }
+    }
+}
+
+private struct TicketListLabelToggleRow: View {
+    let label: TicketLabel
+    let isApplied: Bool
+    let isLoading: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        Button {
+            onToggle(!isApplied)
+        } label: {
+            HStack {
+                LabelPill(label: label)
+                Spacer()
+                if isApplied {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.blue)
+                }
+            }
+        }
+        .disabled(isLoading)
     }
 }
 

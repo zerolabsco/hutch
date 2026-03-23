@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct PasteListView: View {
+    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @State private var viewModel: PasteListViewModel?
     @State private var showCreatePasteSheet = false
     @State private var createdPaste: Paste?
+    @State private var pasteToDelete: Paste?
 
     var body: some View {
         Group {
@@ -68,9 +70,31 @@ struct PasteListView: View {
         @Bindable var vm = viewModel
 
         List {
-            ForEach(viewModel.pastes) { paste in
+            ForEach(viewModel.filteredPastes) { paste in
                 NavigationLink(value: paste) {
                     PasteRowView(paste: paste)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if swipeActionsEnabled {
+                        Button {
+                            Task { await viewModel.cycleVisibility(for: paste) }
+                        } label: {
+                            Label(
+                                nextVisibilityLabel(for: paste.visibility),
+                                systemImage: nextVisibilityIcon(for: paste.visibility)
+                            )
+                        }
+                        .tint(nextVisibilityColor(for: paste.visibility))
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if swipeActionsEnabled {
+                        Button(role: .destructive) {
+                            pasteToDelete = paste
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
                 .task {
                     await viewModel.loadMoreIfNeeded(currentItem: paste)
@@ -115,6 +139,24 @@ struct PasteListView: View {
             await viewModel.loadPastes()
         }
         .srhtErrorBanner(error: $vm.error)
+        .alert("Delete Paste?", isPresented: Binding(
+            get: { pasteToDelete != nil },
+            set: { if !$0 { pasteToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                pasteToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let paste = pasteToDelete {
+                    pasteToDelete = nil
+                    Task {
+                        await viewModel.deletePaste(paste)
+                    }
+                }
+            }
+        } message: {
+            Text("This paste will be permanently deleted from SourceHut.")
+        }
         .refreshable {
             await viewModel.loadPastes()
         }
@@ -128,6 +170,39 @@ struct PasteListView: View {
                     viewModel.removePaste(id: id)
                 }
             )
+        }
+    }
+
+    private func nextVisibilityLabel(for visibility: Visibility) -> String {
+        switch visibility {
+        case .public:
+            return "Make Unlisted"
+        case .unlisted:
+            return "Make Private"
+        case .private:
+            return "Make Public"
+        }
+    }
+
+    private func nextVisibilityIcon(for visibility: Visibility) -> String {
+        switch visibility {
+        case .public:
+            return "eye.slash"
+        case .unlisted:
+            return "lock"
+        case .private:
+            return "globe"
+        }
+    }
+
+    private func nextVisibilityColor(for visibility: Visibility) -> Color {
+        switch visibility {
+        case .public:
+            return .orange
+        case .unlisted:
+            return .red
+        case .private:
+            return .green
         }
     }
 }

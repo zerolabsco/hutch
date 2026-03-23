@@ -107,6 +107,47 @@ final class PasteListViewModel {
         }
     }
 
+    func deletePaste(_ paste: Paste) async {
+        do {
+            _ = try await service.deletePaste(id: paste.id)
+            removePaste(id: paste.id)
+        } catch {
+            self.error = error.userFacingMessage
+        }
+    }
+
+    func cycleVisibility(for paste: Paste) async {
+        let next: Visibility
+        switch paste.visibility {
+        case .public:
+            next = .unlisted
+        case .unlisted:
+            next = .private
+        case .private:
+            next = .public
+        }
+
+        let original = pastes
+        if let index = pastes.firstIndex(where: { $0.id == paste.id }) {
+            pastes[index] = Paste(
+                id: paste.id,
+                created: paste.created,
+                visibility: next,
+                files: paste.files,
+                user: paste.user
+            )
+        }
+
+        do {
+            if let updated = try await service.updateVisibility(id: paste.id, visibility: next) {
+                upsertPaste(updated)
+            }
+        } catch {
+            pastes = original
+            self.error = error.userFacingMessage
+        }
+    }
+
     func upsertPaste(_ paste: Paste) {
         if let index = pastes.firstIndex(where: { $0.id == paste.id }) {
             pastes[index] = paste
