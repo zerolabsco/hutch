@@ -1140,7 +1140,7 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
         self.parent = parent
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
         DispatchQueue.main.async {
             self.parent.loadError = nil
         }
@@ -1151,11 +1151,11 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
         }
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
         handleLoadFailure(error)
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
         handleLoadFailure(error)
     }
 

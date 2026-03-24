@@ -92,7 +92,7 @@ struct BuildTaskLogView: View {
 private struct BuildLogTextView: UIViewRepresentable {
     let text: String
 
-    func makeUIView(context: Context) -> UITextView {
+    func makeUIView(context _: Context) -> UITextView {
         let textView = UITextView()
         textView.isEditable = false
         textView.isSelectable = true
@@ -110,7 +110,7 @@ private struct BuildLogTextView: UIViewRepresentable {
         return textView
     }
 
-    func updateUIView(_ uiView: UITextView, context: Context) {
+    func updateUIView(_ uiView: UITextView, context _: Context) {
         guard uiView.text != text else { return }
         uiView.text = text
     }

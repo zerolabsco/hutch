@@ -277,7 +277,7 @@ private struct MailComposeView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+    func updateUIViewController(_ : UIViewController, context _: Context) {
         // The view controller is fully configured in makeUIViewController.
         // No state-driven updates are required.
     }
@@ -339,7 +339,7 @@ private final class MailUnavailableViewController: UIViewController {
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
