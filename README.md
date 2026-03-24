@@ -2,6 +2,8 @@
 iOS client for SourceHut.
 
 [![builds.sr.ht status](https://builds.sr.ht/~ccleberg/Hutch.svg)](https://builds.sr.ht/~ccleberg/Hutch?)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ccleberg_Hutch&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ccleberg_Hutch)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=ccleberg_Hutch&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=ccleberg_Hutch)
 
 ## Overview
 
