@@ -136,6 +136,7 @@ final class InboxViewModel {
                 }
                 return lhs.lastActivityAt > rhs.lastActivityAt
             }
+            NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count)
         } catch {
             inboxListLogger.error("Inbox request failed")
             self.error = "Failed to load inbox"
@@ -146,11 +147,13 @@ final class InboxViewModel {
         let viewedAt = max(Date(), thread.lastActivityAt)
         InboxReadStateStore.markViewed(viewedAt, for: thread.id)
         threads.removeAll { $0.id == thread.id }
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
         InboxReadStateStore.markUnread(for: thread.id)
         updateThread(thread, isUnread: true)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
     }
 
     func toggleThreadReadState(_ thread: InboxThreadSummary) {

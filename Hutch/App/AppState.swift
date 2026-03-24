@@ -77,11 +77,13 @@ final class AppState {
             let user = try await fetchMe()
             currentUser = user
             authPhase = .authenticated
+            await refreshNeedsAttentionSnapshot()
         } catch {
             try? KeychainHelper.deleteToken()
             client.setToken(nil)
             currentUser = nil
             authPhase = .unauthenticated
+            NeedsAttentionSnapshotStore.clear()
         }
     }
 
@@ -98,6 +100,7 @@ final class AppState {
             try KeychainHelper.saveToken(token)
             currentUser = user
             authPhase = .authenticated
+            await refreshNeedsAttentionSnapshot()
         } catch {
             // Roll back — don't leave an invalid token in the client.
             client.setToken(nil)
@@ -111,6 +114,7 @@ final class AppState {
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
+        NeedsAttentionSnapshotStore.clear()
         authPhase = .unauthenticated
         selectedTab = .home
     }
@@ -125,6 +129,7 @@ final class AppState {
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
+        NeedsAttentionSnapshotStore.clear()
 
         authPhase = .unauthenticated
         selectedTab = .home
@@ -268,6 +273,16 @@ final class AppState {
         pendingTabNavigation = nil
         deepLinkError = nil
         selectedTab = .home
+    }
+
+    private func refreshNeedsAttentionSnapshot() async {
+        guard let currentUser else {
+            NeedsAttentionSnapshotStore.clear()
+            return
+        }
+
+        let viewModel = HomeViewModel(currentUser: currentUser, client: client)
+        await viewModel.loadDashboard()
     }
 
     private func clearWebData() async {

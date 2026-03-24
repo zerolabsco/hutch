@@ -161,6 +161,10 @@ struct RootView: View {
         guard appState.isAuthenticated else { return }
 
         switch link {
+        case .home:
+            homePath = NavigationPath()
+            appState.selectedTab = .home
+
         case .repository(let owner, let repo):
             resolveRepositoryLink(owner: owner, repo: repo)
 
@@ -284,12 +288,15 @@ private struct MoreNavigationRoot: View {
                         thread: thread,
                         onViewed: {
                             InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
                         },
                         onMarkRead: {
                             InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
                         },
                         onMarkUnread: {
                             InboxReadStateStore.markUnread(for: thread.id)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
                         }
                     )
                 }

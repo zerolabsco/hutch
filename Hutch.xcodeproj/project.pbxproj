@@ -10,6 +10,7 @@
 		8B2F89662F69DEB900FC0253 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89632F69DEB900FC0253 /* LICENSE */; };
 		8B2F89672F69DEB900FC0253 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89642F69DEB900FC0253 /* README.md */; };
 		8B2F89682F69DEB900FC0253 /* SECURITY.md in Resources */ = {isa = PBXBuildFile; fileRef = 8B2F89652F69DEB900FC0253 /* SECURITY.md */; };
+		8BE082012F80000100000001 /* HutchWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 8BE081F62F80000100000001 /* HutchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,6 +20,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 8B4B28D02F6704280045FA19;
 			remoteInfo = Hutch;
+		};
+		8BE082022F80000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B4B28C92F6704280045FA19 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BE081F72F80000100000001;
+			remoteInfo = HutchWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -30,6 +38,7 @@
 		8B8182B72F6B73F3000AE049 /* HutchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HutchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B8182C22F6B742B000AE049 /* HutchTests */ = {isa = PBXFileReference; lastKnownFileType = folder; path = HutchTests; sourceTree = "<group>"; };
 		8BDCA5272F6B76B20066AA29 /* HutchTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = HutchTests.xctestplan; sourceTree = "<group>"; };
+		8BE081F62F80000100000001 /* HutchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HutchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -39,6 +48,13 @@
 				Info.plist,
 			);
 			target = 8B4B28D02F6704280045FA19 /* Hutch */;
+		};
+		8BE082032F80000100000001 /* Exceptions for "HutchWidgetExtension" folder in "HutchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8BE081F72F80000100000001 /* HutchWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -56,7 +72,34 @@
 			path = HutchTests;
 			sourceTree = "<group>";
 		};
+		8BE081F42F80000100000001 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		8BE081F52F80000100000001 /* HutchWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8BE082032F80000100000001 /* Exceptions for "HutchWidgetExtension" folder in "HutchWidgetExtension" target */,
+			);
+			path = HutchWidgetExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8BE081FA2F80000100000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8BE082012F80000100000001 /* HutchWidgetExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		8B4B28CE2F6704280045FA19 /* Frameworks */ = {
@@ -67,6 +110,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8B8182B42F6B73F3000AE049 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BE081F92F80000100000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -85,6 +135,8 @@
 				8B2F89642F69DEB900FC0253 /* README.md */,
 				8B2F89652F69DEB900FC0253 /* SECURITY.md */,
 				8B4B28D32F6704280045FA19 /* Hutch */,
+				8BE081F42F80000100000001 /* Shared */,
+				8BE081F52F80000100000001 /* HutchWidgetExtension */,
 				8B8182B82F6B73F3000AE049 /* HutchTests */,
 				8B4B28D22F6704280045FA19 /* Products */,
 			);
@@ -95,6 +147,7 @@
 			children = (
 				8B4B28D12F6704280045FA19 /* Hutch.app */,
 				8B8182B72F6B73F3000AE049 /* HutchTests.xctest */,
+				8BE081F62F80000100000001 /* HutchWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -109,13 +162,16 @@
 				8B4B28CD2F6704280045FA19 /* Sources */,
 				8B4B28CE2F6704280045FA19 /* Frameworks */,
 				8B4B28CF2F6704280045FA19 /* Resources */,
+				8BE081FA2F80000100000001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8BE082042F80000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8B4B28D32F6704280045FA19 /* Hutch */,
+				8BE081F42F80000100000001 /* Shared */,
 			);
 			name = Hutch;
 			packageProductDependencies = (
@@ -146,6 +202,29 @@
 			productName = HutchTests;
 			productReference = 8B8182B72F6B73F3000AE049 /* HutchTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		8BE081F72F80000100000001 /* HutchWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BE081FE2F80000100000001 /* Build configuration list for PBXNativeTarget "HutchWidgetExtension" */;
+			buildPhases = (
+				8BE081F82F80000100000001 /* Sources */,
+				8BE081F92F80000100000001 /* Frameworks */,
+				8BE081FB2F80000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8BE081F42F80000100000001 /* Shared */,
+				8BE081F52F80000100000001 /* HutchWidgetExtension */,
+			);
+			name = HutchWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = HutchWidgetExtension;
+			productReference = 8BE081F62F80000100000001 /* HutchWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -182,6 +261,7 @@
 			targets = (
 				8B4B28D02F6704280045FA19 /* Hutch */,
 				8B8182B62F6B73F3000AE049 /* HutchTests */,
+				8BE081F72F80000100000001 /* HutchWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -198,6 +278,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8B8182B52F6B73F3000AE049 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BE081FB2F80000100000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -221,6 +308,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8BE081F82F80000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -228,6 +322,11 @@
 			isa = PBXTargetDependency;
 			target = 8B4B28D02F6704280045FA19 /* Hutch */;
 			targetProxy = 8B8182BB2F6B73F3000AE049 /* PBXContainerItemProxy */;
+		};
+		8BE082042F80000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BE081F72F80000100000001 /* HutchWidgetExtension */;
+			targetProxy = 8BE082022F80000100000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -358,8 +457,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -376,7 +476,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -394,8 +494,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -412,7 +513,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -469,6 +570,64 @@
 			};
 			name = Release;
 		};
+		8BE081FC2F80000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = ZCNAX3VL9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8BE081FD2F80000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = ZCNAX3VL9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -495,6 +654,15 @@
 			buildConfigurations = (
 				8B8182BD2F6B73F3000AE049 /* Debug */,
 				8B8182BE2F6B73F3000AE049 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BE081FE2F80000100000001 /* Build configuration list for PBXNativeTarget "HutchWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BE081FC2F80000100000001 /* Debug */,
+				8BE081FD2F80000100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -92,11 +92,13 @@ final class MailingListDetailViewModel {
         let viewedAt = max(Date(), thread.lastActivityAt)
         InboxReadStateStore.markViewed(viewedAt, for: thread.id)
         updateThread(thread, isUnread: false)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
         InboxReadStateStore.markUnread(for: thread.id)
         updateThread(thread, isUnread: true)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
     }
 
     private func makeSummary(from thread: ProjectMailingListThreadPayload) -> InboxThreadSummary {

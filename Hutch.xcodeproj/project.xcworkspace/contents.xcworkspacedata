@@ -4,4 +4,12 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <Group
+      location = "group:Shared"
+      name = "Shared">
+   </Group>
+   <Group
+      location = "group:HutchWidgetExtension"
+      name = "HutchWidgetExtension">
+   </Group>
 </Workspace>
