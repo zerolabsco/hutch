@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let homeLogger = Logger(subsystem: "net.cleberg.Hutch", category: "Home")
 
 private struct HomeJobsResponse: Decodable, Sendable {
     let jobs: HomeJobsPage
@@ -345,6 +348,7 @@ final class HomeViewModel {
             )
             assignedTickets.removeAll { $0.id == ticket.id }
         } catch {
+            homeLogger.error("Unassign from me failed: \(error, privacy: .public)")
         }
     }
 
@@ -377,6 +381,7 @@ final class HomeViewModel {
                 )
             }
         } catch {
+            homeLogger.error("Cancel build failed: \(error, privacy: .public)")
         }
     }
 
@@ -612,6 +617,7 @@ final class HomeViewModel {
             )
             assignedTickets.removeAll { $0.id == ticket.id }
         } catch {
+            homeLogger.error("Ticket status update failed: \(error, privacy: .public)")
         }
     }
 
