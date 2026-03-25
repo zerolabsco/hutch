@@ -576,7 +576,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -586,7 +586,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.4.0;
+				MARKETING_VERSION = 2.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -605,7 +605,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -615,7 +615,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.4.0;
+				MARKETING_VERSION = 2.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
