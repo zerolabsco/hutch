@@ -283,8 +283,15 @@ nonisolated func markdownToHTML(_ text: String, imageURLResolver: ((String) -> S
     let lines = normalizedText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     var html = ""
     var inCodeBlock = false
-    var inList = false
+    var codeBlockInListItem = false
+    var codeBlockLines: [String] = []
+    var listType: MarkupListType?
+    var inBlockquote = false
+    var pendingListItemBreak = false
+    var currentListItemLines: [String] = []
+    var currentListItemBlocks: [String] = []
     var paragraph: [String] = []
+    var tableRows: [[String]] = []
 
     func flushParagraph() {
         if !paragraph.isEmpty {
@@ -296,72 +303,262 @@ nonisolated func markdownToHTML(_ text: String, imageURLResolver: ((String) -> S
         }
     }
 
+    func flushListItem() {
+        guard !currentListItemLines.isEmpty || !currentListItemBlocks.isEmpty else { return }
+        let itemContent = currentListItemLines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: " ")
+
+        if currentListItemBlocks.isEmpty {
+            html += "<li>" + renderTaskListItem(
+                itemContent,
+                inlineRenderer: { processInline($0, imageURLResolver: imageURLResolver) }
+            ) + "</li>\n"
+        } else {
+            if !itemContent.isEmpty {
+                currentListItemBlocks.append(
+                    "<p>" + renderTaskListItem(
+                        itemContent,
+                        inlineRenderer: { processInline($0, imageURLResolver: imageURLResolver) }
+                    ) + "</p>"
+                )
+            }
+            html += "<li>" + currentListItemBlocks.joined(separator: "\n") + "</li>\n"
+        }
+        currentListItemLines = []
+        currentListItemBlocks = []
+    }
+
+    func flushListItemParagraphIntoBlocks() {
+        guard !currentListItemLines.isEmpty else { return }
+        let itemContent = currentListItemLines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: " ")
+        currentListItemBlocks.append(
+            "<p>" + renderTaskListItem(
+                itemContent,
+                inlineRenderer: { processInline($0, imageURLResolver: imageURLResolver) }
+            ) + "</p>"
+        )
+        currentListItemLines = []
+    }
+
+    func flushCodeBlock() {
+        let content = codeBlockLines.joined(separator: "\n")
+        let blockHTML = "<pre><code>" + content + "</code></pre>\n"
+        if codeBlockInListItem {
+            currentListItemBlocks.append(blockHTML)
+        } else {
+            html += blockHTML
+        }
+        codeBlockLines = []
+        codeBlockInListItem = false
+    }
+
     func closeList() {
-        if inList {
+        flushListItem()
+        switch listType {
+        case .unordered:
             html += "</ul>\n"
-            inList = false
+        case .ordered:
+            html += "</ol>\n"
+        case nil:
+            break
+        }
+        listType = nil
+    }
+
+    func flushTable() {
+        guard !tableRows.isEmpty else { return }
+        html += renderHTMLTable(
+            rows: tableRows,
+            inlineRenderer: { processInline($0, imageURLResolver: imageURLResolver) }
+        )
+        tableRows = []
+    }
+
+    func closeBlockquote() {
+        if inBlockquote {
+            flushParagraph()
+            html += "</blockquote>\n"
+            inBlockquote = false
         }
     }
 
     for line in lines {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+        if pendingListItemBreak, listType != nil {
+            if trimmed.isEmpty {
+                continue
+            }
+            if isIndentedContinuationLine(line) || trimmed.hasPrefix("```") {
+                pendingListItemBreak = false
+            } else if isMarkdownUnorderedListItem(trimmed) || orderedListItem(in: trimmed) != nil {
+                flushListItem()
+                pendingListItemBreak = false
+            } else {
+                flushListItem()
+                closeList()
+                pendingListItemBreak = false
+            }
+        }
+
+        if let rawHTML = sanitizedMarkdownHTMLLine(from: trimmed) {
+            closeBlockquote()
+            flushParagraph()
+            flushTable()
+            if listType != nil {
+                flushListItemParagraphIntoBlocks()
+                currentListItemBlocks.append(rawHTML)
+            } else {
+                closeList()
+                html += rawHTML + "\n"
+            }
+            continue
+        }
+
         // Fenced code blocks
-        if line.hasPrefix("```") {
+        if trimmed.hasPrefix("```") {
             if inCodeBlock {
-                html += "</code></pre>\n"
+                flushCodeBlock()
                 inCodeBlock = false
             } else {
+                closeBlockquote()
                 flushParagraph()
-                closeList()
-                html += "<pre><code>"
+                flushTable()
+                codeBlockInListItem = listType != nil && (!currentListItemLines.isEmpty || !currentListItemBlocks.isEmpty)
+                if !codeBlockInListItem {
+                    closeList()
+                } else {
+                    flushListItemParagraphIntoBlocks()
+                }
                 inCodeBlock = true
+                codeBlockLines = []
             }
             continue
         }
 
         if inCodeBlock {
-            html += escapeHTML(line) + "\n"
+            codeBlockLines.append(escapeHTML(line))
             continue
         }
 
+        if isTableLine(trimmed) {
+            closeBlockquote()
+            flushParagraph()
+            closeList()
+            tableRows.append(parseTableRow(trimmed))
+            continue
+        } else {
+            flushTable()
+        }
+
         // Headings
+        if line.hasPrefix("###### ") {
+            closeBlockquote()
+            flushParagraph()
+            closeList()
+            html += "<h6>" + processInline(String(line.dropFirst(7)), imageURLResolver: imageURLResolver) + "</h6>\n"
+            continue
+        }
+        if line.hasPrefix("##### ") {
+            closeBlockquote()
+            flushParagraph()
+            closeList()
+            html += "<h5>" + processInline(String(line.dropFirst(6)), imageURLResolver: imageURLResolver) + "</h5>\n"
+            continue
+        }
+        if line.hasPrefix("#### ") {
+            closeBlockquote()
+            flushParagraph()
+            closeList()
+            html += "<h4>" + processInline(String(line.dropFirst(5)), imageURLResolver: imageURLResolver) + "</h4>\n"
+            continue
+        }
         if line.hasPrefix("### ") {
+            closeBlockquote()
             flushParagraph()
             closeList()
             html += "<h3>" + processInline(String(line.dropFirst(4)), imageURLResolver: imageURLResolver) + "</h3>\n"
             continue
         }
         if line.hasPrefix("## ") {
+            closeBlockquote()
             flushParagraph()
             closeList()
             html += "<h2>" + processInline(String(line.dropFirst(3)), imageURLResolver: imageURLResolver) + "</h2>\n"
             continue
         }
         if line.hasPrefix("# ") {
+            closeBlockquote()
             flushParagraph()
             closeList()
             html += "<h1>" + processInline(String(line.dropFirst(2)), imageURLResolver: imageURLResolver) + "</h1>\n"
             continue
         }
 
+        if isMarkdownHorizontalRule(trimmed) {
+            closeBlockquote()
+            flushParagraph()
+            closeList()
+            html += "<hr>\n"
+            continue
+        }
+
+        if trimmed.hasPrefix("> ") {
+            flushTable()
+            closeList()
+            if !inBlockquote {
+                flushParagraph()
+                html += "<blockquote>\n"
+                inBlockquote = true
+            }
+            paragraph.append(processInline(String(trimmed.dropFirst(2)), imageURLResolver: imageURLResolver))
+            continue
+        } else {
+            closeBlockquote()
+        }
+
         // List items
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
             flushParagraph()
-            if !inList {
+            if listType != .unordered {
+                closeList()
                 html += "<ul>\n"
-                inList = true
+                listType = .unordered
             }
-            html += "<li>" + renderTaskListItem(
-                String(trimmed.dropFirst(2)),
-                inlineRenderer: { processInline($0, imageURLResolver: imageURLResolver) }
-            ) + "</li>\n"
+            flushListItem()
+            currentListItemLines = [String(trimmed.dropFirst(2))]
+            continue
+        }
+        if let orderedItem = orderedListItem(in: trimmed) {
+            flushParagraph()
+            if listType != .ordered {
+                closeList()
+                html += "<ol>\n"
+                listType = .ordered
+            }
+            flushListItem()
+            currentListItemLines = [orderedItem]
+            continue
+        }
+
+        if listType != nil && isIndentedContinuationLine(line) {
+            currentListItemLines.append(trimmed)
             continue
         }
 
         // Blank line
         if trimmed.isEmpty {
-            flushParagraph()
-            closeList()
+            if inBlockquote {
+                closeBlockquote()
+            } else if listType != nil, !currentListItemLines.isEmpty || !currentListItemBlocks.isEmpty {
+                pendingListItemBreak = true
+            } else {
+                flushParagraph()
+                closeList()
+            }
             continue
         }
 
@@ -371,21 +568,33 @@ nonisolated func markdownToHTML(_ text: String, imageURLResolver: ((String) -> S
 
     // Flush remaining state
     if inCodeBlock {
-        html += "</code></pre>\n"
+        flushCodeBlock()
     }
+    closeBlockquote()
     flushParagraph()
+    flushTable()
     closeList()
 
     return html
 }
 
 nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> String?)? = nil) -> String {
-    var result = escapeHTML(text)
+    var protectedFragments: [String: String] = [:]
+    var result = protectMatches(
+        in: text,
+        pattern: #"</?[A-Za-z][^>]*?>"#,
+        protectedFragments: &protectedFragments
+    ) { match, nsText in
+        let rawTag = nsText.substring(with: match.range)
+        return sanitizedMarkdownHTMLTag(rawTag) ?? escapeHTML(rawTag)
+    }
+
+    result = escapeHTML(result)
 
     // Images: ![alt](url)
     result = replaceMatches(in: result, pattern: #"!\[([^\]]*)\]\(([^)]+)\)"#) { match, nsText in
         let alt = nsText.substring(with: match.range(at: 1))
-        let source = nsText.substring(with: match.range(at: 2))
+        let source = decodeHTMLEntities(nsText.substring(with: match.range(at: 2)))
         let resolvedSource = imageURLResolver?(source) ?? source
         guard let sanitizedSource = sanitizedReadmeImageURLString(resolvedSource) else {
             return escapeHTML(alt)
@@ -395,12 +604,30 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
     // Links: [text](url)
     result = replaceMatches(in: result, pattern: #"\[([^\]]+)\]\(([^)]+)\)"#) { match, nsText in
         let label = nsText.substring(with: match.range(at: 1))
-        let rawURL = nsText.substring(with: match.range(at: 2))
+        let rawURL = decodeHTMLEntities(nsText.substring(with: match.range(at: 2)))
         guard let sanitizedURL = sanitizedReadmeLinkURLString(rawURL) else {
             return label
         }
         return #"<a href="\#(sanitizedURL)">\#(label)</a>"#
     }
+    // Plain email autolinks
+    result = replaceMatches(
+        in: result,
+        pattern: #"(?i)(?<![\w.%+\-])([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})(?![\w\-])"#
+    ) { match, nsText in
+        guard !isInsideHTMLTag(nsText, range: match.range) else {
+            return nsText.substring(with: match.range)
+        }
+        let email = nsText.substring(with: match.range(at: 1))
+        let href = escapeHTMLAttribute("mailto:\(email)")
+        return #"<a href="\#(href)">\#(email)</a>"#
+    }
+    // Strikethrough: ~~text~~
+    result = result.replacingOccurrences(
+        of: #"~~(.+?)~~"#,
+        with: "<del>$1</del>",
+        options: .regularExpression
+    )
     // Bold: **text**
     result = result.replacingOccurrences(
         of: #"\*\*(.+?)\*\*"#,
@@ -409,7 +636,13 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
     )
     // Italic: *text*
     result = result.replacingOccurrences(
-        of: #"\*(.+?)\*"#,
+        of: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#,
+        with: "<em>$1</em>",
+        options: .regularExpression
+    )
+    // Italic: _text_
+    result = result.replacingOccurrences(
+        of: #"(?<!\w)_(.+?)_(?!\w)"#,
         with: "<em>$1</em>",
         options: .regularExpression
     )
@@ -420,6 +653,10 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
         options: .regularExpression
     )
 
+    for (token, fragment) in protectedFragments {
+        result = result.replacingOccurrences(of: token, with: fragment)
+    }
+
     return result
 }
 
@@ -429,12 +666,39 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
     let normalizedText = text
         .replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
-    let lines = normalizedText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let rawLines = normalizedText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    var title: String?
+    var author: String?
+    var date: String?
+    let lines = rawLines.filter { line in
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard let keywordMatch = trimmed.firstMatch(of: /^#\+([A-Za-z]+):\s*(.*)$/) else {
+            return true
+        }
+        let keyword = String(keywordMatch.1).lowercased()
+        let value = String(keywordMatch.2).trimmingCharacters(in: .whitespaces)
+        switch keyword {
+        case "title":
+            title = value
+            return false
+        case "author":
+            author = value
+            return false
+        case "date":
+            date = value
+            return false
+        default:
+            return true
+        }
+    }
     var html = ""
     var listType: OrgListType?
     var inQuoteBlock = false
     var inPropertyDrawer = false
     var srcLanguage: String?
+    var inExampleBlock = false
+    var inCenterBlock = false
+    var currentListItemLines: [String] = []
     var paragraph: [String] = []
     var tableRows: [[String]] = []
     var propertyRows: [(String, String)] = []
@@ -449,7 +713,20 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
         }
     }
 
+    func flushListItem() {
+        guard !currentListItemLines.isEmpty else { return }
+        let content = currentListItemLines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: " ")
+        html += "<li>" + renderTaskListItem(
+            content,
+            inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
+        ) + "</li>\n"
+        currentListItemLines = []
+    }
+
     func closeList() {
+        flushListItem()
         switch listType {
         case .unordered:
             html += "</ul>\n"
@@ -463,34 +740,10 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
 
     func flushTable() {
         guard !tableRows.isEmpty else { return }
-        let hasHeaderSeparator = tableRows.count > 1 && tableRows[1].allSatisfy(isOrgTableSeparatorCell)
-        let headerRow = tableRows.first ?? []
-        let bodyRows: [[String]]
-
-        html += "<table>\n"
-        if hasHeaderSeparator {
-            html += "<thead><tr>"
-            for cell in headerRow {
-                html += "<th>" + processOrgInline(cell, imageURLResolver: imageURLResolver) + "</th>"
-            }
-            html += "</tr></thead>\n<tbody>\n"
-            bodyRows = Array(tableRows.dropFirst(2))
-        } else {
-            bodyRows = tableRows
-        }
-
-        for row in bodyRows {
-            html += "<tr>"
-            for cell in row {
-                html += "<td>" + processOrgInline(cell, imageURLResolver: imageURLResolver) + "</td>"
-            }
-            html += "</tr>\n"
-        }
-
-        if hasHeaderSeparator {
-            html += "</tbody>\n"
-        }
-        html += "</table>\n"
+        html += renderHTMLTable(
+            rows: tableRows,
+            inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
+        )
         tableRows = []
     }
 
@@ -520,11 +773,40 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
         }
     }
 
+    func closeExampleBlock() {
+        if inExampleBlock {
+            html += "</code></pre>\n"
+            inExampleBlock = false
+        }
+    }
+
+    func closeCenterBlock() {
+        if inCenterBlock {
+            flushParagraph()
+            html += "</div>\n"
+            inCenterBlock = false
+        }
+    }
+
     func flushBlockState() {
         flushParagraph()
         closeList()
         flushTable()
         flushPropertyDrawer()
+    }
+
+    if title != nil || author != nil || date != nil {
+        html += "<div class=\"org-metadata\">\n"
+        if let title {
+            html += "<h1 class=\"org-title\">" + escapeHTML(title) + "</h1>\n"
+        }
+        if let author {
+            html += "<p class=\"org-author\">" + escapeHTML(author) + "</p>\n"
+        }
+        if let date {
+            html += "<p class=\"org-date\">" + escapeHTML(date) + "</p>\n"
+        }
+        html += "</div>\n"
     }
 
     for line in lines {
@@ -539,8 +821,32 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
             continue
         }
 
+        if inExampleBlock {
+            if trimmed.lowercased() == "#+end_example" {
+                closeExampleBlock()
+            } else {
+                html += escapeHTML(line) + "\n"
+            }
+            continue
+        }
+
         if inQuoteBlock, trimmed.lowercased() == "#+end_quote" {
             closeQuoteBlock()
+            continue
+        }
+
+        if inCenterBlock {
+            if trimmed.lowercased() == "#+end_center" {
+                closeCenterBlock()
+            } else if trimmed.isEmpty {
+                flushParagraph()
+            } else {
+                paragraph.append(line)
+            }
+            continue
+        }
+
+        if trimmed == "#" || trimmed.hasPrefix("# ") {
             continue
         }
 
@@ -559,10 +865,26 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
             continue
         }
 
+        if trimmed.lowercased() == "#+begin_example" {
+            closeQuoteBlock()
+            flushBlockState()
+            html += "<pre><code>"
+            inExampleBlock = true
+            continue
+        }
+
         if trimmed.lowercased() == "#+begin_quote" {
             flushBlockState()
             html += "<blockquote>\n"
             inQuoteBlock = true
+            continue
+        }
+
+        if trimmed.lowercased() == "#+begin_center" {
+            closeQuoteBlock()
+            flushBlockState()
+            html += "<div style=\"text-align:center\">\n"
+            inCenterBlock = true
             continue
         }
 
@@ -592,18 +914,25 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
             }
         }
 
-        if isOrgTableLine(trimmed) {
+        if isTableLine(trimmed) {
             closeQuoteBlock()
             flushParagraph()
             closeList()
-            tableRows.append(parseOrgTableRow(trimmed))
+            tableRows.append(parseTableRow(trimmed))
             continue
         } else {
             flushTable()
         }
 
+        if isOrgHorizontalRule(trimmed) {
+            closeQuoteBlock()
+            flushBlockState()
+            html += "<hr>\n"
+            continue
+        }
+
         // Org headings: * heading, ** heading, *** heading
-        if let match = trimmed.firstMatch(of: /^(\*{1,3})\s+(.+)$/) {
+        if let match = trimmed.firstMatch(of: /^(\*{1,6})\s+(.+)$/) {
             closeQuoteBlock()
             flushBlockState()
             let level = match.1.count
@@ -621,10 +950,8 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
                 html += "<ul>\n"
                 listType = .unordered
             }
-            html += "<li>" + renderTaskListItem(
-                String(trimmed.dropFirst(2)),
-                inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
-            ) + "</li>\n"
+            flushListItem()
+            currentListItemLines = [String(trimmed.dropFirst(2))]
             continue
         }
 
@@ -636,10 +963,13 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
                 html += "<ol>\n"
                 listType = .ordered
             }
-            html += "<li>" + renderTaskListItem(
-                orderedItem,
-                inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
-            ) + "</li>\n"
+            flushListItem()
+            currentListItemLines = [orderedItem]
+            continue
+        }
+
+        if listType != nil && isIndentedContinuationLine(line) {
+            currentListItemLines.append(trimmed)
             continue
         }
 
@@ -658,6 +988,8 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
     }
 
     closeSourceBlock()
+    closeExampleBlock()
+    closeCenterBlock()
     closeQuoteBlock()
     flushBlockState()
 
@@ -720,6 +1052,22 @@ nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((St
         }
         return "<code>\(codeText)</code>"
     }
+    result = protectMatches(
+        in: result,
+        pattern: #"(?<!\S)\+(.+?)\+(?=\s|$|[.,;:!?])"#,
+        protectedFragments: &protectedFragments
+    ) { match, nsText in
+        let value = nsText.substring(with: match.range(at: 1))
+        return "<del>\(value)</del>"
+    }
+    result = protectMatches(
+        in: result,
+        pattern: #"(?<!\S)_(.+?)_(?=\s|$|[.,;:!?])"#,
+        protectedFragments: &protectedFragments
+    ) { match, nsText in
+        let value = nsText.substring(with: match.range(at: 1))
+        return "<u>\(value)</u>"
+    }
 
     // Bold: *text*
     result = result.replacingOccurrences(
@@ -733,6 +1081,17 @@ nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((St
         with: "<em>$1</em>",
         options: .regularExpression
     )
+    result = replaceMatches(
+        in: result,
+        pattern: #"(?i)(?<![\w.%+\-])([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})(?![\w\-])"#
+    ) { match, nsText in
+        guard !isInsideHTMLTag(nsText, range: match.range) else {
+            return nsText.substring(with: match.range)
+        }
+        let email = nsText.substring(with: match.range(at: 1))
+        let href = escapeHTMLAttribute("mailto:\(email)")
+        return #"<a href="\#(href)">\#(email)</a>"#
+    }
 
     for (token, fragment) in protectedFragments {
         result = result.replacingOccurrences(of: token, with: fragment)
@@ -805,11 +1164,11 @@ nonisolated private func sanitizeReadmeURLString(
     return escapeHTMLAttribute(sanitizedURL)
 }
 
-nonisolated private func isOrgTableLine(_ line: String) -> Bool {
+nonisolated private func isTableLine(_ line: String) -> Bool {
     line.hasPrefix("|") && line.hasSuffix("|")
 }
 
-nonisolated private func parseOrgTableRow(_ line: String) -> [String] {
+nonisolated private func parseTableRow(_ line: String) -> [String] {
     line
         .split(separator: "|", omittingEmptySubsequences: false)
         .dropFirst()
@@ -817,19 +1176,161 @@ nonisolated private func parseOrgTableRow(_ line: String) -> [String] {
         .map { String($0).trimmingCharacters(in: .whitespaces) }
 }
 
-nonisolated private func isOrgTableSeparatorCell(_ cell: String) -> Bool {
+nonisolated private func isTableSeparatorCell(_ cell: String) -> Bool {
     let trimmed = cell.trimmingCharacters(in: .whitespaces)
     return !trimmed.isEmpty && trimmed.allSatisfy { $0 == "-" || $0 == "+" }
 }
 
-private enum OrgListType {
+nonisolated private func renderHTMLTable(
+    rows: [[String]],
+    inlineRenderer: (String) -> String
+) -> String {
+    guard !rows.isEmpty else { return "" }
+    let hasHeaderSeparator = rows.count > 1 && rows[1].allSatisfy(isTableSeparatorCell)
+    let headerRow = rows.first ?? []
+    let bodyRows = hasHeaderSeparator ? Array(rows.dropFirst(2)) : rows
+    var html = "<table>\n"
+
+    if hasHeaderSeparator {
+        html += "<thead><tr>"
+        for cell in headerRow {
+            html += "<th>" + inlineRenderer(cell) + "</th>"
+        }
+        html += "</tr></thead>\n"
+    }
+
+    html += "<tbody>\n"
+    for row in bodyRows {
+        html += "<tr>"
+        for cell in row {
+            html += "<td>" + inlineRenderer(cell) + "</td>"
+        }
+        html += "</tr>\n"
+    }
+    html += "</tbody>\n"
+    html += "</table>\n"
+    return html
+}
+
+private enum MarkupListType: Equatable {
     case unordered
     case ordered
 }
 
+private typealias OrgListType = MarkupListType
+
 nonisolated private func orderedListItem(in line: String) -> String? {
     guard let match = line.firstMatch(of: /^(\d+)\.\s+(.+)$/) else { return nil }
     return String(match.2)
+}
+
+nonisolated private func isMarkdownHorizontalRule(_ line: String) -> Bool {
+    matchesRegex(line, pattern: #"^\s*([*\-_])(?:\s*\1){2,}\s*$"#)
+}
+
+nonisolated private func isOrgHorizontalRule(_ line: String) -> Bool {
+    matchesRegex(line, pattern: #"^\s*-{5,}\s*$"#)
+}
+
+nonisolated private func matchesRegex(_ text: String, pattern: String) -> Bool {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+    let range = NSRange(location: 0, length: (text as NSString).length)
+    return regex.firstMatch(in: text, range: range) != nil
+}
+
+nonisolated private func isInsideHTMLTag(_ text: NSString, range: NSRange) -> Bool {
+    guard range.location != NSNotFound else { return false }
+    let prefix = text.substring(to: range.location)
+    guard let lastOpen = prefix.lastIndex(of: "<") else { return false }
+    guard let lastClose = prefix.lastIndex(of: ">") else { return true }
+    return lastOpen > lastClose
+}
+
+nonisolated private func isIndentedContinuationLine(_ line: String) -> Bool {
+    guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+    guard let first = line.first else { return false }
+    return first == " " || first == "\t"
+}
+
+nonisolated private func isMarkdownUnorderedListItem(_ line: String) -> Bool {
+    line.hasPrefix("- ") || line.hasPrefix("* ")
+}
+
+nonisolated private func decodeHTMLEntities(_ text: String) -> String {
+    text
+        .replacingOccurrences(of: "&amp;", with: "&")
+        .replacingOccurrences(of: "&quot;", with: "\"")
+        .replacingOccurrences(of: "&#39;", with: "'")
+        .replacingOccurrences(of: "&lt;", with: "<")
+        .replacingOccurrences(of: "&gt;", with: ">")
+}
+
+nonisolated private func sanitizedMarkdownHTMLLine(from line: String) -> String? {
+    guard line.hasPrefix("<"), line.hasSuffix(">") else { return nil }
+    return sanitizedMarkdownHTMLTag(line)
+}
+
+nonisolated private func sanitizedMarkdownHTMLTag(_ rawTag: String) -> String? {
+    let trimmed = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.hasPrefix("<"), trimmed.hasSuffix(">") else { return nil }
+    guard !trimmed.lowercased().hasPrefix("<!--") else { return nil }
+
+    let selfClosing = trimmed.hasSuffix("/>")
+    let contentStart = trimmed.index(after: trimmed.startIndex)
+    let contentEnd = trimmed.index(trimmed.endIndex, offsetBy: selfClosing ? -2 : -1)
+    let inner = trimmed[contentStart..<contentEnd].trimmingCharacters(in: .whitespacesAndNewlines)
+    let isClosing = inner.hasPrefix("/")
+    let body = isClosing ? inner.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines) : inner
+    let parts = body.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+    guard let rawName = parts.first else { return nil }
+    let tagName = rawName.lowercased()
+    let allowedTags: Set<String> = [
+        "a", "abbr", "b", "blockquote", "br", "code", "del", "div", "em",
+        "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "sub",
+        "sup", "u", "ul"
+    ]
+    guard allowedTags.contains(tagName) else { return nil }
+
+    if isClosing {
+        return "</\(tagName)>"
+    }
+
+    let attributePortion = parts.count > 1 ? String(parts[1]) : ""
+    let attributes = parseHTMLAttributes(attributePortion)
+    var renderedAttributes: [String] = []
+
+    for (name, value) in attributes {
+        switch (tagName, name.lowercased()) {
+        case ("a", "href"):
+            if let sanitized = sanitizedReadmeLinkURLString(decodeHTMLEntities(value)) {
+                renderedAttributes.append(#"href="\#(sanitized)""#)
+            }
+        case ("img", "src"):
+            if let sanitized = sanitizedReadmeImageURLString(decodeHTMLEntities(value)) {
+                renderedAttributes.append(#"src="\#(sanitized)""#)
+            }
+        case ("img", "alt"), (_, "title"), (_, "class"):
+            renderedAttributes.append(#"\#(name)="\#(escapeHTMLAttribute(value))""#)
+        default:
+            continue
+        }
+    }
+
+    let suffix = selfClosing || tagName == "br" || tagName == "hr" || tagName == "img" ? " /" : ""
+    let attributeText = renderedAttributes.isEmpty ? "" : " " + renderedAttributes.joined(separator: " ")
+    return "<\(tagName)\(attributeText)\(suffix)>"
+}
+
+nonisolated private func parseHTMLAttributes(_ text: String) -> [(String, String)] {
+    guard let regex = try? NSRegularExpression(pattern: #"([A-Za-z_:][A-Za-z0-9:._-]*)\s*=\s*"([^"]*)""#) else {
+        return []
+    }
+    let nsText = text as NSString
+    return regex.matches(in: text, range: NSRange(location: 0, length: nsText.length)).map { match in
+        let name = nsText.substring(with: match.range(at: 1))
+        let value = nsText.substring(with: match.range(at: 2))
+        return (name, value)
+    }
 }
 
 nonisolated private func protectMatches(
@@ -843,7 +1344,7 @@ nonisolated private func protectMatches(
     let matches = regex.matches(in: result, range: NSRange(location: 0, length: (result as NSString).length))
 
     for match in matches.reversed() {
-        let token = "__ORG_PROTECTED_\(protectedFragments.count)__"
+        let token = "ZZPROTECTED\(protectedFragments.count)ZZ"
         let nsText = result as NSString
         protectedFragments[token] = transform(match, nsText)
         result = nsText.replacingCharacters(in: match.range, with: token)
@@ -877,8 +1378,9 @@ nonisolated private func makeOrgImageHTML(
 ) -> String? {
     guard isRenderableImageSource(source) else { return nil }
     let resolvedSource = imageURLResolver?(source) ?? source
+    guard let sanitizedSource = sanitizedReadmeImageURLString(resolvedSource) else { return nil }
     let altText = escapeHTMLAttribute(alt ?? "")
-    return #"<img src="\#(resolvedSource)" alt="\#(altText)">"#
+    return #"<img src="\#(sanitizedSource)" alt="\#(altText)">"#
 }
 
 nonisolated private func isRenderableImageSource(_ source: String) -> Bool {
@@ -911,7 +1413,19 @@ nonisolated func resolveRepositoryAssetURL(
     }
 
     guard !relativePath.isEmpty else { return nil }
-    return "https://git.sr.ht/\(owner)/\(repositoryName)/blob/HEAD/\(relativePath)"
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = "git.sr.ht"
+    let encodedOwner = owner.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? owner
+    let encodedRepository = repositoryName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repositoryName
+    let encodedRelativePath = relativePath
+        .split(separator: "/", omittingEmptySubsequences: false)
+        .map { segment in
+            String(segment).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(segment)
+        }
+        .joined(separator: "/")
+    components.percentEncodedPath = "/\(encodedOwner)/\(encodedRepository)/blob/HEAD/\(encodedRelativePath)"
+    return components.string
 }
 
 nonisolated private func normalizeRepositoryPath(_ path: String) -> String {
@@ -1099,6 +1613,53 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
             a { color: \(linkColor); }
             table { border-collapse: collapse; width: 100%; }
             td, th { border: 1px solid #ccc; padding: 4px 8px; }
+            blockquote {
+                border-left: 3px solid rgba(128, 128, 128, 0.5);
+                margin: 0.5em 0;
+                padding: 0.25em 0 0.25em 1em;
+                color: inherit;
+                opacity: 0.85;
+            }
+            hr {
+                border: none;
+                border-top: 1px solid rgba(128, 128, 128, 0.35);
+                margin: 1em 0;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 0.75em 0;
+                font-size: 0.95em;
+            }
+            th {
+                background: rgba(128, 128, 128, 0.15);
+                font-weight: 600;
+                text-align: left;
+            }
+            td, th {
+                border: 1px solid rgba(128, 128, 128, 0.3);
+                padding: 6px 10px;
+            }
+            dl.org-properties {
+                margin: 0.5em 0;
+                display: grid;
+                grid-template-columns: max-content 1fr;
+                gap: 2px 12px;
+            }
+            dt {
+                font-weight: 600;
+                font-family: ui-monospace, Menlo, monospace;
+                font-size: 0.9em;
+            }
+            dd { margin: 0; }
+            .org-metadata { margin-bottom: 1em; }
+            .org-title { margin: 0 0 0.25em; }
+            .org-author, .org-date {
+                margin: 0;
+                color: rgba(128, 128, 128, 0.85);
+                font-size: 0.9em;
+            }
+            del { opacity: 0.7; }
         </style>
         </head>
         <body>\(html)</body>
