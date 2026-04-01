@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InboxView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: InboxViewModel?
     @State private var selectedThreadID: InboxThreadSummary.ID?
     @State private var selectedThreadSnapshot: InboxThreadSummary?
@@ -17,10 +18,21 @@ struct InboxView: View {
         }
         .navigationTitle("Inbox")
         .task {
-            if viewModel == nil {
-                let vm = InboxViewModel(client: appState.client)
-                viewModel = vm
-                await vm.loadThreads()
+            let vm: InboxViewModel
+            if let viewModel {
+                vm = viewModel
+            } else {
+                let newViewModel = InboxViewModel(client: appState.client)
+                viewModel = newViewModel
+                vm = newViewModel
+            }
+
+            await vm.loadThreads()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, let viewModel, !isShowingThreadDetail else { return }
+            Task {
+                await viewModel.loadThreads()
             }
         }
     }
@@ -51,6 +63,20 @@ struct InboxView: View {
             prompt: "Search inbox"
         )
         .listStyle(.plain)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if viewModel.hasUnreadThreads {
+                    Button("Mark All Read") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.markAllThreadsRead()
+                        }
+                        Task {
+                            await viewModel.loadThreads()
+                        }
+                    }
+                }
+            }
+        }
         .overlay {
             if viewModel.isLoading, viewModel.threads.isEmpty {
                 SRHTLoadingStateView(message: "Loading inbox…")
@@ -66,7 +92,7 @@ struct InboxView: View {
                 ContentUnavailableView(
                     "Inbox Zero",
                     systemImage: "tray",
-                    description: Text("Unread threads will appear here.")
+                    description: Text("You're up to date.")
                 )
             }
         }

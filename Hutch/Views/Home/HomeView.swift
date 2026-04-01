@@ -26,11 +26,18 @@ struct HomeView: View {
             }
         }
         .task {
-            if viewModel == nil, let currentUser = appState.currentUser {
-                let vm = HomeViewModel(currentUser: currentUser, client: appState.client)
-                viewModel = vm
-                await vm.loadDashboard()
+            guard let currentUser = appState.currentUser else { return }
+
+            let vm: HomeViewModel
+            if let viewModel {
+                vm = viewModel
+            } else {
+                let newViewModel = HomeViewModel(currentUser: currentUser, client: appState.client)
+                viewModel = newViewModel
+                vm = newViewModel
             }
+
+            await vm.loadDashboard()
         }
     }
 
@@ -214,17 +221,8 @@ private struct HomeInboxToolbarIcon: View {
     let hasUnreadThreads: Bool
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
-
-            if hasUnreadThreads {
-                Circle()
-                    .fill(.blue)
-                    .frame(width: 9, height: 9)
-                    .offset(x: 4, y: -2)
-            }
-        }
-        .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
+        Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
+            .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
     }
 }
 

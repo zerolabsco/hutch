@@ -150,6 +150,18 @@ final class InboxViewModel {
         NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
     }
 
+    func markAllThreadsRead() {
+        guard !threads.isEmpty else { return }
+
+        let viewedAt = Date()
+        for thread in threads where thread.isUnread {
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id)
+        }
+
+        threads.removeAll { $0.isUnread }
+        NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count)
+    }
+
     func markThreadUnread(_ thread: InboxThreadSummary) {
         InboxReadStateStore.markUnread(for: thread.id)
         updateThread(thread, isUnread: true)
@@ -176,6 +188,10 @@ final class InboxViewModel {
             $0.listName.lowercased().contains(q) ||
             $0.latestSender.canonicalName.lowercased().contains(q)
         }
+    }
+
+    var hasUnreadThreads: Bool {
+        threads.contains(where: \.isUnread)
     }
 
     private func fetchSubscriptions() async throws -> [InboxActivitySubscription] {
