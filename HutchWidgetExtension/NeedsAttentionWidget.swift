@@ -44,7 +44,7 @@ struct NeedsAttentionWidget: Widget {
         }
         .configurationDisplayName("Needs Attention")
         .description("Unread inbox threads, assigned tickets, and failed builds.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -61,6 +61,8 @@ private struct NeedsAttentionWidgetView: View {
                     switch family {
                     case .systemMedium:
                         mediumView(snapshot: snapshot)
+                    case .systemLarge:
+                        largeView(snapshot: snapshot)
                     default:
                         smallView(snapshot: snapshot)
                     }
@@ -72,17 +74,6 @@ private struct NeedsAttentionWidgetView: View {
         .widgetURL(URL(string: "hutch://home"))
         .containerBackground(for: .widget) {
             Color(.systemBackground)
-        }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("Hutch")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text("Needs Attention")
-                .font(.headline)
-                .lineLimit(1)
         }
     }
 
@@ -108,9 +99,7 @@ private struct NeedsAttentionWidgetView: View {
     }
 
     private func mediumView(snapshot: NeedsAttentionSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            header
-                .padding(.top, 6)
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 metricColumn(
                     count: snapshot.unreadInboxThreads,
@@ -137,23 +126,47 @@ private struct NeedsAttentionWidgetView: View {
         .padding(.bottom, 16)
     }
 
-    private var clearState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+    private func largeView(snapshot: NeedsAttentionSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            metricRow(
+                count: snapshot.unreadInboxThreads,
+                label: "Unread threads",
+                systemImage: "tray",
+                tint: unreadTint(for: snapshot.unreadInboxThreads)
+            )
+            metricRow(
+                count: snapshot.assignedOpenTickets,
+                label: "Assigned tickets",
+                systemImage: "ticket"
+            )
+            metricRow(
+                count: snapshot.failedBuilds,
+                label: "Failed builds",
+                systemImage: "hammer",
+                tint: failedTint(for: snapshot.failedBuilds)
+            )
             Spacer(minLength: 0)
-            Text("All clear")
-                .font(.title3.weight(.semibold))
-            Text("No unread threads, assigned tickets, or failed builds.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding()
+        .padding(20)
+    }
+
+    private var clearState: some View {
+        Group {
+            switch family {
+            case .systemSmall:
+                smallClearState
+            case .systemMedium:
+                mediumClearState
+            case .systemLarge:
+                largeClearState
+            default:
+                smallClearState
+            }
+        }
     }
 
     private var fallbackState: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
             Spacer(minLength: 0)
             Text("Open Hutch")
                 .font(.title3.weight(.semibold))
@@ -200,6 +213,73 @@ private struct NeedsAttentionWidgetView: View {
                 .frame(height: 16, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func metricRow(count: Int?, label: String, systemImage: String, tint: Color = .primary) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 24, alignment: .leading)
+            Text(displayCount(count))
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+            Text(label)
+                .font(.body)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var smallClearState: some View {
+        VStack(spacing: 6) {
+            Spacer(minLength: 0)
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 52, weight: .regular))
+                .foregroundStyle(clearStateTint)
+            Text("0 items")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    private var mediumClearState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 26, weight: .regular))
+                .foregroundStyle(clearStateTint)
+            Text("Nothing to review")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding()
+    }
+
+    private var largeClearState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 38, weight: .regular))
+                .foregroundStyle(clearStateTint)
+            Text("Nothing to review")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding()
+    }
+
+    private var clearStateTint: Color {
+        Color(.systemGreen).opacity(0.75)
     }
 
     private func displayCount(_ count: Int?) -> String {
