@@ -18,7 +18,7 @@ struct AccountSwitcherView: View {
                             switchTo(account)
                         } label: {
                             HStack {
-                                Text(account.username)
+                                Text("~\(account.username)")
                                     .foregroundStyle(.primary)
                                 Spacer()
                                 if account.id == appState.activeAccountID {
