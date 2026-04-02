@@ -1,6 +1,6 @@
 import Foundation
 
-/// Each Sourcehut service exposes its own GraphQL endpoint.
+/// Each SourceHut service exposes its own GraphQL endpoint.
 enum SRHTService: String, Codable, Sendable, CaseIterable {
     case meta
     case hub

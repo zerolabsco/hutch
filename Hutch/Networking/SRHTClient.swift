@@ -13,7 +13,7 @@ struct MultipartUploadFile: Sendable {
 /// Placeholder type for decoding GraphQL error responses when the data shape is unknown.
 private struct EmptyData: Decodable {}
 
-/// A lightweight GraphQL client for Sourcehut services.
+/// A lightweight GraphQL client for SourceHut services.
 /// All requests require a personal access token set via ``token``.
 final class SRHTClient: Sendable {
 
@@ -45,10 +45,10 @@ final class SRHTClient: Sendable {
         _token.withLock { $0 = token }
     }
 
-    /// Execute a GraphQL query or mutation against a Sourcehut service.
+    /// Execute a GraphQL query or mutation against a SourceHut service.
     ///
     /// - Parameters:
-    ///   - service: The target Sourcehut service (determines the endpoint URL).
+    ///   - service: The target SourceHut service (determines the endpoint URL).
     ///   - query: The GraphQL query or mutation string.
     ///   - variables: Optional dictionary of GraphQL variables.
     ///   - responseType: The expected `Decodable` type nested under `data`.
@@ -163,7 +163,7 @@ final class SRHTClient: Sendable {
     /// graphql-multipart-request-spec (multipart/form-data).
     ///
     /// - Parameters:
-    ///   - service: The target Sourcehut service.
+    ///   - service: The target SourceHut service.
     ///   - query: The GraphQL mutation string.
     ///   - variables: Variables dict; the file variable should be set to `nil`.
     ///   - fileVariablePath: The dot-separated path to the file variable (e.g. "input.avatar").

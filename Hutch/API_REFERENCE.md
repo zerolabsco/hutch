@@ -1,10 +1,10 @@
 # Sourcehut API Reference
 
-This document provides context and references for working with Sourcehut's APIs.
+This document provides context and references for working with SourceHut's APIs.
 
 ## Official Documentation
 
-The official Sourcehut API documentation can be found at:
+The official SourceHut API documentation can be found at:
 - **https://man.sr.ht** - Contains links to API reference pages for all *.sr.ht services
 
 ## Services and Their APIs
@@ -70,7 +70,7 @@ input Filter {
 
 ### Error Handling
 
-Sourcehut APIs return GraphQL errors in the following format:
+    SourceHut APIs return GraphQL errors in the following format:
 
 ```json
 {
@@ -107,7 +107,7 @@ Use GraphiQL interfaces available at each service's `/graphql` endpoint to:
 
 1. **Filtering**: Some services may not support all filter operations. Check the schema.
 2. **Pagination**: Always handle `cursor` properly for pagination.
-3. **Caching**: Sourcehut APIs may have aggressive caching. Use cache headers appropriately.
+3. **Caching**: SourceHut APIs may have aggressive caching. Use cache headers appropriately.
 
 ### Example Query Structure
 
@@ -141,7 +141,6 @@ query {
 
 ## Additional Resources
 
-- Sourcehut API Status: https://status.sr.ht
-- Sourcehut Meta (announcements): https://meta.sr.ht
-- Sourcehut GitHub Mirror: https://github.com/sourcehut
-- IRC: #sourcehut on Libera.Chat
+- SourceHut API Status: https://status.sr.ht
+- SourceHut Man Pages: https://man.sr.ht
+- IRC: #sr.ht on Libera.Chat

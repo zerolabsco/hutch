@@ -36,7 +36,7 @@ struct MoreView: View {
             } header: {
                 Text("External Links")
             } footer: {
-                Text("These SourceHut services are not supported in-app and open in your browser.")
+                Text("These SourceHut services are not supported in-app, as the SourceHut API does not support them, and will open in your browser.")
             }
         }
         .navigationTitle("More")

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Errors produced by the Sourcehut GraphQL client.
+/// Errors produced by the SourceHut GraphQL client.
 enum SRHTError: LocalizedError, Sendable {
     /// The server returned one or more GraphQL-level errors.
     case graphQLErrors([GraphQLError])

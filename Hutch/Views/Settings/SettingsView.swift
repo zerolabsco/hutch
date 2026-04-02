@@ -713,7 +713,7 @@ private struct AboutView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(appName)
                         .font(.title2.weight(.semibold))
-                    Text("A native SourceHut client for iPhone.")
+                    Text("A native SourceHut client for iOS.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -752,7 +752,7 @@ private struct AboutView: View {
             }
 
             Section("Acknowledgements") {
-                Text("Built for SourceHut users who want quick access to repositories, builds, and tickets on iPhone.")
+                Text("Built for SourceHut users who want quick access to repositories, builds, and tickets on iOS.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

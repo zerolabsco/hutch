@@ -217,7 +217,7 @@ private struct CreateRepositorySheet: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text("Create Repository")
+                            Text("Create")
                         }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isCreatingRepository)
