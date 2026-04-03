@@ -5,7 +5,6 @@ struct MoreView: View {
 
     private let unsupportedLinks: [(title: String, url: URL)] = [
         ("chat.sr.ht", URL(string: "https://chat.sr.ht")!),
-        ("man.sr.ht", URL(string: "https://man.sr.ht")!),
         ("srht.site", URL(string: "https://srht.site")!)
     ]
 
@@ -20,6 +19,10 @@ struct MoreView: View {
 
                 NavigationLink(value: MoreRoute.lists) {
                     Label("Mailing Lists", systemImage: "list.bullet.rectangle")
+                }
+                
+                NavigationLink(value: MoreRoute.manPageBrowser) {
+                    Label("Man Pages", systemImage: "book")
                 }
 
                 NavigationLink(value: MoreRoute.pastes) {

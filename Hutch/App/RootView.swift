@@ -269,6 +269,8 @@ enum MoreRoute: Hashable {
     case settings
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
+    case manPageBrowser
+    case manPage(URL)
 }
 
 private struct MoreNavigationRoot: View {
@@ -302,6 +304,10 @@ private struct MoreNavigationRoot: View {
                             NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
                         }
                     )
+                case .manPageBrowser:
+                    ManPageBrowserView()
+                case .manPage(let url):
+                    ManPageDetailView(url: url)
                 }
             }
     }

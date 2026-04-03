@@ -449,6 +449,10 @@ struct LookupView: View {
                             NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
                         }
                     )
+                case .manPageBrowser:
+                    ManPageBrowserView()
+                case .manPage(let url):
+                    ManPageDetailView(url: url)
                 }
             }
             .environment(appState)

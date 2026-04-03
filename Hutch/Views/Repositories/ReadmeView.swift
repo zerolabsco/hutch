@@ -1522,6 +1522,8 @@ struct HTMLWebView: View {
     let html: String
     let colorScheme: ColorScheme
     var style: HTMLWebViewStyle = .readme
+    var baseURL: URL? = nil
+    var onInterceptURL: ((URL) -> Bool)? = nil
     @Environment(\.openURL) private var openURL
     @State private var contentHeight: CGFloat = 1
     @State private var loadError: String?
@@ -1545,6 +1547,8 @@ struct HTMLWebView: View {
                     html: html,
                     colorScheme: colorScheme,
                     style: style,
+                    baseURL: baseURL,
+                    onInterceptURL: onInterceptURL,
                     openURL: openURL,
                     dynamicHeight: $contentHeight,
                     loadError: $loadError,
@@ -1581,6 +1585,8 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
     let html: String
     let colorScheme: ColorScheme
     let style: HTMLWebViewStyle
+    let baseURL: URL?
+    let onInterceptURL: ((URL) -> Bool)?
     let openURL: OpenURLAction
     @Binding var dynamicHeight: CGFloat
     @Binding var loadError: String?
@@ -1607,6 +1613,7 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.parent = self
         let textColor = colorScheme == .dark ? "#fff" : "#000"
         let linkColor = colorScheme == .dark ? "#58a6ff" : "#0066cc"
 
@@ -1648,6 +1655,10 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
                 overflow-wrap: normal;
             }
             img { max-width: 100%; height: auto; }
+            svg {
+                max-width: 100%;
+                height: auto;
+            }
             input[type="checkbox"] {
                 margin-right: 0.45rem;
                 vertical-align: middle;
@@ -1711,6 +1722,22 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
                 color: rgba(128, 128, 128, 0.85);
                 font-size: 0.9em;
             }
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4em;
+            }
+            .icon {
+                display: inline-flex;
+                align-items: center;
+                vertical-align: middle;
+            }
+            .icon svg {
+                width: 0.65em;
+                height: 0.65em;
+                display: block;
+                fill: currentColor;
+            }
             .org-title { margin: 0 0 0.25em; }
             .org-author, .org-date {
                 margin: 0;
@@ -1743,7 +1770,7 @@ private struct HTMLWebViewRepresentable: UIViewRepresentable {
                 self.loadError = nil
             }
         }
-        webView.loadHTMLString(wrapped, baseURL: nil)
+        webView.loadHTMLString(wrapped, baseURL: baseURL)
     }
 }
 
@@ -1751,7 +1778,7 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
     static let websiteDataStore = WKWebsiteDataStore.nonPersistent()
     static let heightCache = NSCache<NSString, NSNumber>()
 
-    let parent: HTMLWebViewRepresentable
+    var parent: HTMLWebViewRepresentable
     var lastHTML: String?
     var lastReloadToken = 0
 
@@ -1785,6 +1812,14 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
         }
 
         if navigationAction.navigationType == .linkActivated {
+            if isSameDocumentFragmentNavigation(requestURL) {
+                decisionHandler(.allow)
+                return
+            }
+            if let intercept = parent.onInterceptURL, intercept(requestURL) {
+                decisionHandler(.cancel)
+                return
+            }
             if isAllowedReadmeNavigationURL(requestURL) {
                 parent.openURL(requestURL)
             }
@@ -1823,5 +1858,21 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
                 }
             }
         }
+    }
+
+    private func isSameDocumentFragmentNavigation(_ url: URL) -> Bool {
+        guard url.fragment != nil,
+              let baseURL = parent.baseURL else {
+            return false
+        }
+
+        guard var destination = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              var base = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+
+        destination.fragment = nil
+        base.fragment = nil
+        return destination.url == base.url
     }
 }
