@@ -4,8 +4,7 @@ struct MoreView: View {
     @Environment(AppState.self) private var appState
 
     private let unsupportedLinks: [(title: String, url: URL)] = [
-        ("chat.sr.ht", URL(string: "https://chat.sr.ht")!),
-        ("srht.site", URL(string: "https://srht.site")!)
+        ("chat.sr.ht", URL(string: "https://chat.sr.ht")!)
     ]
 
     @State private var showAccountSwitcher = false
