@@ -746,7 +746,7 @@ private struct AboutView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Link(destination: URL(string: "https://hutch.cleberg.net/privacy.html")!) {
+                Link(destination: URL(string: "https://zerolabs.sh/hutch/privacy-policy/")!) {
                     SwiftUI.Label("Privacy Policy", systemImage: "hand.raised")
                 }
             }

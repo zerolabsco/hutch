@@ -18,10 +18,6 @@
 		8B2FA9D22F7E211800E609E2 /* todo.json in Resources */ = {isa = PBXBuildFile; fileRef = 8B2FA9CA2F7E211800E609E2 /* todo.json */; };
 		8B2FA9D32F7E211800E609E2 /* lists.json in Resources */ = {isa = PBXBuildFile; fileRef = 8B2FA9C72F7E211800E609E2 /* lists.json */; };
 		8BE082012F80000100000001 /* HutchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8BE081F62F80000100000001 /* HutchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		8BE09E7F2F7B2CC300F88693 /* storebutton.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8BE09E7C2F7B2CC300F88693 /* storebutton.svg */; };
-		8BE09E802F7B2CC300F88693 /* index.html in Resources */ = {isa = PBXBuildFile; fileRef = 8BE09E7A2F7B2CC300F88693 /* index.html */; };
-		8BE09E812F7B2CC300F88693 /* styles.css in Resources */ = {isa = PBXBuildFile; fileRef = 8BE09E7D2F7B2CC300F88693 /* styles.css */; };
-		8BE09E822F7B2CC300F88693 /* privacy.html in Resources */ = {isa = PBXBuildFile; fileRef = 8BE09E7B2F7B2CC300F88693 /* privacy.html */; };
 		8BF100032F9A000100000001 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 8BF100022F9A000100000001 /* Markdown */; };
 		8BF100052F9A000100000002 /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 8BF100042F9A000100000002 /* Splash */; };
 /* End PBXBuildFile section */
@@ -73,10 +69,6 @@
 		8B8182C22F6B742B000AE049 /* HutchTests */ = {isa = PBXFileReference; lastKnownFileType = folder; path = HutchTests; sourceTree = "<group>"; };
 		8BDCA5272F6B76B20066AA29 /* HutchTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = HutchTests.xctestplan; sourceTree = "<group>"; };
 		8BE081F62F80000100000001 /* HutchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HutchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BE09E7A2F7B2CC300F88693 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
-		8BE09E7B2F7B2CC300F88693 /* privacy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = privacy.html; sourceTree = "<group>"; };
-		8BE09E7C2F7B2CC300F88693 /* storebutton.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = storebutton.svg; sourceTree = "<group>"; };
-		8BE09E7D2F7B2CC300F88693 /* styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = styles.css; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -178,7 +170,6 @@
 			isa = PBXGroup;
 			children = (
 				8B2FA9CC2F7E211800E609E2 /* Docs */,
-				8BE09E7E2F7B2CC300F88693 /* website */,
 				8BDCA5272F6B76B20066AA29 /* HutchTests.xctestplan */,
 				8B8182C22F6B742B000AE049 /* HutchTests */,
 				8B2F89632F69DEB900FC0253 /* LICENSE */,
@@ -200,17 +191,6 @@
 				8BE081F62F80000100000001 /* HutchWidgetExtension.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		8BE09E7E2F7B2CC300F88693 /* website */ = {
-			isa = PBXGroup;
-			children = (
-				8BE09E7A2F7B2CC300F88693 /* index.html */,
-				8BE09E7B2F7B2CC300F88693 /* privacy.html */,
-				8BE09E7C2F7B2CC300F88693 /* storebutton.svg */,
-				8BE09E7D2F7B2CC300F88693 /* styles.css */,
-			);
-			path = website;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -348,10 +328,6 @@
 				8B2FA9D12F7E211800E609E2 /* paste.json in Resources */,
 				8B2FA9D22F7E211800E609E2 /* todo.json in Resources */,
 				8B2FA9D32F7E211800E609E2 /* lists.json in Resources */,
-				8BE09E7F2F7B2CC300F88693 /* storebutton.svg in Resources */,
-				8BE09E802F7B2CC300F88693 /* index.html in Resources */,
-				8BE09E812F7B2CC300F88693 /* styles.css in Resources */,
-				8BE09E822F7B2CC300F88693 /* privacy.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -539,7 +515,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -556,7 +532,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.10.2;
+				MARKETING_VERSION = 2.10.3;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -576,7 +552,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -593,7 +569,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.10.2;
+				MARKETING_VERSION = 2.10.3;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -656,7 +632,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -666,7 +642,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.10.2;
+				MARKETING_VERSION = 2.10.3;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -685,7 +661,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -695,7 +671,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.10.2;
+				MARKETING_VERSION = 2.10.3;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
