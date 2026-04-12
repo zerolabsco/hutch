@@ -266,6 +266,7 @@ enum MoreRoute: Hashable {
     case lookup
     case lists
     case pastes
+    case profile
     case settings
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
@@ -284,6 +285,8 @@ private struct MoreNavigationRoot: View {
                     MailingListListView()
                 case .pastes:
                     PasteListView()
+                case .profile:
+                    ProfileView()
                 case .settings:
                     SettingsView()
                 case .mailingList(let mailingList):

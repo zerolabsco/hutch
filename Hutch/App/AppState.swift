@@ -56,6 +56,7 @@ final class AppState {
     // MARK: - Networking
 
     let client: SRHTClient
+    let configuration: AppConfiguration
 
     // MARK: - Deep link pending navigation
 
@@ -67,6 +68,7 @@ final class AppState {
     // MARK: - Init
 
     init() {
+        self.configuration = AppConfiguration()
         let token = KeychainHelper.loadToken()
         self.client = SRHTClient(token: token)
     }
@@ -107,11 +109,13 @@ final class AppState {
             accounts = storedAccounts
             activeAccountID = target.id
             currentUser = user
+            ContributionWidgetContextStore.saveActor(user.canonicalName)
             authPhase = .authenticated
             await refreshNeedsAttentionSnapshot()
         } catch {
             client.setToken(nil)
             currentUser = nil
+            ContributionWidgetContextStore.clear()
             authPhase = .unauthenticated
             NeedsAttentionSnapshotStore.clear()
         }
@@ -131,6 +135,7 @@ final class AppState {
             UserDefaults.standard.set(entry.id, forKey: AppStorageKeys.activeAccountID)
             try KeychainHelper.saveAccounts(accounts)
             currentUser = user
+            ContributionWidgetContextStore.saveActor(user.canonicalName)
             authPhase = .authenticated
             await refreshNeedsAttentionSnapshot()
         } catch {
@@ -168,6 +173,7 @@ final class AppState {
 
         let user = try await fetchMe()
         currentUser = user
+        ContributionWidgetContextStore.saveActor(user.canonicalName)
         authPhase = .authenticated
         await refreshNeedsAttentionSnapshot()
     }
@@ -355,6 +361,7 @@ final class AppState {
         activeAccountID = ""
         UserDefaults.standard.removeObject(forKey: AppStorageKeys.activeAccountID)
         currentUser = nil
+        ContributionWidgetContextStore.clear()
         pendingDeepLink = nil
         pendingTabNavigation = nil
         deepLinkError = nil

@@ -429,6 +429,8 @@ struct LookupView: View {
                     MailingListListView()
                 case .pastes:
                     PasteListView()
+                case .profile:
+                    ProfileView()
                 case .settings:
                     SettingsView()
                 case .mailingList(let mailingList):

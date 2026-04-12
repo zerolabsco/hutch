@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UserProfileView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage(AppStorageKeys.contributionGraphsEnabled) private var contributionGraphsEnabled = true
 
     let user: User
     @State private var profileViewModel: UserProfileViewModel?
@@ -91,6 +92,21 @@ struct UserProfileView: View {
             }
 
             if let viewModel = profileViewModel {
+                if contributionGraphsEnabled {
+                    Section {
+                        ContributionProfileCard(
+                            actor: viewModel.actor,
+                            weeks: viewModel.contributionCalendar.map {
+                                ContributionCalendarLayout.weekColumns(from: $0.days)
+                            } ?? [],
+                            stats: viewModel.contributionStats,
+                            isLoading: viewModel.isLoadingContributions,
+                            error: viewModel.contributionsError ?? viewModel.contributionStatusText,
+                            isIndexedButEmpty: viewModel.isContributionActivityIndexedButEmpty
+                        )
+                    }
+                }
+
                 Section {
                     if viewModel.isLoadingRepositories && viewModel.repositories.isEmpty {
                         ProgressView()
@@ -143,15 +159,36 @@ struct UserProfileView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(user.canonicalName)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(id: user.canonicalName) {
             let owner = user.canonicalName.hasPrefix("~")
                 ? String(user.canonicalName.dropFirst())
                 : user.canonicalName
-            let vm = UserProfileViewModel(ownerUsername: owner, client: appState.client)
-            profileViewModel = vm
+            let actor = user.canonicalName.hasPrefix("~") ? user.canonicalName : "~\(user.canonicalName)"
+
+            let vm: UserProfileViewModel
+            if let existingViewModel = profileViewModel,
+               existingViewModel.actor == actor,
+               existingViewModel.ownerUsername == owner {
+                vm = existingViewModel
+            } else {
+                let newViewModel = UserProfileViewModel(
+                    ownerUsername: owner,
+                    actor: actor,
+                    client: appState.client,
+                    statsService: HutchStatsService(configuration: appState.configuration)
+                )
+                profileViewModel = newViewModel
+                vm = newViewModel
+            }
+
             async let repos: () = vm.loadRepositories()
             async let trackers: () = vm.loadTrackers()
-            _ = await (repos, trackers)
+            if contributionGraphsEnabled {
+                async let contributions: () = vm.loadContributions()
+                _ = await (repos, trackers, contributions)
+            } else {
+                _ = await (repos, trackers)
+            }
         }
     }
 

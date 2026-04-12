@@ -5,17 +5,42 @@ import Foundation
 final class UserProfileViewModel {
     private(set) var repositories: [RepositorySummary] = []
     private(set) var trackers: [TrackerSummary] = []
+    private(set) var contributionCalendar: ContributionCalendarResponse?
+    private(set) var contributionStats: ContributionStatsResponse?
     private(set) var isLoadingRepositories = false
     private(set) var isLoadingTrackers = false
+    private(set) var isLoadingContributions = false
     var repositoriesError: String?
     var trackersError: String?
+    var contributionsError: String?
 
     private let client: SRHTClient
+    private let statsService: HutchStatsService
     let ownerUsername: String
+    let actor: String
 
-    init(ownerUsername: String, client: SRHTClient) {
+    var isContributionActivityIndexedButEmpty: Bool {
+        contributionDisplayState != .populated && contributionDisplayState != .unavailable
+    }
+
+    var contributionStatusText: String? {
+        switch contributionDisplayState {
+        case .indexing:
+            return "Activity is being indexed."
+        case .empty:
+            return "No contribution activity found."
+        case .unavailable:
+            return "Contribution activity is unavailable."
+        case .populated:
+            return nil
+        }
+    }
+
+    init(ownerUsername: String, actor: String, client: SRHTClient, statsService: HutchStatsService) {
         self.ownerUsername = ownerUsername
+        self.actor = actor
         self.client = client
+        self.statsService = statsService
     }
 
     func loadRepositories() async {
@@ -51,6 +76,37 @@ final class UserProfileViewModel {
             trackers = result.user.trackers.results
         } catch {
             trackersError = error.userFacingMessage
+        }
+    }
+
+    func loadContributions(endingOn endDate: Date? = nil) async {
+        isLoadingContributions = true
+        contributionsError = nil
+        defer { isLoadingContributions = false }
+
+        let resolvedEndDate = Calendar.contributionCalendar.startOfDay(for: endDate ?? Date())
+        debugLog("profile contributions start actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted))")
+
+        do {
+            async let contributionCalendar = statsService.fetchContributionCalendar(actor: actor, endingOn: resolvedEndDate)
+            async let contributionStats = statsService.fetchContributionStats(actor: actor, endingOn: resolvedEndDate)
+
+            self.contributionCalendar = try await contributionCalendar
+            self.contributionStats = try await contributionStats
+            if contributionDisplayState != .unavailable {
+                contributionsError = nil
+            }
+            debugLog(
+                "profile contributions complete actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted)) " +
+                "state=\(String(describing: contributionDisplayState)) days=\(self.contributionCalendar?.days.count ?? 0) " +
+                "totalEvents=\(self.contributionStats?.totalEvents ?? 0) error=\(contributionsError ?? "none")"
+            )
+        } catch {
+            contributionsError = error.userFacingMessage
+            debugLog(
+                "profile contributions failed actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted)) " +
+                "error=\(error.localizedDescription) userFacing=\(contributionsError ?? "none")"
+            )
         }
     }
 
@@ -147,5 +203,38 @@ final class UserProfileViewModel {
     private struct TrackersPage: Decodable, Sendable {
         let results: [TrackerSummary]
         let cursor: String?
+    }
+
+    private enum ContributionDisplayState {
+        case populated
+        case indexing
+        case empty
+        case unavailable
+    }
+
+    private var contributionDisplayState: ContributionDisplayState {
+        if let contributionStats, contributionStats.totalEvents > 0 {
+            return .populated
+        }
+
+        if let contributionCalendar, !contributionCalendar.isEmpty {
+            return .populated
+        }
+
+        let indexingState = contributionStats?.indexingState ?? contributionCalendar?.indexingState
+        switch indexingState {
+        case .pending:
+            return .indexing
+        case .error:
+            return .unavailable
+        case .indexed, nil:
+            return .empty
+        }
+    }
+
+    private func debugLog(_ message: String) {
+#if DEBUG
+        print("[UserProfileViewModel] \(message)")
+#endif
     }
 }
