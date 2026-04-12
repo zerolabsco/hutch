@@ -11,21 +11,29 @@ struct MoreView: View {
 
     var body: some View {
         List {
-            Section {
+            Section("Search") {
                 NavigationLink(value: MoreRoute.lookup) {
                     Label("Look Up", systemImage: "magnifyingglass")
                 }
+            }
 
+            Section("Other Services") {
                 NavigationLink(value: MoreRoute.lists) {
                     Label("Mailing Lists", systemImage: "list.bullet.rectangle")
                 }
-                
+
                 NavigationLink(value: MoreRoute.manPageBrowser) {
                     Label("Man Pages", systemImage: "book")
                 }
 
                 NavigationLink(value: MoreRoute.pastes) {
                     Label("Pastes", systemImage: "doc.on.clipboard")
+                }
+            }
+
+            Section("Meta") {
+                NavigationLink(value: MoreRoute.profile) {
+                    Label("Profile", systemImage: "person.text.rectangle")
                 }
 
                 NavigationLink(value: MoreRoute.settings) {
