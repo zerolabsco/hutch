@@ -20,7 +20,6 @@ struct HutchStatsService: ContributionCalendarServing {
     }
 
     func fetchContributionCalendar(actor: String, endingOn endDate: Date) async throws -> ContributionCalendarResponse {
-        debugLog("calendar request actor=\(actor) endDate=\(Self.rangeFormatter.string(from: endDate))")
         return try await fetch(
             path: "api/contributions/\(actor)",
             queryItems: trailingYearQueryItems(endingOn: endDate),
@@ -29,7 +28,6 @@ struct HutchStatsService: ContributionCalendarServing {
     }
 
     func fetchContributionStats(actor: String, endingOn endDate: Date) async throws -> ContributionStatsResponse {
-        debugLog("stats request actor=\(actor) endDate=\(Self.rangeFormatter.string(from: endDate))")
         return try await fetch(
             path: "api/contributions/\(actor)/stats",
             queryItems: trailingYearQueryItems(endingOn: endDate),
@@ -53,17 +51,14 @@ struct HutchStatsService: ContributionCalendarServing {
             throw URLError(.badURL)
         }
 
-        debugLog("request \(url.absoluteString)")
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(from: url)
         } catch {
-            debugLog("network failure \(url.absoluteString) error=\(error.localizedDescription)")
             throw SRHTError.networkError(error)
         }
 
         if let httpResponse = response as? HTTPURLResponse {
-            debugLog("response \(url.absoluteString) status=\(httpResponse.statusCode) bytes=\(data.count)")
             if !(200...299).contains(httpResponse.statusCode) {
                 throw SRHTError.httpError(httpResponse.statusCode)
             }
@@ -72,8 +67,6 @@ struct HutchStatsService: ContributionCalendarServing {
         do {
             return try decoder.decode(responseType, from: data)
         } catch {
-            let preview = String(decoding: data.prefix(300), as: UTF8.self)
-            debugLog("decode failure \(url.absoluteString) error=\(error.localizedDescription) body=\(preview)")
             throw SRHTError.decodingError(error)
         }
     }
@@ -113,9 +106,4 @@ struct HutchStatsService: ContributionCalendarServing {
         return formatter
     }()
 
-    private func debugLog(_ message: String) {
-#if DEBUG
-        print("[HutchStatsService] \(message)")
-#endif
-    }
 }

@@ -201,8 +201,6 @@ final class LookupViewModel {
         }
         """
 
-        lookupLogger.debug("Looking up user profile for username: \(username, privacy: .public)")
-
         let result: Response
         do {
             result = try await client.execute(
@@ -224,8 +222,6 @@ final class LookupViewModel {
             )
             throw error
         }
-
-        lookupLogger.debug("User lookup succeeded for username: \(username, privacy: .public)")
 
         return .user(result.user)
     }

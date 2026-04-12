@@ -315,8 +315,6 @@ final class BuildDetailViewModel {
         guard autoRefreshTask == nil else { return }
         guard shouldAutoRefresh else { return }
 
-        print("Build auto-refresh started")
-
         autoRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 do {
@@ -336,7 +334,6 @@ final class BuildDetailViewModel {
 
         autoRefreshTask.cancel()
         self.autoRefreshTask = nil
-        print("Build auto-refresh stopped")
     }
 
     private var shouldAutoRefresh: Bool {
@@ -352,7 +349,6 @@ final class BuildDetailViewModel {
             return
         }
 
-        print("Build refresh tick")
         await loadJob()
         await loadBuildLog()
     }

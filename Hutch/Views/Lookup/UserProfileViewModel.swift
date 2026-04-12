@@ -85,8 +85,6 @@ final class UserProfileViewModel {
         defer { isLoadingContributions = false }
 
         let resolvedEndDate = Calendar.contributionCalendar.startOfDay(for: endDate ?? Date())
-        debugLog("profile contributions start actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted))")
-
         do {
             async let contributionCalendar = statsService.fetchContributionCalendar(actor: actor, endingOn: resolvedEndDate)
             async let contributionStats = statsService.fetchContributionStats(actor: actor, endingOn: resolvedEndDate)
@@ -96,17 +94,8 @@ final class UserProfileViewModel {
             if contributionDisplayState != .unavailable {
                 contributionsError = nil
             }
-            debugLog(
-                "profile contributions complete actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted)) " +
-                "state=\(String(describing: contributionDisplayState)) days=\(self.contributionCalendar?.days.count ?? 0) " +
-                "totalEvents=\(self.contributionStats?.totalEvents ?? 0) error=\(contributionsError ?? "none")"
-            )
         } catch {
             contributionsError = error.userFacingMessage
-            debugLog(
-                "profile contributions failed actor=\(actor) endDate=\(resolvedEndDate.formatted(date: .abbreviated, time: .omitted)) " +
-                "error=\(error.localizedDescription) userFacing=\(contributionsError ?? "none")"
-            )
         }
     }
 
@@ -232,9 +221,4 @@ final class UserProfileViewModel {
         }
     }
 
-    private func debugLog(_ message: String) {
-#if DEBUG
-        print("[UserProfileViewModel] \(message)")
-#endif
-    }
 }

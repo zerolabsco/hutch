@@ -116,8 +116,6 @@ final class ContributionCalendarViewModel {
         isLoading = true
         loadErrorMessage = nil
         defer { isLoading = false }
-        debugLog("load start actor=\(actor) endDate=\(selectedEndDate.formatted(date: .abbreviated, time: .omitted))")
-
         let fetchedCalendar: ContributionCalendarResponse?
         let fetchedStats: ContributionStatsResponse?
         var errors: [any Error] = []
@@ -147,11 +145,6 @@ final class ContributionCalendarViewModel {
             loadErrorMessage = errors.first?.userFacingMessage
         }
 
-        debugLog(
-            "load complete actor=\(actor) endDate=\(selectedEndDate.formatted(date: .abbreviated, time: .omitted)) state=\(String(describing: displayState)) " +
-            "calendarDays=\(calendar?.days.count ?? 0) totalEvents=\(stats?.totalEvents ?? 0) " +
-            "indexingState=\(String(describing: effectiveIndexingState)) error=\(loadErrorMessage ?? "none")"
-        )
     }
 
     func selectPreviousYear() async {
@@ -196,9 +189,4 @@ final class ContributionCalendarViewModel {
         return normalizedStartDate...normalizedEndDate
     }
 
-    private func debugLog(_ message: String) {
-#if DEBUG
-        print("[ContributionCalendarViewModel] \(message)")
-#endif
-    }
 }
