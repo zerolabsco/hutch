@@ -9,6 +9,7 @@ struct ContributionGraphEntry: TimelineEntry {
 
     enum State {
         case placeholder
+        case disabled
         case unavailable
         case empty
         case indexing
@@ -41,6 +42,10 @@ struct ContributionGraphTimelineProvider: TimelineProvider {
     }
 
     private func loadEntry() async -> ContributionGraphEntry {
+        guard ContributionWidgetContextStore.isEnabled() else {
+            return ContributionGraphEntry(date: .now, actor: nil, state: .disabled, weeks: [])
+        }
+
         guard let actor = ContributionWidgetContextStore.loadActor(), !actor.isEmpty else {
             return ContributionGraphEntry(date: .now, actor: nil, state: .unavailable, weeks: [])
         }
@@ -91,6 +96,29 @@ private struct ContributionGraphWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        Group {
+            switch entry.state {
+            case .disabled:
+                messageView(
+                    title: "Contributions Disabled",
+                    detail: "Enable contribution graphs in Hutch settings to use this widget."
+                )
+            case .unavailable:
+                messageView(
+                    title: "Open Hutch",
+                    detail: "Sign in and open your profile to load contribution data."
+                )
+            default:
+                graphView
+            }
+        }
+        .widgetURL(URL(string: "hutch://home"))
+        .containerBackground(for: .widget) {
+            Color(.systemBackground)
+        }
+    }
+
+    private var graphView: some View {
         GeometryReader { geometry in
             let cellSize = ContributionGraphSizing.baseCellSize(availableHeight: geometry.size.height)
             let layout = ContributionGraphSizing.layout(availableSize: geometry.size, cellSize: cellSize)
@@ -108,17 +136,27 @@ private struct ContributionGraphWidgetView: View {
             .frame(width: actualSize.width, height: actualSize.height)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .widgetURL(URL(string: "hutch://home"))
-        .containerBackground(for: .widget) {
-            Color(.systemBackground)
+    }
+
+    private func messageView(title: String, detail: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(family == .systemSmall ? .headline : .title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func displayedWeeks(columnCount: Int) -> [ContributionGraphWeek] {
         var baseWeeks = switch entry.state {
         case .populated, .indexing, .empty:
             entry.weeks
-        case .placeholder, .unavailable:
+        case .placeholder, .disabled, .unavailable:
             ContributionGraphSampleData.placeholderWeeks
         }
 

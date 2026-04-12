@@ -9,9 +9,19 @@ enum ContributionGraphWidgetConfiguration {
 
 enum ContributionWidgetContextStore {
     private static let actorKey = "contributionWidget.actor"
+    private static let enabledKey = "contributionWidget.enabled"
 
     static func loadActor(defaults: UserDefaults? = sharedDefaults()) -> String? {
         defaults?.string(forKey: actorKey)
+    }
+
+    static func isEnabled(defaults: UserDefaults? = sharedDefaults()) -> Bool {
+        defaults?.object(forKey: enabledKey) == nil ? true : defaults?.bool(forKey: enabledKey) ?? true
+    }
+
+    static func setEnabled(_ enabled: Bool, defaults: UserDefaults? = sharedDefaults()) {
+        defaults?.set(enabled, forKey: enabledKey)
+        reloadWidgetTimelines()
     }
 
     static func saveActor(_ actor: String, defaults: UserDefaults? = sharedDefaults()) {

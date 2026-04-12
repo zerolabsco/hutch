@@ -49,6 +49,9 @@ struct SettingsView: View {
         Section {
             Toggle("Swipe actions", isOn: $swipeActionsEnabled)
             Toggle("Contribution graphs", isOn: $contributionGraphsEnabled)
+                .onChange(of: contributionGraphsEnabled) { _, newValue in
+                    ContributionWidgetContextStore.setEnabled(newValue)
+                }
         } header: {
             Text("Behavior")
         } footer: {
