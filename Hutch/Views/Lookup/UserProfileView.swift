@@ -74,9 +74,12 @@ struct UserProfileView: View {
                 }
             }
 
-            if let bio = user.bio {
+            if let bio = user.bio, !bio.isEmpty {
                 Section("Bio") {
-                    Text(bio)
+                    Text(profileBioAttributedString(bio))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tint(.accentColor)
+                        .textSelection(.enabled)
                 }
             }
 
