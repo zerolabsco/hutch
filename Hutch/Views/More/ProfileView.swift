@@ -46,7 +46,10 @@ struct ProfileView: View {
                     ownerUsername: owner,
                     actor: actor,
                     client: appState.client,
-                    statsService: HutchStatsService(configuration: appState.configuration)
+                    statsService: HutchStatsService(
+                        configuration: appState.configuration,
+                        currentActor: appState.currentUser?.canonicalName
+                    )
                 )
                 contributionViewModel = newViewModel
                 vm = newViewModel

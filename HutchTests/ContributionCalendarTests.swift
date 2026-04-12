@@ -94,6 +94,30 @@ struct ContributionCalendarTests {
     }
 
     @Test
+    func selfContributionRequestsIncludeExplicitPrioritySignal() {
+        let service = HutchStatsService(
+            configuration: AppConfiguration(),
+            currentActor: "~alice"
+        )
+        let endDate = ContributionDateParser.parse("2026-04-11")!
+        let queryItems = service.contributionQueryItems(actor: "~alice", endingOn: endDate)
+
+        #expect(queryItems.contains(URLQueryItem(name: "prioritize", value: "self")))
+    }
+
+    @Test
+    func otherContributionRequestsDoNotIncludePrioritySignal() {
+        let service = HutchStatsService(
+            configuration: AppConfiguration(),
+            currentActor: "~alice"
+        )
+        let endDate = ContributionDateParser.parse("2026-04-11")!
+        let queryItems = service.contributionQueryItems(actor: "~bob", endingOn: endDate)
+
+        #expect(queryItems.contains(URLQueryItem(name: "prioritize", value: "self")) == false)
+    }
+
+    @Test
     func contributionIntensityBucketsMatchProductRules() {
         #expect(ContributionIntensity(count: 0) == .empty)
         #expect(ContributionIntensity(count: 1) == .level1)

@@ -9,20 +9,23 @@ struct HutchStatsService: ContributionCalendarServing {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let baseURL: URL
+    private let currentActor: String?
 
     init(
         session: URLSession = .shared,
-        configuration: AppConfiguration
+        configuration: AppConfiguration,
+        currentActor: String? = nil
     ) {
         self.session = session
         self.baseURL = configuration.hutchStatsBaseURL
         self.decoder = JSONDecoder()
+        self.currentActor = currentActor
     }
 
     func fetchContributionCalendar(actor: String, endingOn endDate: Date) async throws -> ContributionCalendarResponse {
         return try await fetch(
             path: "api/contributions/\(actor)",
-            queryItems: trailingYearQueryItems(endingOn: endDate),
+            queryItems: contributionQueryItems(actor: actor, endingOn: endDate),
             responseType: ContributionCalendarResponse.self
         )
     }
@@ -30,7 +33,7 @@ struct HutchStatsService: ContributionCalendarServing {
     func fetchContributionStats(actor: String, endingOn endDate: Date) async throws -> ContributionStatsResponse {
         return try await fetch(
             path: "api/contributions/\(actor)/stats",
-            queryItems: trailingYearQueryItems(endingOn: endDate),
+            queryItems: contributionQueryItems(actor: actor, endingOn: endDate),
             responseType: ContributionStatsResponse.self
         )
     }
@@ -86,15 +89,21 @@ struct HutchStatsService: ContributionCalendarServing {
         return normalizedStartDate...normalizedEndDate
     }
 
-    private func trailingYearQueryItems(endingOn endDate: Date) -> [URLQueryItem] {
+    func contributionQueryItems(actor: String, endingOn endDate: Date) -> [URLQueryItem] {
         let range = trailingRange(endingOn: endDate)
         let start = Self.rangeFormatter.string(from: range.lowerBound)
         let end = Self.rangeFormatter.string(from: range.upperBound)
 
-        return [
+        var queryItems = [
             URLQueryItem(name: "from", value: start),
             URLQueryItem(name: "to", value: end)
         ]
+
+        if actor == currentActor {
+            queryItems.append(URLQueryItem(name: "prioritize", value: "self"))
+        }
+
+        return queryItems
     }
 
     private static let rangeFormatter: DateFormatter = {
