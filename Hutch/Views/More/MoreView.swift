@@ -7,6 +7,7 @@ struct MoreView: View {
         ("chat.sr.ht", SRHTWebURL.chat)
     ]
 
+    @State private var viewModel: MoreViewModel?
     @State private var showAccountSwitcher = false
 
     var body: some View {
@@ -29,9 +30,14 @@ struct MoreView: View {
                 NavigationLink(value: MoreRoute.pastes) {
                     Label("Pastes", systemImage: "doc.on.clipboard")
                 }
-                
+
                 NavigationLink(value: MoreRoute.systemStatus) {
-                    Label("System Status", systemImage: "server.rack")
+                    SystemStatusSummaryRow(
+                        snapshot: viewModel?.systemStatusSnapshot,
+                        isLoading: viewModel?.isLoadingSystemStatus ?? true,
+                        errorMessage: viewModel?.systemStatusErrorMessage,
+                        isShowingStaleData: viewModel?.isShowingStaleSystemStatus ?? false
+                    )
                 }
             }
 
@@ -58,6 +64,12 @@ struct MoreView: View {
             }
         }
         .navigationTitle("More")
+        .refreshable {
+            await ensureViewModel().loadSystemStatus(forceRefresh: true)
+        }
+        .task {
+            await ensureViewModel().loadIfNeeded()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -70,5 +82,16 @@ struct MoreView: View {
         .sheet(isPresented: $showAccountSwitcher) {
             AccountSwitcherView()
         }
+    }
+
+    @MainActor
+    private func ensureViewModel() -> MoreViewModel {
+        if let viewModel {
+            return viewModel
+        }
+
+        let newViewModel = MoreViewModel(repository: appState.systemStatusRepository)
+        viewModel = newViewModel
+        return newViewModel
     }
 }

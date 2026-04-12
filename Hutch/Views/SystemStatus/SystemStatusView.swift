@@ -31,6 +31,14 @@ struct SystemStatusView: View {
     @ViewBuilder
     private func content(_ viewModel: SystemStatusViewModel) -> some View {
         List {
+            if viewModel.isShowingStaleData, let staleDataMessage = viewModel.staleDataMessage {
+                Section {
+                    Label(staleDataMessage, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let snapshot = viewModel.snapshot {
                 summarySection(snapshot)
                 servicesSection(snapshot)

@@ -22,4 +22,15 @@ struct AppStateTests {
 
         #expect(appState.deepLinkError == "The ticket could not be found or is inaccessible.")
     }
+
+    @Test
+    @MainActor
+    func openSystemStatusSelectsMoreTabAndQueuesNavigation() {
+        let appState = AppState()
+
+        appState.openSystemStatus()
+
+        #expect(appState.selectedTab == .more)
+        #expect(appState.pendingTabNavigation == .systemStatus)
+    }
 }

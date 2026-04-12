@@ -144,6 +144,9 @@ final class HomeViewModel {
     var assignedTickets: [HomeAssignedTicket] = []
     var recentBuilds: [HomeBuildItem] = []
     private(set) var systemStatusSnapshot: SystemStatusSnapshot?
+    private(set) var isLoadingSystemStatus = false
+    private(set) var isShowingStaleSystemStatus = false
+    private(set) var systemStatusErrorMessage: String?
     private(set) var hasUnreadInboxThreads = false
     private(set) var unreadInboxThreadCount: Int?
     private(set) var isLoadingProjects = false
@@ -279,8 +282,11 @@ final class HomeViewModel {
         isLoadingProjects = true
         isLoadingAssignedTickets = true
         isLoadingRecentBuilds = true
+        isLoadingSystemStatus = true
         assignedTicketsError = nil
         recentBuildsError = nil
+        isShowingStaleSystemStatus = false
+        systemStatusErrorMessage = nil
 
         async let projectsTask = loadProjects()
         async let jobsTask = loadRecentJobs()
@@ -324,13 +330,21 @@ final class HomeViewModel {
 
         unreadInboxThreadCount = await inboxUnreadTask
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
-        systemStatusSnapshot = await systemStatusTask
+        let systemStatusResult = await systemStatusTask
+        switch systemStatusResult {
+        case .success(let result):
+            systemStatusSnapshot = result.value
+            isShowingStaleSystemStatus = result.isStale
+            systemStatusErrorMessage = result.isStale ? result.refreshErrorMessage : nil
+        case .failure(let error):
+            systemStatusErrorMessage = error.userFacingMessage
+        }
+        isLoadingSystemStatus = false
         persistNeedsAttentionSnapshot()
     }
 
-    var systemStatusBannerTitle: String? {
-        guard let systemStatusSnapshot, systemStatusSnapshot.hasDisruption else { return nil }
-        return systemStatusSnapshot.bannerSummary
+    var hasDashboardContent: Bool {
+        !projects.isEmpty || !assignedTickets.isEmpty || !recentBuilds.isEmpty || systemStatusSnapshot != nil
     }
 
     func resolveTicket(_ ticket: HomeAssignedTicket) async {
@@ -430,11 +444,11 @@ final class HomeViewModel {
         }
     }
 
-    private func loadSystemStatusSnapshot() async -> SystemStatusSnapshot? {
+    private func loadSystemStatusSnapshot() async -> Result<CachedSystemStatusValue<SystemStatusSnapshot>, Error> {
         do {
-            return try await systemStatusRepository.snapshot()
+            return .success(try await systemStatusRepository.snapshotResult())
         } catch {
-            return systemStatusSnapshot
+            return .failure(error)
         }
     }
 

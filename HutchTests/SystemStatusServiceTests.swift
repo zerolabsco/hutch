@@ -20,6 +20,18 @@ struct SystemStatusServiceTests {
     }
 
     @Test
+    func parsesStatusHTMLWithClassOrderChangesAndTimeElements() throws {
+        let snapshot = try SystemStatusService.parseSnapshotHTML(Self.variantHTML, fetchedAt: .now)
+
+        #expect(snapshot.services.count == 2)
+        #expect(snapshot.services[0].status == .operational)
+        #expect(snapshot.services[1].status == .majorOutage)
+        #expect(snapshot.activeIncidents.count == 1)
+        #expect(snapshot.activeIncidents[0].title == "builds.sr.ht outage")
+        #expect(snapshot.activeIncidents[0].publishedAt == ISO8601DateFormatter().date(from: "2026-04-07T12:00:00Z"))
+    }
+
+    @Test
     func parsesIncidentFeedRSS() async throws {
         let incidents = try await SystemStatusService.parseIncidentFeedXML(Data(Self.sampleRSS.utf8))
 
@@ -30,6 +42,15 @@ struct SystemStatusServiceTests {
         #expect(incidents[1].title == "Planned maintenance on all services")
         #expect(incidents[1].isActive == false)
         #expect(incidents[1].updatedAt != nil)
+    }
+
+    @Test
+    func parsesIncidentFeedWithISO8601Dates() async throws {
+        let incidents = try await SystemStatusService.parseIncidentFeedXML(Data(Self.variantRSS.utf8))
+
+        #expect(incidents.count == 1)
+        #expect(incidents[0].title == "Status feed moved")
+        #expect(incidents[0].publishedAt == ISO8601DateFormatter().date(from: "2026-04-07T15:30:00Z"))
     }
 
     @Test
@@ -102,6 +123,32 @@ struct SystemStatusServiceTests {
     </html>
     """#
 
+    private static let variantHTML = #"""
+    <html>
+    <body>
+      <div class="component extra" data-status="ok">
+        <a class="no-underline" href="/affected/meta.sr.ht/">meta.sr.ht</a>
+        <small class="component-status secondary">All systems operational</small>
+      </div>
+      <div data-status="down" class="extra component">
+        <a href="/affected/builds.sr.ht/" class="link">builds.sr.ht</a>
+        <div class="component-status badge">Outage</div>
+      </div>
+      <div class="announcement-box">
+        <div class="padding">
+          <p><a href="/issues/2026-04-07-builds-outage/"><strong>builds.sr.ht outage</strong></a></p>
+          <p><strong>Build jobs are currently failing.</strong></p>
+        </div>
+      </div>
+      <a class="issue no-underline urgent" href="/issues/2026-04-07-builds-outage/">
+        <time class="date" datetime="2026-04-07T12:00:00Z">Apr 7</time>
+        <h4>builds.sr.ht outage</h4>
+        <span>Investigating elevated failures</span>
+      </a>
+    </body>
+    </html>
+    """#
+
     private static let sampleRSS = #"""
     <?xml version="1.0" encoding="utf-8" standalone="yes"?>
     <rss version="2.0">
@@ -122,6 +169,22 @@ struct SystemStatusServiceTests {
           <guid>https://status.sr.ht/issues/2025-10-22-planned-maintenance/</guid>
           <category>2025-10-22 12:25:00</category>
           <description>&lt;p&gt;&lt;strong&gt;The maintenance is complete&lt;/strong&gt;.&lt;/p&gt;</description>
+        </item>
+      </channel>
+    </rss>
+    """#
+
+    private static let variantRSS = #"""
+    <?xml version="1.0" encoding="utf-8" standalone="yes"?>
+    <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <channel>
+        <title>sr.ht status</title>
+        <item>
+          <title>Status feed moved</title>
+          <link>https://status.sr.ht/issues/2026-04-07-feed-moved/</link>
+          <dc:date>2026-04-07T15:30:00Z</dc:date>
+          <guid>https://status.sr.ht/issues/2026-04-07-feed-moved/</guid>
+          <description>&lt;p&gt;Use the new feed endpoint.&lt;/p&gt;</description>
         </item>
       </channel>
     </rss>

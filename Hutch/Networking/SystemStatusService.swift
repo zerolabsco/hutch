@@ -13,13 +13,21 @@ struct SystemStatusService: Sendable {
     }
 
     func fetchSnapshot() async throws -> SystemStatusSnapshot {
-        let html = try await fetchText(from: Self.statusURL, accept: "text/html,application/xhtml+xml")
+        let html = try await fetchSnapshotHTML()
         return try Self.parseSnapshotHTML(html, fetchedAt: now())
     }
 
     func fetchIncidentFeed() async throws -> [StatusIncident] {
-        let data = try await fetchData(from: Self.feedURL, accept: "application/rss+xml,application/xml,text/xml")
+        let data = try await fetchIncidentFeedData()
         return try await Self.parseIncidentFeedXML(data)
+    }
+
+    func fetchSnapshotHTML() async throws -> String {
+        try await fetchText(from: Self.statusURL, accept: "text/html,application/xhtml+xml")
+    }
+
+    func fetchIncidentFeedData() async throws -> Data {
+        try await fetchData(from: Self.feedURL, accept: "application/rss+xml,application/xml,text/xml")
     }
 
     private func fetchText(from url: URL, accept: String) async throws -> String {
@@ -62,6 +70,8 @@ struct SystemStatusService: Sendable {
     }
 }
 
+extension SystemStatusService: SystemStatusServing {}
+
 extension SystemStatusService {
     nonisolated static func parseSnapshotHTML(_ html: String, fetchedAt: Date) throws -> SystemStatusSnapshot {
         let services = parseServices(in: html)
@@ -96,7 +106,7 @@ extension SystemStatusService {
     nonisolated private static func parseServices(in html: String) -> [StatusServiceState] {
         firstMatches(
             in: html,
-            pattern: #"<div class="component" data-status="([^"]+)">([\s\S]*?)</div>"#
+            pattern: #"<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bcomponent\b[^"']*["'])(?=[^>]*\bdata-status\s*=\s*["']([^"']+)["'])[^>]*>([\s\S]*?)</div>"#
         ).compactMap { captures in
             guard captures.count >= 2 else { return nil }
 
@@ -104,16 +114,18 @@ extension SystemStatusService {
             let content = captures[1]
             guard let linkCaptures = firstMatches(
                 in: content,
-                pattern: #"<a[^>]*href="([^"]+)"[^>]*>\s*(.*?)\s*</a>"#
+                pattern: #"<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)</a>"#
             ).first,
-                  linkCaptures.count >= 2,
-                  let statusText = firstMatch(in: content, pattern: #"<span class="component-status">\s*(.*?)\s*</span>"#) else {
+                  linkCaptures.count >= 2 else {
                 return nil
             }
 
             let href = linkCaptures[0]
             let cleanedName = cleanText(linkCaptures[1])
-            let readableStatus = cleanText(statusText)
+            let readableStatus = firstMatch(
+                in: content,
+                pattern: #"<(?:span|small|div)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bcomponent-status\b[^"']*["'])[^>]*>([\s\S]*?)</(?:span|small|div)>"#
+            ).map(cleanText) ?? firstStatusLabel(in: content) ?? ""
             let level = statusLevel(fromHTMLStatus: rawStatus)
 
             return StatusServiceState(
@@ -129,19 +141,19 @@ extension SystemStatusService {
     nonisolated private static func parseHTMLIncidentCards(in html: String) -> [StatusIncident] {
         firstMatches(
             in: html,
-            pattern: #"<a href="([^"]+)" class="issue no-underline">([\s\S]*?)</a>"#
+            pattern: #"<a\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bissue\b[^"']*["'])(?=[^>]*\bhref\s*=\s*["']([^"']+)["'])[^>]*>([\s\S]*?)</a>"#
         ).compactMap { captures in
             guard captures.count >= 2 else { return nil }
             let href = captures[0]
             let content = captures[1]
-            guard let titleHTML = firstMatch(in: content, pattern: #"<h3>\s*([\s\S]*?)\s*</h3>"#),
-                  let titleAttribute = firstMatch(in: content, pattern: #"<small class="date[^"]*" title="([^"]+)">"#),
-                  let publishedAt = htmlIssueDateFormatter.date(from: cleanText(titleAttribute)) else {
+            guard let titleHTML = firstMatch(in: content, pattern: #"<h[1-6][^>]*>\s*([\s\S]*?)\s*</h[1-6]>"#)
+                    ?? firstMatch(in: content, pattern: #"<strong[^>]*>\s*([\s\S]*?)\s*</strong>"#)
+                    ?? firstMatch(in: content, pattern: #"<span[^>]*>\s*([\s\S]*?)\s*</span>"#),
+                  let publishedAt = publishedIncidentDate(in: content) else {
                 return nil
             }
 
             let url = URL(string: href, relativeTo: statusURL)?.absoluteURL
-            let isActive = content.localizedCaseInsensitiveContains("This issue is not resolved yet")
             return StatusIncident(
                 id: url?.absoluteString ?? cleanText(titleHTML),
                 title: cleanText(titleHTML),
@@ -149,7 +161,7 @@ extension SystemStatusService {
                 url: url,
                 publishedAt: publishedAt,
                 updatedAt: nil,
-                isActive: isActive
+                isActive: isActiveIncidentCard(content)
             )
         }
     }
@@ -157,12 +169,12 @@ extension SystemStatusService {
     nonisolated private static func parseActiveIncidentSummaries(in html: String) -> [String: String] {
         firstMatches(
             in: html,
-            pattern: #"<div class="announcement-box"[\s\S]*?<div class="padding">([\s\S]*?)</div>\s*<hr class="clean announcement-box">"#
+            pattern: #"<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bannouncement-box\b[^"']*["'])[^>]*>([\s\S]*?)</div>\s*(?:<hr\b[^>]*\bannouncement-box\b[^>]*>)?"#
         ).reduce(into: [:]) { partialResult, captures in
             guard let content = captures.first,
                   let titleLinkCaptures = firstMatches(
                     in: content,
-                    pattern: #"<a href="([^"]+)"><strong class="bold">([\s\S]*?)</strong></a>"#
+                    pattern: #"<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)</a>"#
                   ).first,
                   let href = titleLinkCaptures.first else {
                 return
@@ -197,17 +209,22 @@ extension SystemStatusService {
     }
 
     nonisolated private static func statusLevel(fromLabel label: String) -> StatusLevel {
-        switch label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "operational":
-            .operational
-        case "disrupted", "degraded":
-            .degraded
-        case "down", "major outage":
-            .majorOutage
-        case "maintenance":
-            .maintenance
+        let normalizedLabel = label
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+
+        return switch normalizedLabel {
+        case "operational", "all systems operational":
+            StatusLevel.operational
+        case "disrupted", "degraded", "partial outage":
+            StatusLevel.degraded
+        case "down", "major outage", "outage":
+            StatusLevel.majorOutage
+        case "maintenance", "scheduled maintenance", "under maintenance":
+            StatusLevel.maintenance
         default:
-            .unknown
+            StatusLevel.unknown
         }
     }
 
@@ -252,6 +269,47 @@ extension SystemStatusService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    nonisolated private static func firstStatusLabel(in text: String) -> String? {
+        cleanText(text)
+            .split(separator: "•")
+            .map(String.init)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { statusLevel(fromLabel: $0) != .unknown })
+    }
+
+    nonisolated private static func publishedIncidentDate(in content: String) -> Date? {
+        if let timeValue = firstMatch(in: content, pattern: #"<time\b[^>]*\bdatetime\s*=\s*["']([^"']+)["'][^>]*>"#),
+           let parsed = parseISO8601Date(cleanText(timeValue)) {
+            return parsed
+        }
+
+        if let titleAttribute = firstMatch(
+            in: content,
+            pattern: #"<(?:small|time)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bdate\b[^"']*["'])[^>]*\btitle\s*=\s*["']([^"']+)["'][^>]*>"#
+        ) ?? firstMatch(in: content, pattern: #"\btitle\s*=\s*["']([^"']+UTC)["']"#) {
+            return htmlIssueDateFormatter.date(from: cleanText(titleAttribute))
+        }
+
+        return nil
+    }
+
+    nonisolated private static func isActiveIncidentCard(_ content: String) -> Bool {
+        let normalizedContent = cleanText(content).lowercased()
+        return normalizedContent.contains("not resolved yet")
+            || normalizedContent.contains("ongoing")
+            || normalizedContent.contains("investigating")
+    }
+
+    nonisolated fileprivate static func parseISO8601Date(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value) ?? {
+            let fallbackFormatter = ISO8601DateFormatter()
+            fallbackFormatter.formatOptions = [.withInternetDateTime]
+            return fallbackFormatter.date(from: value)
+        }()
+    }
+
     nonisolated private static let htmlIssueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -259,9 +317,9 @@ extension SystemStatusService {
         formatter.dateFormat = "MMM d HH:mm:ss yyyy zzz"
         return formatter
     }()
+
 }
 
-@MainActor
 private final class SystemStatusFeedParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var incidents: [StatusIncident] = []
     private var currentItem: FeedItem?
@@ -315,7 +373,7 @@ private final class SystemStatusFeedParser: NSObject, XMLParserDelegate, @unchec
             currentItem.guid = value
         case "description":
             currentItem.description = value
-        case "pubDate":
+        case "pubDate", "dc:date":
             currentItem.pubDate = value
         case "category":
             currentItem.category = value
@@ -345,7 +403,7 @@ private final class SystemStatusFeedParser: NSObject, XMLParserDelegate, @unchec
         func makeIncident() -> StatusIncident? {
             let cleanedTitle = title.replacingOccurrences(of: "[Resolved] ", with: "")
             guard !cleanedTitle.isEmpty,
-                  let publishedAt = SystemStatusFeedParser.pubDateFormatter.date(from: pubDate) else {
+                  let publishedAt = SystemStatusFeedParser.parsePubDate(pubDate) else {
                 return nil
             }
 
@@ -380,6 +438,10 @@ private final class SystemStatusFeedParser: NSObject, XMLParserDelegate, @unchec
     nonisolated private static func stripHTML(_ text: String) -> String {
         let stripped = text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
         return decodeHTMLEntities(stripped)
+    }
+
+    nonisolated private static func parsePubDate(_ value: String) -> Date? {
+        pubDateFormatter.date(from: value) ?? SystemStatusService.parseISO8601Date(value)
     }
 
     nonisolated private static let pubDateFormatter: DateFormatter = {

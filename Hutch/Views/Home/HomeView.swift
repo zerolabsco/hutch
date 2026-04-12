@@ -78,19 +78,25 @@ struct HomeView: View {
         .refreshable {
             await viewModel.loadDashboard()
         }
+        .connectivityOverlay(hasContent: viewModel.hasDashboardContent) {
+            await viewModel.loadDashboard()
+        }
     }
 
     @ViewBuilder
     private func systemStatusBannerSection(_ viewModel: HomeViewModel) -> some View {
-        if let bannerTitle = viewModel.systemStatusBannerTitle {
-            Section {
-                NavigationLink {
-                    SystemStatusView()
-                } label: {
-                    HomeSystemStatusBanner(title: bannerTitle)
-                }
-                .buttonStyle(.plain)
+        Section {
+            NavigationLink {
+                SystemStatusView()
+            } label: {
+                SystemStatusSummaryRow(
+                    snapshot: viewModel.systemStatusSnapshot,
+                    isLoading: viewModel.isLoadingSystemStatus,
+                    errorMessage: viewModel.systemStatusErrorMessage,
+                    isShowingStaleData: viewModel.isShowingStaleSystemStatus
+                )
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -249,32 +255,6 @@ private struct HomeInboxToolbarIcon: View {
     var body: some View {
         Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
             .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
-    }
-}
-
-private struct HomeSystemStatusBanner: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("SourceHut service disruption")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
     }
 }
 
