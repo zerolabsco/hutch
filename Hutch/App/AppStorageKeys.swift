@@ -11,4 +11,6 @@ enum AppStorageKeys {
     static let homeProjectsExpanded = "homeProjectsExpanded"
     static let homeAssignedTicketsExpanded = "homeAssignedTicketsExpanded"
     static let homeBuildsExpanded = "homeBuildsExpanded"
+    static let buildsAutoRefreshInterval = "buildsAutoRefreshInterval"
+    static let buildsRepoFilter = "buildsRepoFilter"
 }

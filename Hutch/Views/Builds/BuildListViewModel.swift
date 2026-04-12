@@ -25,6 +25,20 @@ enum BuildListFilter: String, CaseIterable, Sendable {
     case all = "All"
 }
 
+enum AutoRefreshInterval: Int, CaseIterable, Sendable {
+    case off = 0
+    case fiveSeconds = 5
+    case tenSeconds = 10
+
+    var label: String {
+        switch self {
+        case .off: "Off"
+        case .fiveSeconds: "5s"
+        case .tenSeconds: "10s"
+        }
+    }
+}
+
 // MARK: - View Model
 
 @Observable
@@ -39,10 +53,15 @@ final class BuildListViewModel {
     var error: String?
     var filter: BuildListFilter = .attention
     var searchText = ""
+    var repoFilter: String = "" {
+        didSet { if repoFilter != oldValue { repoFilterDidChange() } }
+    }
 
     private var cursor: String?
     private var hasMore = true
     private let client: SRHTClient
+    private var refreshTask: Task<Void, Never>?
+    private var isAutoRefreshing = false
 
     private static let cacheKey = "builds.jobs"
 
@@ -50,15 +69,56 @@ final class BuildListViewModel {
         self.client = client
     }
 
+    /// Unique tags across all loaded jobs, sorted alphabetically.
+    var availableTags: [String] {
+        let allTags = Set(jobs.flatMap(\.tags))
+        return allTags.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
     var filteredJobs: [JobSummary] {
-        let statusFiltered = Self.filterJobs(jobs, filter: filter)
+        var result = Self.filterJobs(jobs, filter: filter)
+
+        if !repoFilter.isEmpty {
+            result = result.filter { $0.tags.contains(repoFilter) }
+        }
+
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return statusFiltered }
-        return statusFiltered.filter {
+        guard !q.isEmpty else { return result }
+        return result.filter {
             String($0.id).contains(q) ||
             $0.tags.contains { $0.lowercased().contains(q) } ||
             ($0.note?.lowercased().contains(q) == true) ||
             ($0.image?.lowercased().contains(q) == true)
+        }
+    }
+
+    // MARK: - Auto-Refresh
+
+    func startAutoRefresh(interval: AutoRefreshInterval) {
+        stopAutoRefresh()
+        guard interval != .off else { return }
+        let seconds = interval.rawValue
+        refreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(seconds))
+                guard !Task.isCancelled, let self else { return }
+                guard !self.isAutoRefreshing, !self.isLoading, !self.isRefreshing else { continue }
+                self.isAutoRefreshing = true
+                await self.loadJobs()
+                self.isAutoRefreshing = false
+            }
+        }
+    }
+
+    func stopAutoRefresh() {
+        refreshTask?.cancel()
+        refreshTask = nil
+    }
+
+    private func repoFilterDidChange() {
+        // Reset to empty if the selected tag no longer exists
+        if !repoFilter.isEmpty, !availableTags.contains(repoFilter) {
+            repoFilter = ""
         }
     }
 

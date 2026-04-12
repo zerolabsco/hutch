@@ -2,10 +2,16 @@ import SwiftUI
 
 struct BuildListView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.buildsAutoRefreshInterval) private var autoRefreshRawValue = 0
+    @AppStorage(AppStorageKeys.buildsRepoFilter) private var savedRepoFilter = ""
     @Environment(AppState.self) private var appState
     @State private var viewModel: BuildListViewModel?
     @State private var showSubmitSheet = false
     @State private var submittedJobId: Int?
+
+    private var autoRefreshInterval: AutoRefreshInterval {
+        AutoRefreshInterval(rawValue: autoRefreshRawValue) ?? .off
+    }
 
     var body: some View {
         Group {
@@ -17,7 +23,52 @@ struct BuildListView: View {
         }
         .navigationTitle("Builds")
         .toolbar {
-            if viewModel != nil {
+            if let viewModel {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Section("Auto-Refresh") {
+                            ForEach(AutoRefreshInterval.allCases, id: \.self) { interval in
+                                Button {
+                                    autoRefreshRawValue = interval.rawValue
+                                    viewModel.startAutoRefresh(interval: interval)
+                                } label: {
+                                    if interval.rawValue == autoRefreshRawValue {
+                                        Label(interval.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(interval.label)
+                                    }
+                                }
+                            }
+                        }
+                        Section("Filter by Tag") {
+                            Button {
+                                savedRepoFilter = ""
+                                viewModel.repoFilter = ""
+                            } label: {
+                                if savedRepoFilter.isEmpty {
+                                    Label("All", systemImage: "checkmark")
+                                } else {
+                                    Text("All")
+                                }
+                            }
+                            ForEach(viewModel.availableTags, id: \.self) { tag in
+                                Button {
+                                    savedRepoFilter = tag
+                                    viewModel.repoFilter = tag
+                                } label: {
+                                    if savedRepoFilter == tag {
+                                        Label(tag, systemImage: "checkmark")
+                                    } else {
+                                        Text(tag)
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityLabel("Build filters")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showSubmitSheet = true
@@ -54,9 +105,14 @@ struct BuildListView: View {
         .task {
             if viewModel == nil {
                 let vm = BuildListViewModel(client: appState.client)
+                vm.repoFilter = savedRepoFilter
                 viewModel = vm
                 await vm.loadJobs()
+                vm.startAutoRefresh(interval: autoRefreshInterval)
             }
+        }
+        .onDisappear {
+            viewModel?.stopAutoRefresh()
         }
     }
 
