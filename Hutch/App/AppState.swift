@@ -20,6 +20,7 @@ final class AppState {
         case tracker(TrackerSummary)
         case mailingList(InboxMailingListReference)
         case systemStatus
+        case builds
     }
 
     enum AuthPhase {
@@ -307,6 +308,11 @@ final class AppState {
     func navigateToSystemStatus() {
         pendingTabNavigation = .systemStatus
         selectedTab = .more
+    }
+
+    func navigateToBuildsList() {
+        pendingTabNavigation = .builds
+        selectedTab = .builds
     }
 
     func presentRepositoryDeepLinkError() {

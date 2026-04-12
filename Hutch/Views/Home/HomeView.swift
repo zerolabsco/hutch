@@ -2,6 +2,9 @@ import SwiftUI
 
 struct HomeView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.homeProjectsExpanded) private var projectsExpanded = true
+    @AppStorage(AppStorageKeys.homeAssignedTicketsExpanded) private var assignedTicketsExpanded = true
+    @AppStorage(AppStorageKeys.homeBuildsExpanded) private var buildsExpanded = true
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HomeViewModel?
@@ -116,7 +119,7 @@ struct HomeView: View {
                 summary: viewModel.buildsSummaryText,
                 countText: String(viewModel.failedBuildCount + viewModel.activeBuildCount),
                 action: {
-                    appState.selectedTab = .builds
+                    appState.navigateToBuildsList()
                 }
             )
         }
@@ -176,7 +179,15 @@ struct HomeView: View {
     @ViewBuilder
     private func projectsSection(_ viewModel: HomeViewModel) -> some View {
         if !viewModel.projects.isEmpty {
-            Section {
+            HomeSectionView("Projects", isExpanded: $projectsExpanded) {
+                NavigationLink {
+                    HomeProjectsListView(viewModel: viewModel)
+                } label: {
+                    Text("See All")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.plain)
+            } content: {
                 ForEach(viewModel.projects.prefix(projectPreviewLimit)) { project in
                     NavigationLink {
                         ProjectDetailView(project: project)
@@ -184,17 +195,21 @@ struct HomeView: View {
                         HomeProjectRow(project: project)
                     }
                 }
-            } header: {
-                HomeSectionHeader("Projects") {
-                    HomeProjectsListView(viewModel: viewModel)
-                }
             }
         }
     }
 
     @ViewBuilder
     private func assignedTicketsSection(_ viewModel: HomeViewModel) -> some View {
-        Section {
+        HomeSectionView("Tickets", isExpanded: $assignedTicketsExpanded) {
+            NavigationLink {
+                HomeAssignedTicketsListView(viewModel: viewModel)
+            } label: {
+                Text("See All")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.plain)
+        } content: {
             if viewModel.isLoadingAssignedTickets && viewModel.assignedTickets.isEmpty {
                 HomeSectionLoadingRow(label: "Loading assigned tickets")
             } else if let error = viewModel.assignedTicketsError, viewModel.assignedTickets.isEmpty {
@@ -241,16 +256,18 @@ struct HomeView: View {
                     }
                 }
             }
-        } header: {
-            HomeSectionHeader("Assigned Tickets") {
-                HomeAssignedTicketsListView(viewModel: viewModel)
-            }
         }
     }
 
     @ViewBuilder
     private func recentBuildsSection(_ viewModel: HomeViewModel) -> some View {
-        Section {
+        HomeSectionView("Builds", isExpanded: $buildsExpanded) {
+            Button("See All") {
+                appState.navigateToBuildsList()
+            }
+            .font(.caption.weight(.medium))
+            .buttonStyle(.plain)
+        } content: {
             if viewModel.isLoadingRecentBuilds && viewModel.recentBuilds.isEmpty {
                 HomeSectionLoadingRow(label: "Loading recent builds")
             } else if let error = viewModel.recentBuildsError, viewModel.recentBuilds.isEmpty {
@@ -266,32 +283,67 @@ struct HomeView: View {
                     systemImage: "clock"
                 )
             } else {
-                ForEach(viewModel.recentBuilds.prefix(previewLimit)) { build in
-                    NavigationLink {
-                        BuildDetailView(jobId: build.job.id)
-                    } label: {
-                        HomeBuildRow(build: build)
+                ForEach(buildGroups(for: viewModel.recentBuilds)) { group in
+                    if let repositoryDisplayName = group.repositoryDisplayName {
+                        HomeBuildGroupHeader(
+                            repositoryDisplayName: repositoryDisplayName,
+                            buildCount: group.builds.count,
+                            latestStatus: group.latestStatus
+                        )
                     }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if swipeActionsEnabled, build.job.status.isCancellable {
-                            Button {
-                                Task {
-                                    await viewModel.cancelBuild(build)
+
+                    ForEach(group.builds) { build in
+                        NavigationLink {
+                            BuildDetailView(jobId: build.job.id)
+                        } label: {
+                            HomeBuildRow(
+                                build: build,
+                                showsRepositoryLink: group.repositoryDisplayName == nil
+                            )
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            if swipeActionsEnabled, build.job.status.isCancellable {
+                                Button {
+                                    Task {
+                                        await viewModel.cancelBuild(build)
+                                    }
                                 }
+                                label: {
+                                    Label("Cancel", systemImage: "xmark.circle")
+                                }
+                                .tint(.red)
                             }
-                            label: {
-                                Label("Cancel", systemImage: "xmark.circle")
-                            }
-                            .tint(.red)
                         }
                     }
                 }
             }
-        } header: {
-            HomeSectionActionHeader("Recent Builds") {
-                appState.selectedTab = .builds
+        }
+    }
+
+    private func buildGroups(for builds: [HomeBuildItem]) -> [HomeBuildGroup] {
+        let previewBuilds = Array(builds.prefix(previewLimit))
+        guard let firstBuild = previewBuilds.first else { return [] }
+
+        var groups: [HomeBuildGroup] = []
+        var currentIdentity = HomeBuildGroup.Identity(build: firstBuild)
+        var currentBuilds: [HomeBuildItem] = []
+
+        for build in previewBuilds {
+            let identity = HomeBuildGroup.Identity(build: build)
+            if identity == currentIdentity {
+                currentBuilds.append(build)
+            } else {
+                groups.append(HomeBuildGroup(identity: currentIdentity, builds: currentBuilds))
+                currentIdentity = identity
+                currentBuilds = [build]
             }
         }
+
+        if !currentBuilds.isEmpty {
+            groups.append(HomeBuildGroup(identity: currentIdentity, builds: currentBuilds))
+        }
+
+        return groups
     }
 
     @ViewBuilder
@@ -387,6 +439,7 @@ private struct HomeProjectsListView: View {
 private struct HomeBuildRow: View {
     @Environment(AppState.self) private var appState
     let build: HomeBuildItem
+    var showsRepositoryLink = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -395,7 +448,7 @@ private struct HomeBuildRow: View {
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(primaryTitle)
+                    Text(build.job.displayLabel)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
 
@@ -408,7 +461,7 @@ private struct HomeBuildRow: View {
                             .font(.caption)
                             .foregroundStyle(.tertiary)
 
-                        Text(build.job.status.rawValue.capitalized)
+                        Text(build.job.status.displayTitle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -425,7 +478,7 @@ private struct HomeBuildRow: View {
                 }
             }
 
-            if let repositoryDisplayName = build.repositoryDisplayName {
+            if showsRepositoryLink, let repositoryDisplayName = build.repositoryDisplayName {
                 Button {
                     openRepository()
                 } label: {
@@ -437,13 +490,6 @@ private struct HomeBuildRow: View {
             }
         }
         .padding(.vertical, 2)
-    }
-
-    private var primaryTitle: String {
-        if let repositoryDisplayName = build.repositoryDisplayName {
-            return repositoryDisplayName
-        }
-        return build.job.displayLabel
     }
 
     private func openRepository() {
@@ -460,6 +506,68 @@ private struct HomeBuildRow: View {
                 appState.presentRepositoryDeepLinkError()
             }
         }
+    }
+}
+
+private struct HomeBuildGroup: Identifiable {
+    enum Identity: Hashable {
+        case repository(owner: String?, name: String)
+        case standalone(Int)
+
+        init(build: HomeBuildItem) {
+            if let repositoryName = build.repositoryName {
+                self = .repository(owner: build.repositoryOwner, name: repositoryName)
+            } else {
+                self = .standalone(build.id)
+            }
+        }
+    }
+
+    let identity: Identity
+    let builds: [HomeBuildItem]
+
+    var id: String {
+        switch identity {
+        case .repository(let owner, let name):
+            return "\(owner ?? "_")/\(name)#\(builds.first?.id ?? 0)"
+        case .standalone(let jobId):
+            return "job-\(jobId)"
+        }
+    }
+
+    var repositoryDisplayName: String? {
+        builds.first?.repositoryDisplayName
+    }
+
+    var latestStatus: JobStatus {
+        builds.first?.job.status ?? .pending
+    }
+}
+
+private struct HomeBuildGroupHeader: View {
+    let repositoryDisplayName: String
+    let buildCount: Int
+    let latestStatus: JobStatus
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label(repositoryDisplayName, systemImage: "book.closed")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Text("\(buildCount) \(buildCount == 1 ? "build" : "builds")")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.tertiary)
+
+            JobStatusBadge(status: latestStatus)
+        }
+        .padding(.top, 4)
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 0, trailing: 20))
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -714,27 +822,6 @@ private struct HomeAttentionLinkRow<Destination: View>: View {
                 .background(Color(.secondarySystemFill), in: Capsule())
         }
         .padding(.vertical, 2)
-    }
-}
-
-private struct HomeSectionActionHeader: View {
-    let title: String
-    let action: () -> Void
-
-    init(_ title: String, action: @escaping () -> Void) {
-        self.title = title
-        self.action = action
-    }
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Button("See All", action: action)
-                .font(.caption.weight(.medium))
-                .buttonStyle(.plain)
-        }
-        .textCase(nil)
     }
 }
 

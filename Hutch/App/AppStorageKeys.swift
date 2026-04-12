@@ -8,4 +8,7 @@ enum AppStorageKeys {
     static let hutchStatsBaseURL = "hutchStatsBaseURL"
     static let systemStatusSnapshotCache = "systemStatusSnapshotCache"
     static let systemStatusIncidentCache = "systemStatusIncidentCache"
+    static let homeProjectsExpanded = "homeProjectsExpanded"
+    static let homeAssignedTicketsExpanded = "homeAssignedTicketsExpanded"
+    static let homeBuildsExpanded = "homeBuildsExpanded"
 }

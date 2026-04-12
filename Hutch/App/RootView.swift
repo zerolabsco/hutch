@@ -242,6 +242,9 @@ struct RootView: View {
                 await settleNavigationTransition()
                 morePath.append(MoreRoute.systemStatus)
             }
+        case .builds:
+            buildsPath = NavigationPath()
+            appState.selectedTab = .builds
         }
     }
 

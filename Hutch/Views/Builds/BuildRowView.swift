@@ -36,6 +36,44 @@ struct BuildRowView: View {
     }
 }
 
+struct JobStatusBadge: View {
+    let status: JobStatus
+
+    var body: some View {
+        HStack(spacing: 4) {
+            JobStatusIcon(status: status)
+                .frame(width: 12, height: 12)
+            Text(status.displayTitle)
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.secondarySystemFill), in: Capsule())
+    }
+}
+
+extension JobStatus {
+    var displayTitle: String {
+        switch self {
+        case .pending:
+            "Pending"
+        case .queued:
+            "Queued"
+        case .running:
+            "Running"
+        case .success:
+            "Succeeded"
+        case .failed:
+            "Failed"
+        case .cancelled:
+            "Cancelled"
+        case .timeout:
+            "Timed Out"
+        }
+    }
+}
+
 // MARK: - Job Status Icon
 
 struct JobStatusIcon: View {
