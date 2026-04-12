@@ -33,6 +33,7 @@ struct RepositorySettingsViewModelTests {
     }
 
     @Test
+    @MainActor
     func gitCanonicalEntityAddsMissingTilde() {
         #expect(RepositorySettingsViewModel.gitCanonicalEntity(from: "alice") == "~alice")
         #expect(RepositorySettingsViewModel.gitCanonicalEntity(from: "~alice") == "~alice")
@@ -40,6 +41,7 @@ struct RepositorySettingsViewModelTests {
     }
 
     @Test
+    @MainActor
     func gitHeadReferenceUsesFullBranchRef() {
         #expect(RepositorySettingsViewModel.gitHeadReference(from: "main") == "refs/heads/main")
         #expect(RepositorySettingsViewModel.gitHeadReference(from: " refs/heads/dev ") == "refs/heads/dev")
@@ -50,7 +52,7 @@ struct RepositorySettingsViewModelTests {
     func unchangedHeadIsOmittedFromSaveInput() {
         let viewModel = RepositorySettingsViewModel(
             repository: makeRepository(headName: "refs/heads/main"),
-            branches: [Reference(name: "refs/heads/main", target: nil)],
+            branches: [ReferenceDetail(name: "refs/heads/main", target: nil, date: nil)],
             client: SRHTClient(token: "test-token")
         )
 
@@ -63,8 +65,8 @@ struct RepositorySettingsViewModelTests {
         let viewModel = RepositorySettingsViewModel(
             repository: makeRepository(headName: "refs/heads/main"),
             branches: [
-                Reference(name: "refs/heads/main", target: nil),
-                Reference(name: "refs/heads/dev", target: nil)
+                ReferenceDetail(name: "refs/heads/main", target: nil, date: nil),
+                ReferenceDetail(name: "refs/heads/dev", target: nil, date: nil)
             ],
             client: SRHTClient(token: "test-token")
         )

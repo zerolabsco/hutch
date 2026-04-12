@@ -4,12 +4,14 @@ import Testing
 struct TrackerManagementViewModelTests {
 
     @Test
+    @MainActor
     func normalizedUsernameStripsLeadingTildeAndWhitespace() {
         #expect(TrackerManagementViewModel.normalizedUsername("  ~alice  ") == "alice")
         #expect(TrackerManagementViewModel.normalizedUsername("bob") == "bob")
     }
 
     @Test
+    @MainActor
     func hexColorValidationRequiresPoundAndSixHexDigits() {
         #expect(TrackerManagementViewModel.isValidHexColor("#a1B2c3"))
         #expect(!TrackerManagementViewModel.isValidHexColor("a1B2c3"))

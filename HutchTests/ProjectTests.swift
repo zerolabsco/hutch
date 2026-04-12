@@ -12,6 +12,7 @@ struct ProjectTests {
             website: nil,
             visibility: .public,
             tags: [],
+            updated: Date(timeIntervalSince1970: 0),
             mailingLists: [
                 Project.MailingList(
                     id: "list-1",
@@ -62,6 +63,7 @@ struct ProjectTests {
             website: "https://example.com",
             visibility: .public,
             tags: [],
+            updated: Date(timeIntervalSince1970: 0),
             mailingLists: [],
             sources: [],
             trackers: []

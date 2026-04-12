@@ -22,10 +22,19 @@ struct HomeViewModelTests {
     func matchesCurrentUserAssigneeNormalizesCanonicalNameAndUsername() {
         let currentUser = User(
             id: 42,
+            created: nil,
+            updated: nil,
             username: "owner",
             canonicalName: "~owner",
             email: "owner@example.com",
-            avatar: nil
+            url: nil,
+            location: nil,
+            bio: nil,
+            avatar: nil,
+            pronouns: nil,
+            userType: nil,
+            receivesPaidServices: nil,
+            suspensionNotice: nil
         )
 
         #expect(HomeViewModel.matchesCurrentUserAssignee(Entity(canonicalName: "~owner"), currentUser: currentUser))
