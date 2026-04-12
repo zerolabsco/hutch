@@ -113,6 +113,11 @@ struct RootView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
         }
+        .modifier(SidebarAdaptableTabStyle())
+        .modifier(TabKeyboardShortcuts(selectedTab: Binding(
+            get: { appState.selectedTab },
+            set: { appState.selectedTab = $0 }
+        )))
         .overlay {
             if isResolvingDeepLink {
                 ZStack {
@@ -178,6 +183,29 @@ struct RootView: View {
 
         case .ticket(let owner, let tracker, let ticketId):
             resolveTicketLink(owner: owner, tracker: tracker, ticketId: ticketId)
+
+        case .buildsTab:
+            buildsPath = NavigationPath()
+            appState.selectedTab = .builds
+
+        case .repositoriesTab:
+            repoPath = NavigationPath()
+            appState.selectedTab = .repositories
+
+        case .trackersTab:
+            ticketsPath = NavigationPath()
+            appState.selectedTab = .tickets
+
+        case .systemStatus:
+            appState.navigateToSystemStatus()
+
+        case .lookup:
+            morePath = NavigationPath()
+            appState.selectedTab = .more
+            Task {
+                await settleNavigationTransition()
+                morePath.append(MoreRoute.lookup)
+            }
         }
     }
 
@@ -335,4 +363,47 @@ struct TicketDeepLinkTarget: Hashable {
     let trackerId: Int
     let trackerRid: String
     let ticketId: Int
+}
+
+// MARK: - Keyboard Shortcuts for iPad + Hardware Keyboard
+
+/// Adds Cmd+1 through Cmd+5 keyboard shortcuts for tab switching on iPad.
+private struct TabKeyboardShortcuts: ViewModifier {
+    @Binding var selectedTab: AppState.Tab
+
+    private static let tabMap: [String: AppState.Tab] = [
+        "1": .home,
+        "2": .repositories,
+        "3": .tickets,
+        "4": .builds,
+        "5": .more,
+    ]
+
+    func body(content: Content) -> some View {
+        content
+            .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+                guard press.modifiers == .command else { return .ignored }
+                let key = String(press.characters)
+                if let tab = Self.tabMap[key] {
+                    selectedTab = tab
+                    return .handled
+                }
+                return .ignored
+            }
+    }
+}
+
+// MARK: - iPad Sidebar Adaptable
+
+/// Applies `.tabViewStyle(.sidebarAdaptable)` on iOS 18+ so the tab bar
+/// becomes a full sidebar on iPad, while falling back to the standard tab
+/// bar on earlier releases.
+private struct SidebarAdaptableTabStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.tabViewStyle(.sidebarAdaptable)
+        } else {
+            content
+        }
+    }
 }

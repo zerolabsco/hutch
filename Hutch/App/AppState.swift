@@ -203,6 +203,7 @@ final class AppState {
         await clearWebData()
         clearWebContentRenderCaches()
         NeedsAttentionSnapshotStore.clear()
+        SystemStatusWidgetSnapshotStore.clear()
         authPhase = .unauthenticated
         selectedTab = .home
     }
@@ -218,6 +219,7 @@ final class AppState {
         await clearWebData()
         clearWebContentRenderCaches()
         NeedsAttentionSnapshotStore.clear()
+        SystemStatusWidgetSnapshotStore.clear()
 
         authPhase = .unauthenticated
         selectedTab = .home

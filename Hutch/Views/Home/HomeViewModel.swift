@@ -388,6 +388,7 @@ final class HomeViewModel {
         }
         isLoadingSystemStatus = false
         persistNeedsAttentionSnapshot()
+        persistSystemStatusWidgetSnapshot()
     }
 
     var hasDashboardContent: Bool {
@@ -926,6 +927,27 @@ final class HomeViewModel {
                 updatedAt: .now
             )
         )
+    }
+
+    private func persistSystemStatusWidgetSnapshot() {
+        guard let snapshot = systemStatusSnapshot else {
+            return
+        }
+        let widgetSnapshot = SystemStatusWidgetSnapshot(
+            services: snapshot.services.map { service in
+                SystemStatusWidgetSnapshot.ServiceEntry(
+                    id: service.id,
+                    name: service.name,
+                    status: service.status.displayName,
+                    requiresAttention: service.status.requiresAttention
+                )
+            },
+            hasDisruption: snapshot.hasDisruption,
+            overallStatusText: snapshot.overallStatusText,
+            bannerSummary: snapshot.bannerSummary,
+            updatedAt: .now
+        )
+        SystemStatusWidgetSnapshotStore.save(widgetSnapshot)
     }
 
     nonisolated static func buildItems(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {

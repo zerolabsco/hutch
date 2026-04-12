@@ -9,6 +9,16 @@ enum DeepLink: Equatable {
     case ticket(owner: String, tracker: String, ticketId: Int)
     /// hutch://builds/<jobId>
     case build(jobId: Int)
+    /// hutch://builds (tab-level)
+    case buildsTab
+    /// hutch://repositories (tab-level)
+    case repositoriesTab
+    /// hutch://trackers (tab-level)
+    case trackersTab
+    /// hutch://status
+    case systemStatus
+    /// hutch://lookup
+    case lookup
 
     /// Attempt to parse a URL into a DeepLink.
     /// Expected format: hutch://<path>
@@ -37,6 +47,21 @@ enum DeepLink: Equatable {
         case "builds" where components.count >= 2:
             guard let jobId = Int(components[1]) else { return nil }
             self = .build(jobId: jobId)
+
+        case "builds":
+            self = .buildsTab
+
+        case "repositories":
+            self = .repositoriesTab
+
+        case "trackers":
+            self = .trackersTab
+
+        case "status":
+            self = .systemStatus
+
+        case "lookup":
+            self = .lookup
 
         default:
             return nil

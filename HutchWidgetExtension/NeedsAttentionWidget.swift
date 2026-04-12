@@ -71,7 +71,7 @@ private struct NeedsAttentionWidgetView: View {
                 fallbackState
             }
         }
-        .widgetURL(URL(string: "hutch://home"))
+        .widgetURL(family == .systemSmall ? URL(string: "hutch://home") : nil)
         .containerBackground(for: .widget) {
             Color(.systemBackground)
         }
@@ -101,23 +101,29 @@ private struct NeedsAttentionWidgetView: View {
     private func mediumView(snapshot: NeedsAttentionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                metricColumn(
-                    count: snapshot.unreadInboxThreads,
-                    label: "Unread",
-                    systemImage: "tray",
-                    tint: unreadTint(for: snapshot.unreadInboxThreads)
-                )
-                metricColumn(
-                    count: snapshot.assignedOpenTickets,
-                    label: "Assigned",
-                    systemImage: "ticket"
-                )
-                metricColumn(
-                    count: snapshot.failedBuilds,
-                    label: "Failed",
-                    systemImage: "hammer",
-                    tint: failedTint(for: snapshot.failedBuilds)
-                )
+                Link(destination: URL(string: "hutch://home")!) {
+                    metricColumn(
+                        count: snapshot.unreadInboxThreads,
+                        label: "Unread",
+                        systemImage: "tray",
+                        tint: unreadTint(for: snapshot.unreadInboxThreads)
+                    )
+                }
+                Link(destination: URL(string: "hutch://trackers")!) {
+                    metricColumn(
+                        count: snapshot.assignedOpenTickets,
+                        label: "Assigned",
+                        systemImage: "ticket"
+                    )
+                }
+                Link(destination: URL(string: "hutch://builds")!) {
+                    metricColumn(
+                        count: snapshot.failedBuilds,
+                        label: "Failed",
+                        systemImage: "hammer",
+                        tint: failedTint(for: snapshot.failedBuilds)
+                    )
+                }
             }
             Spacer(minLength: 0)
         }
@@ -128,23 +134,29 @@ private struct NeedsAttentionWidgetView: View {
 
     private func largeView(snapshot: NeedsAttentionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            metricRow(
-                count: snapshot.unreadInboxThreads,
-                label: "Unread threads",
-                systemImage: "tray",
-                tint: unreadTint(for: snapshot.unreadInboxThreads)
-            )
-            metricRow(
-                count: snapshot.assignedOpenTickets,
-                label: "Assigned tickets",
-                systemImage: "ticket"
-            )
-            metricRow(
-                count: snapshot.failedBuilds,
-                label: "Failed builds",
-                systemImage: "hammer",
-                tint: failedTint(for: snapshot.failedBuilds)
-            )
+            Link(destination: URL(string: "hutch://home")!) {
+                metricRow(
+                    count: snapshot.unreadInboxThreads,
+                    label: "Unread threads",
+                    systemImage: "tray",
+                    tint: unreadTint(for: snapshot.unreadInboxThreads)
+                )
+            }
+            Link(destination: URL(string: "hutch://trackers")!) {
+                metricRow(
+                    count: snapshot.assignedOpenTickets,
+                    label: "Assigned tickets",
+                    systemImage: "ticket"
+                )
+            }
+            Link(destination: URL(string: "hutch://builds")!) {
+                metricRow(
+                    count: snapshot.failedBuilds,
+                    label: "Failed builds",
+                    systemImage: "hammer",
+                    tint: failedTint(for: snapshot.failedBuilds)
+                )
+            }
             Spacer(minLength: 0)
         }
         .padding(20)
@@ -303,5 +315,6 @@ struct HutchWidgets: WidgetBundle {
     var body: some Widget {
         NeedsAttentionWidget()
         ContributionGraphWidget()
+        SystemStatusWidget()
     }
 }
