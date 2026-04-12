@@ -84,8 +84,8 @@ struct HomeView: View {
     private func systemStatusBannerSection(_ viewModel: HomeViewModel) -> some View {
         if let bannerTitle = viewModel.systemStatusBannerTitle {
             Section {
-                Button {
-                    appState.openSystemStatus()
+                NavigationLink {
+                    SystemStatusView()
                 } label: {
                     HomeSystemStatusBanner(title: bannerTitle)
                 }
