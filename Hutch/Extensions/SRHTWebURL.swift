@@ -1,6 +1,9 @@
 import Foundation
 
 enum SRHTWebURL {
+    static let chat = URL(string: "https://chat.sr.ht")!
+    static let status = URL(string: "https://status.sr.ht")!
+
     static func repository(_ repository: RepositorySummary) -> URL? {
         userScopedURL(
             host: "\(repository.service.rawValue).sr.ht",

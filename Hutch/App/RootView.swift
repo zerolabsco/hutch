@@ -207,6 +207,13 @@ struct RootView: View {
                 morePath.append(MoreRoute.lists)
                 morePath.append(MoreRoute.mailingList(mailingList))
             }
+        case .systemStatus:
+            morePath = NavigationPath()
+            appState.selectedTab = .more
+            Task {
+                await settleNavigationTransition()
+                morePath.append(MoreRoute.systemStatus)
+            }
         }
     }
 
@@ -267,6 +274,7 @@ enum MoreRoute: Hashable {
     case lists
     case pastes
     case profile
+    case systemStatus
     case settings
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
@@ -287,6 +295,8 @@ private struct MoreNavigationRoot: View {
                     PasteListView()
                 case .profile:
                     ProfileView()
+                case .systemStatus:
+                    SystemStatusView()
                 case .settings:
                     SettingsView()
                 case .mailingList(let mailingList):

@@ -4,7 +4,7 @@ struct MoreView: View {
     @Environment(AppState.self) private var appState
 
     private let unsupportedLinks: [(title: String, url: URL)] = [
-        ("chat.sr.ht", URL(string: "https://chat.sr.ht")!)
+        ("chat.sr.ht", SRHTWebURL.chat)
     ]
 
     @State private var showAccountSwitcher = false
@@ -28,6 +28,10 @@ struct MoreView: View {
 
                 NavigationLink(value: MoreRoute.pastes) {
                     Label("Pastes", systemImage: "doc.on.clipboard")
+                }
+                
+                NavigationLink(value: MoreRoute.systemStatus) {
+                    Label("System Status", systemImage: "server.rack")
                 }
             }
 
@@ -59,7 +63,7 @@ struct MoreView: View {
                 Button {
                     showAccountSwitcher = true
                 } label: {
-                    Image(systemName: "person.crop.circle")
+                    Image(systemName: "person.crop.circle.badge.plus")
                 }
             }
         }

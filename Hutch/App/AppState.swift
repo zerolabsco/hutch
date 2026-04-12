@@ -19,6 +19,7 @@ final class AppState {
         case repository(RepositorySummary)
         case tracker(TrackerSummary)
         case mailingList(InboxMailingListReference)
+        case systemStatus
     }
 
     enum AuthPhase {
@@ -57,6 +58,7 @@ final class AppState {
 
     let client: SRHTClient
     let configuration: AppConfiguration
+    let systemStatusRepository: SystemStatusRepository
 
     // MARK: - Deep link pending navigation
 
@@ -71,6 +73,7 @@ final class AppState {
         self.configuration = AppConfiguration()
         let token = KeychainHelper.loadToken()
         self.client = SRHTClient(token: token)
+        self.systemStatusRepository = SystemStatusRepository()
     }
 
     // MARK: - Launch validation
@@ -273,6 +276,11 @@ final class AppState {
         selectedTab = .more
     }
 
+    func openSystemStatus() {
+        pendingTabNavigation = .systemStatus
+        selectedTab = .more
+    }
+
     func presentRepositoryDeepLinkError() {
         deepLinkError = "The repository could not be found or is inaccessible."
     }
@@ -374,7 +382,11 @@ final class AppState {
             return
         }
 
-        let viewModel = HomeViewModel(currentUser: currentUser, client: client)
+        let viewModel = HomeViewModel(
+            currentUser: currentUser,
+            client: client,
+            systemStatusRepository: systemStatusRepository
+        )
         await viewModel.loadDashboard()
     }
 

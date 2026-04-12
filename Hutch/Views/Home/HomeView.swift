@@ -33,7 +33,11 @@ struct HomeView: View {
             if let viewModel {
                 vm = viewModel
             } else {
-                let newViewModel = HomeViewModel(currentUser: currentUser, client: appState.client)
+                let newViewModel = HomeViewModel(
+                    currentUser: currentUser,
+                    client: appState.client,
+                    systemStatusRepository: appState.systemStatusRepository
+                )
                 viewModel = newViewModel
                 vm = newViewModel
             }
@@ -51,6 +55,7 @@ struct HomeView: View {
     @ViewBuilder
     private func content(_ viewModel: HomeViewModel) -> some View {
         List {
+            systemStatusBannerSection(viewModel)
             projectsSection(viewModel)
             assignedTicketsSection(viewModel)
             recentBuildsSection(viewModel)
@@ -72,6 +77,20 @@ struct HomeView: View {
         }
         .refreshable {
             await viewModel.loadDashboard()
+        }
+    }
+
+    @ViewBuilder
+    private func systemStatusBannerSection(_ viewModel: HomeViewModel) -> some View {
+        if let bannerTitle = viewModel.systemStatusBannerTitle {
+            Section {
+                Button {
+                    appState.openSystemStatus()
+                } label: {
+                    HomeSystemStatusBanner(title: bannerTitle)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -230,6 +249,32 @@ private struct HomeInboxToolbarIcon: View {
     var body: some View {
         Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
             .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
+    }
+}
+
+private struct HomeSystemStatusBanner: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SourceHut service disruption")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 

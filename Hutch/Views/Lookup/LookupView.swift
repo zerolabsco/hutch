@@ -431,6 +431,8 @@ struct LookupView: View {
                     PasteListView()
                 case .profile:
                     ProfileView()
+                case .systemStatus:
+                    SystemStatusView()
                 case .settings:
                     SettingsView()
                 case .mailingList(let mailingList):

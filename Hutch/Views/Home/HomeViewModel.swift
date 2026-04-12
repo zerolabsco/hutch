@@ -143,6 +143,7 @@ final class HomeViewModel {
     private(set) var projects: [Project] = []
     var assignedTickets: [HomeAssignedTicket] = []
     var recentBuilds: [HomeBuildItem] = []
+    private(set) var systemStatusSnapshot: SystemStatusSnapshot?
     private(set) var hasUnreadInboxThreads = false
     private(set) var unreadInboxThreadCount: Int?
     private(set) var isLoadingProjects = false
@@ -153,6 +154,7 @@ final class HomeViewModel {
 
     private let currentUser: User
     private let client: SRHTClient
+    private let systemStatusRepository: SystemStatusRepository
     private let projectService: ProjectService
     private let ticketFetchConcurrencyLimit = 6
     private let inboxUnreadConcurrencyLimit = 4
@@ -266,9 +268,10 @@ final class HomeViewModel {
     }
     """
 
-    init(currentUser: User, client: SRHTClient) {
+    init(currentUser: User, client: SRHTClient, systemStatusRepository: SystemStatusRepository) {
         self.currentUser = currentUser
         self.client = client
+        self.systemStatusRepository = systemStatusRepository
         self.projectService = ProjectService(client: client)
     }
 
@@ -283,6 +286,7 @@ final class HomeViewModel {
         async let jobsTask = loadRecentJobs()
         async let assignedTicketsTask = loadAssignedTickets()
         async let inboxUnreadTask = loadInboxUnreadCount()
+        async let systemStatusTask = loadSystemStatusSnapshot()
 
         let projectsResult = await projectsTask
         switch projectsResult {
@@ -320,7 +324,13 @@ final class HomeViewModel {
 
         unreadInboxThreadCount = await inboxUnreadTask
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
+        systemStatusSnapshot = await systemStatusTask
         persistNeedsAttentionSnapshot()
+    }
+
+    var systemStatusBannerTitle: String? {
+        guard let systemStatusSnapshot, systemStatusSnapshot.hasDisruption else { return nil }
+        return systemStatusSnapshot.bannerSummary
     }
 
     func resolveTicket(_ ticket: HomeAssignedTicket) async {
@@ -417,6 +427,14 @@ final class HomeViewModel {
             return try await fetchUnreadInboxThreadCount()
         } catch {
             return nil
+        }
+    }
+
+    private func loadSystemStatusSnapshot() async -> SystemStatusSnapshot? {
+        do {
+            return try await systemStatusRepository.snapshot()
+        } catch {
+            return systemStatusSnapshot
         }
     }
 
