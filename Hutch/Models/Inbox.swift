@@ -52,10 +52,14 @@ struct InboxThreadSummary: Identifiable, Hashable, Sendable {
     }
 
     var threadGroupingKey: String {
-        "\(listRID)#\(displaySubject.lowercased())"
+        "\(listRID)#\(Self.normalizationKey(for: subject))"
     }
 
-    private static func normalizedSubject(from subject: String) -> String {
+    nonisolated static func normalizationKey(for subject: String) -> String {
+        normalizedSubject(from: subject).lowercased()
+    }
+
+    private nonisolated static func normalizedSubject(from subject: String) -> String {
         let collapsedWhitespace = subject
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -16,6 +16,7 @@ struct TicketDetailView: View {
     @State private var showResolveSheet = false
     @State private var showAssignSheet = false
     @State private var showLabelsSheet = false
+    @State private var isOpeningTracker = false
 
     // Comment composer mode
     @State private var commentMode: CommentMode = .write
@@ -227,6 +228,26 @@ struct TicketDetailView: View {
             }
             .font(.caption)
 
+            Button {
+                openTracker()
+            } label: {
+                HStack(spacing: 6) {
+                    Label("\(ownerUsername)/\(trackerName)", systemImage: "checklist")
+                        .font(.caption.weight(.medium))
+                    if isOpeningTracker {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(isOpeningTracker)
+
             if !ticket.assignees.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "person.fill")
@@ -345,6 +366,20 @@ struct TicketDetailView: View {
     private func normalizedUsername(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    private func openTracker() {
+        guard !isOpeningTracker else { return }
+        isOpeningTracker = true
+        Task {
+            defer { isOpeningTracker = false }
+            do {
+                let tracker = try await appState.resolveTracker(owner: ownerUsername, name: trackerName)
+                appState.navigateToTracker(tracker)
+            } catch {
+                appState.presentTicketDeepLinkError()
+            }
+        }
     }
 }
 

@@ -63,8 +63,31 @@ private struct HomeInboxThreadPage: Decodable, Sendable {
 }
 
 private struct HomeInboxThreadPayload: Decodable, Sendable {
+    let created: Date
     let updated: Date
     let subject: String
+    let replies: Int
+    let sender: Entity
+    let root: HomeInboxEmailPreview
+}
+
+private struct HomeInboxEmailPreview: Decodable, Sendable {
+    let id: Int
+    let subject: String
+    let date: Date?
+    let received: Date
+    let messageID: String
+    let body: String
+    let patch: HomeInboxPatchPreview?
+}
+
+private struct HomeInboxPatchPreview: Decodable, Sendable {
+    let subject: String?
+}
+
+private struct HomeInboxUnreadSnapshot: Sendable {
+    let unreadCount: Int
+    let threads: [InboxThreadSummary]
 }
 
 private struct HomeTicketPayload: Decodable, Sendable {
@@ -135,6 +158,15 @@ struct HomeBuildItem: Identifiable, Hashable, Sendable {
         }
         return repositoryName
     }
+
+    var requiresAttention: Bool {
+        switch job.status {
+        case .failed, .timeout, .running, .queued, .pending:
+            true
+        case .success, .cancelled:
+            false
+        }
+    }
 }
 
 @Observable
@@ -143,6 +175,7 @@ final class HomeViewModel {
     private(set) var projects: [Project] = []
     var assignedTickets: [HomeAssignedTicket] = []
     var recentBuilds: [HomeBuildItem] = []
+    var unreadInboxThreads: [InboxThreadSummary] = []
     private(set) var systemStatusSnapshot: SystemStatusSnapshot?
     private(set) var isLoadingSystemStatus = false
     private(set) var isShowingStaleSystemStatus = false
@@ -242,8 +275,20 @@ final class HomeViewModel {
         list(rid: $rid) {
             threads(cursor: $cursor) {
                 results {
+                    created
                     updated
                     subject
+                    replies
+                    sender { canonicalName }
+                    root {
+                        id
+                        subject
+                        date
+                        received
+                        messageID
+                        body
+                        patch { subject }
+                    }
                 }
                 cursor
             }
@@ -291,7 +336,7 @@ final class HomeViewModel {
         async let projectsTask = loadProjects()
         async let jobsTask = loadRecentJobs()
         async let assignedTicketsTask = loadAssignedTickets()
-        async let inboxUnreadTask = loadInboxUnreadCount()
+        async let inboxUnreadTask = loadInboxUnreadSnapshot()
         async let systemStatusTask = loadSystemStatusSnapshot()
 
         let projectsResult = await projectsTask
@@ -328,7 +373,9 @@ final class HomeViewModel {
         }
         isLoadingAssignedTickets = false
 
-        unreadInboxThreadCount = await inboxUnreadTask
+        let inboxUnreadSnapshot = await inboxUnreadTask
+        unreadInboxThreadCount = inboxUnreadSnapshot?.unreadCount
+        unreadInboxThreads = Array(inboxUnreadSnapshot?.threads.prefix(4) ?? [])
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
         let systemStatusResult = await systemStatusTask
         switch systemStatusResult {
@@ -344,7 +391,116 @@ final class HomeViewModel {
     }
 
     var hasDashboardContent: Bool {
-        !projects.isEmpty || !assignedTickets.isEmpty || !recentBuilds.isEmpty || systemStatusSnapshot != nil
+        !projects.isEmpty || !assignedTickets.isEmpty || !recentBuilds.isEmpty || !unreadInboxThreads.isEmpty || systemStatusSnapshot != nil
+    }
+
+    var failedBuildCount: Int {
+        recentBuilds.filter {
+            switch $0.job.status {
+            case .failed, .timeout:
+                return true
+            default:
+                return false
+            }
+        }.count
+    }
+
+    var activeBuildCount: Int {
+        recentBuilds.filter {
+            switch $0.job.status {
+            case .pending, .queued, .running:
+                return true
+            default:
+                return false
+            }
+        }.count
+    }
+
+    var activeIncidentCount: Int {
+        systemStatusSnapshot?.activeIncidents.count ?? 0
+    }
+
+    var disruptedServiceCount: Int {
+        systemStatusSnapshot?.disruptedServices.count ?? 0
+    }
+
+    var needsAttentionCount: Int {
+        var count = 0
+        if let unreadInboxThreadCount {
+            count += unreadInboxThreadCount
+        }
+        count += assignedTickets.count
+        count += failedBuildCount
+        count += activeBuildCount
+        if let snapshot = systemStatusSnapshot, snapshot.hasDisruption {
+            count += max(snapshot.disruptedServices.count, snapshot.activeIncidents.count)
+        }
+        return count
+    }
+
+    var attentionSummaryText: String {
+        if needsAttentionCount == 0 {
+            return "All clear"
+        }
+        var parts: [String] = []
+        if let unreadInboxThreadCount, unreadInboxThreadCount > 0 {
+            parts.append(Self.countLabel(unreadInboxThreadCount, singular: "unread thread"))
+        }
+        if !assignedTickets.isEmpty {
+            parts.append(Self.countLabel(assignedTickets.count, singular: "assigned ticket"))
+        }
+        if failedBuildCount > 0 {
+            parts.append(Self.countLabel(failedBuildCount, singular: "failed build"))
+        }
+        if activeBuildCount > 0 {
+            parts.append(Self.countLabel(activeBuildCount, singular: "active build"))
+        }
+        if disruptedServiceCount > 0 {
+            parts.append(Self.countLabel(disruptedServiceCount, singular: "service issue"))
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    var inboxSummaryText: String {
+        guard let unreadInboxThreadCount else { return "Inbox status unavailable" }
+        if unreadInboxThreadCount == 0 {
+            return "Inbox zero"
+        }
+        return "\(Self.countLabel(unreadInboxThreadCount, singular: "unread thread")) across your lists"
+    }
+
+    var ticketsSummaryText: String {
+        if assignedTickets.isEmpty {
+            return "No open tickets assigned to you"
+        }
+        return Self.countLabel(assignedTickets.count, singular: "open assigned ticket")
+    }
+
+    var buildsSummaryText: String {
+        if recentBuilds.isEmpty {
+            return "No recent builds"
+        }
+        var parts: [String] = []
+        if failedBuildCount > 0 {
+            parts.append(Self.countLabel(failedBuildCount, singular: "failed build"))
+        }
+        if activeBuildCount > 0 {
+            parts.append(Self.countLabel(activeBuildCount, singular: "active build"))
+        }
+        if parts.isEmpty {
+            return "Recent builds are clear"
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    var systemSummaryText: String {
+        guard let systemStatusSnapshot else {
+            return systemStatusErrorMessage ?? "System status unavailable"
+        }
+        if systemStatusSnapshot.hasDisruption {
+            return systemStatusSnapshot.bannerSummary
+        }
+        return systemStatusSnapshot.overallStatusText
     }
 
     func resolveTicket(_ ticket: HomeAssignedTicket) async {
@@ -415,6 +571,43 @@ final class HomeViewModel {
         }
     }
 
+    func markInboxThreadRead(_ thread: InboxThreadSummary) {
+        InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+        unreadInboxThreads.removeAll { $0.id == thread.id }
+        unreadInboxThreadCount = max((unreadInboxThreadCount ?? 1) - 1, 0)
+        hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
+        persistNeedsAttentionSnapshot()
+    }
+
+    func markInboxThreadUnread(_ thread: InboxThreadSummary) {
+        InboxReadStateStore.markUnread(for: thread.id)
+        if unreadInboxThreads.contains(where: { $0.id == thread.id }) == false {
+            unreadInboxThreads.append(
+                InboxThreadSummary(
+                    rootEmailID: thread.rootEmailID,
+                    rootMessageID: thread.rootMessageID,
+                    threadRootEmailIDs: thread.threadRootEmailIDs,
+                    threadRootMessageIDs: thread.threadRootMessageIDs,
+                    listID: thread.listID,
+                    listRID: thread.listRID,
+                    listName: thread.listName,
+                    listOwner: thread.listOwner,
+                    subject: thread.subject,
+                    latestSender: thread.latestSender,
+                    lastActivityAt: thread.lastActivityAt,
+                    messageCount: thread.messageCount,
+                    repo: thread.repo,
+                    containsPatch: thread.containsPatch,
+                    isUnread: true
+                )
+            )
+            unreadInboxThreads.sort(by: Self.sortInboxThreadsForTriage)
+        }
+        unreadInboxThreadCount = (unreadInboxThreadCount ?? 0) + 1
+        hasUnreadInboxThreads = true
+        persistNeedsAttentionSnapshot()
+    }
+
     private func loadProjects() async -> Result<[Project], Error> {
         do {
             return .success(try await projectService.fetchProjects())
@@ -436,9 +629,9 @@ final class HomeViewModel {
         }
     }
 
-    private func loadInboxUnreadCount() async -> Int? {
+    private func loadInboxUnreadSnapshot() async -> HomeInboxUnreadSnapshot? {
         do {
-            return try await fetchUnreadInboxThreadCount()
+            return try await fetchUnreadInboxSnapshot()
         } catch {
             return nil
         }
@@ -452,13 +645,14 @@ final class HomeViewModel {
         }
     }
 
-    private func fetchUnreadInboxThreadCount() async throws -> Int {
+    private func fetchUnreadInboxSnapshot() async throws -> HomeInboxUnreadSnapshot {
         let mailingLists = try await fetchInboxMailingLists()
-        guard !mailingLists.isEmpty else { return 0 }
+        guard !mailingLists.isEmpty else { return HomeInboxUnreadSnapshot(unreadCount: 0, threads: []) }
 
         var startIndex = mailingLists.startIndex
         var unreadCount = 0
         var successfulFetchCount = 0
+        var unreadThreads: [InboxThreadSummary] = []
         while startIndex < mailingLists.endIndex {
             let endIndex = mailingLists.index(
                 startIndex,
@@ -467,31 +661,32 @@ final class HomeViewModel {
             ) ?? mailingLists.endIndex
             let batch = Array(mailingLists[startIndex..<endIndex])
 
-            let batchResult = await withTaskGroup(of: Result<Int, Error>.self) { group in
+            let batchResult = await withTaskGroup(of: Result<HomeInboxUnreadSnapshot, Error>.self) { group in
                 for mailingList in batch {
                     group.addTask {
                         do {
-                            return .success(try await self.fetchUnreadThreadCount(for: mailingList))
+                            return .success(try await self.fetchUnreadThreadSnapshot(for: mailingList))
                         } catch {
                             return .failure(error)
                         }
                     }
                 }
 
-                var counts: [Int] = []
+                var snapshots: [HomeInboxUnreadSnapshot] = []
                 var errors: [Error] = []
                 for await result in group {
                     switch result {
-                    case .success(let count):
-                        counts.append(count)
+                    case .success(let snapshot):
+                        snapshots.append(snapshot)
                     case .failure(let error):
                         errors.append(error)
                     }
                 }
-                return (counts, errors)
+                return (snapshots, errors)
             }
 
-            unreadCount += batchResult.0.reduce(0, +)
+            unreadCount += batchResult.0.reduce(0) { $0 + $1.unreadCount }
+            unreadThreads.append(contentsOf: batchResult.0.flatMap(\.threads))
             successfulFetchCount += batchResult.0.count
 
             startIndex = endIndex
@@ -501,7 +696,10 @@ final class HomeViewModel {
             throw SRHTError.graphQLErrors([GraphQLError(message: "Failed to load inbox threads", locations: nil)])
         }
 
-        return unreadCount
+        return HomeInboxUnreadSnapshot(
+            unreadCount: unreadCount,
+            threads: unreadThreads.sorted(by: Self.sortInboxThreadsForTriage)
+        )
     }
 
     private func fetchInboxMailingLists() async throws -> [InboxMailingListReference] {
@@ -532,9 +730,10 @@ final class HomeViewModel {
         return subscriptions.compactMap(\.list).filter { seen.insert($0.rid).inserted }
     }
 
-    private func fetchUnreadThreadCount(for mailingList: InboxMailingListReference) async throws -> Int {
+    private func fetchUnreadThreadSnapshot(for mailingList: InboxMailingListReference) async throws -> HomeInboxUnreadSnapshot {
         var unreadCount = 0
         var cursor: String?
+        var unreadThreads: [InboxThreadSummary] = []
 
         while true {
             var variables: [String: any Sendable] = ["rid": mailingList.rid]
@@ -549,15 +748,31 @@ final class HomeViewModel {
                 responseType: HomeInboxListThreadsResponse.self
             )
 
-            unreadCount += response.list.threads.results.filter { thread in
-                let normalizedSubject = thread.subject
-                    .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .replacingOccurrences(of: #"^(?:(?:re|fwd?)\s*:\s*)+"#, with: "", options: [.regularExpression, .caseInsensitive])
-                    .lowercased()
-                let threadID = "\(mailingList.rid)#\(normalizedSubject)"
-                return InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: thread.updated)
-            }.count
+            let unreadThreadSummaries = response.list.threads.results.compactMap { thread -> InboxThreadSummary? in
+                let summary = InboxThreadSummary(
+                    rootEmailID: thread.root.id,
+                    rootMessageID: thread.root.messageID,
+                    threadRootEmailIDs: [thread.root.id],
+                    threadRootMessageIDs: [thread.root.messageID],
+                    listID: mailingList.id,
+                    listRID: mailingList.rid,
+                    listName: mailingList.name,
+                    listOwner: mailingList.owner,
+                    subject: thread.subject,
+                    latestSender: thread.sender,
+                    lastActivityAt: thread.updated,
+                    messageCount: thread.replies + 1,
+                    repo: InboxViewModel.deriveRepositoryName(from: mailingList.name),
+                    containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
+                    isUnread: InboxReadStateStore.isUnread(
+                        threadID: "\(mailingList.rid)#\(InboxThreadSummary.normalizationKey(for: thread.subject))",
+                        lastActivityAt: thread.updated
+                    )
+                )
+                return summary.isUnread ? summary : nil
+            }
+            unreadCount += unreadThreadSummaries.count
+            unreadThreads.append(contentsOf: unreadThreadSummaries)
 
             guard let nextCursor = response.list.threads.cursor else {
                 break
@@ -565,14 +780,17 @@ final class HomeViewModel {
             cursor = nextCursor
         }
 
-        return unreadCount
+        return HomeInboxUnreadSnapshot(
+            unreadCount: unreadCount,
+            threads: unreadThreads
+        )
     }
 
     private func loadAssignedTickets() async -> Result<[HomeAssignedTicket], Error> {
         do {
             let trackers = try await fetchAllTrackers()
             let tickets = try await fetchAssignedTickets(for: trackers)
-                .sorted { $0.ticket.created > $1.ticket.created }
+                .sorted(by: Self.sortAssignedTicketsForTriage)
             return .success(tickets)
         } catch {
             return .failure(error)
@@ -719,6 +937,7 @@ final class HomeViewModel {
                 repositoryOwner: repository?.ownerCanonicalName
             )
         }
+        .sorted(by: sortBuildItemsForTriage)
     }
 
     nonisolated static func failedBuilds(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {
@@ -730,6 +949,36 @@ final class HomeViewModel {
                 false
             }
         }
+    }
+
+    nonisolated static func sortBuildItemsForTriage(_ lhs: HomeBuildItem, _ rhs: HomeBuildItem) -> Bool {
+        let lhsPriority = buildPriority(for: lhs.job.status)
+        let rhsPriority = buildPriority(for: rhs.job.status)
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+        if lhs.job.updated != rhs.job.updated {
+            return lhs.job.updated > rhs.job.updated
+        }
+        return lhs.job.id > rhs.job.id
+    }
+
+    nonisolated static func sortAssignedTicketsForTriage(_ lhs: HomeAssignedTicket, _ rhs: HomeAssignedTicket) -> Bool {
+        if lhs.ticket.created != rhs.ticket.created {
+            return lhs.ticket.created < rhs.ticket.created
+        }
+        return lhs.ticket.id < rhs.ticket.id
+    }
+
+    nonisolated static func sortInboxThreadsForTriage(_ lhs: InboxThreadSummary, _ rhs: InboxThreadSummary) -> Bool {
+        if lhs.containsPatch != rhs.containsPatch {
+            return lhs.containsPatch && !rhs.containsPatch
+        }
+        if lhs.lastActivityAt != rhs.lastActivityAt {
+            return lhs.lastActivityAt > rhs.lastActivityAt
+        }
+        return InboxThreadSummary.normalizationKey(for: lhs.subject)
+            .localizedCaseInsensitiveCompare(InboxThreadSummary.normalizationKey(for: rhs.subject)) == .orderedAscending
     }
 
     nonisolated static func matchesCurrentUserAssignee(_ entity: Entity, currentUser: User) -> Bool {
@@ -782,6 +1031,25 @@ final class HomeViewModel {
             return String(trimmed.dropFirst())
         }
         return trimmed
+    }
+
+    private nonisolated static func buildPriority(for status: JobStatus) -> Int {
+        switch status {
+        case .failed, .timeout:
+            return 0
+        case .running:
+            return 1
+        case .queued, .pending:
+            return 2
+        case .cancelled:
+            return 3
+        case .success:
+            return 4
+        }
+    }
+
+    private nonisolated static func countLabel(_ count: Int, singular: String) -> String {
+        count == 1 ? "1 \(singular)" : "\(count) \(singular)s"
     }
 
     private struct StatusEventResponse: Decodable, Sendable {

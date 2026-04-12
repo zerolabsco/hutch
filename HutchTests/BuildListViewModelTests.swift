@@ -28,6 +28,22 @@ struct BuildListViewModelTests {
         #expect(filtered.map(\.id) == [42])
     }
 
+    @Test
+    func buildFilterPrioritizesActionableStates() {
+        let jobs = [
+            makeJob(id: 1, status: .success, tags: []),
+            makeJob(id: 2, status: .failed, tags: []),
+            makeJob(id: 3, status: .running, tags: []),
+            makeJob(id: 4, status: .cancelled, tags: [])
+        ]
+
+        let attention = BuildListViewModel.filterJobs(jobs, filter: .attention)
+        let active = BuildListViewModel.filterJobs(jobs, filter: .active)
+
+        #expect(attention.map(\.id) == [2, 3])
+        #expect(active.map(\.id) == [3])
+    }
+
     private func filterJobs(_ jobs: [JobSummary], query: String) -> [JobSummary] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return jobs }
@@ -39,12 +55,12 @@ struct BuildListViewModelTests {
         }
     }
 
-    private func makeJob(id: Int, tags: [String]) -> JobSummary {
+    private func makeJob(id: Int, status: JobStatus = .success, tags: [String]) -> JobSummary {
         JobSummary(
             id: id,
             created: Date(),
             updated: Date(),
-            status: .success,
+            status: status,
             note: nil,
             tags: tags,
             visibility: nil,

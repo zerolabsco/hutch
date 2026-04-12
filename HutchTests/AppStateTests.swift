@@ -33,4 +33,46 @@ struct AppStateTests {
         #expect(appState.selectedTab == .more)
         #expect(appState.pendingTabNavigation == .systemStatus)
     }
+
+    @Test
+    @MainActor
+    func navigationHelpersQueueExpectedTargets() {
+        let appState = AppState()
+        let repository = RepositorySummary(
+            id: 1,
+            rid: "repo",
+            service: .git,
+            name: "hutch",
+            description: nil,
+            visibility: .public,
+            updated: .distantPast,
+            owner: Entity(canonicalName: "~owner"),
+            head: nil
+        )
+        let tracker = TrackerSummary(
+            id: 2,
+            rid: "tracker",
+            name: "todo",
+            description: nil,
+            visibility: .public,
+            updated: .distantPast,
+            owner: Entity(canonicalName: "~owner")
+        )
+
+        appState.navigateToRepository(repository)
+        #expect(appState.selectedTab == .repositories)
+        #expect(appState.pendingTabNavigation == .repository(repository))
+
+        appState.navigateToTracker(tracker)
+        #expect(appState.selectedTab == .tickets)
+        #expect(appState.pendingTabNavigation == .tracker(tracker))
+
+        appState.navigateToBuild(jobId: 42)
+        #expect(appState.selectedTab == .builds)
+        #expect(appState.pendingDeepLink == .build(jobId: 42))
+
+        appState.navigateToTicket(ownerUsername: "owner", trackerName: "todo", ticketId: 9)
+        #expect(appState.selectedTab == .tickets)
+        #expect(appState.pendingDeepLink == .ticket(owner: "owner", tracker: "todo", ticketId: 9))
+    }
 }

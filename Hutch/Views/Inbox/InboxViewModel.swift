@@ -56,12 +56,19 @@ private struct InboxEmailPreview: Decodable, Sendable {
     let patch: InboxPatchPreview?
 }
 
+enum InboxThreadFilter: String, CaseIterable, Sendable {
+    case all = "All"
+    case patches = "Patches"
+    case discussions = "Talk"
+}
+
 @Observable
 @MainActor
 final class InboxViewModel {
     private(set) var threads: [InboxThreadSummary] = []
     private(set) var isLoading = false
     var error: String?
+    var filter: InboxThreadFilter = .all
     var searchText = ""
 
     private let client: SRHTClient
@@ -181,9 +188,10 @@ final class InboxViewModel {
     }
 
     var filteredThreads: [InboxThreadSummary] {
+        let filteredByKind = Self.filterThreads(threads, filter: filter)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return threads }
-        return threads.filter {
+        guard !q.isEmpty else { return filteredByKind }
+        return filteredByKind.filter {
             $0.displaySubject.lowercased().contains(q) ||
             $0.listName.lowercased().contains(q) ||
             $0.latestSender.canonicalName.lowercased().contains(q)
@@ -388,5 +396,18 @@ final class InboxViewModel {
             return String(listName.dropLast(separator.count))
         }
         return nil
+    }
+
+    nonisolated static func filterThreads(_ threads: [InboxThreadSummary], filter: InboxThreadFilter) -> [InboxThreadSummary] {
+        threads.filter { thread in
+            switch filter {
+            case .all:
+                return true
+            case .patches:
+                return thread.containsPatch
+            case .discussions:
+                return !thread.containsPatch
+            }
+        }
     }
 }

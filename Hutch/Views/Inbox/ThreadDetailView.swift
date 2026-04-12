@@ -18,6 +18,7 @@ struct ThreadDetailView: View {
     @State private var hasMarkedCurrentThreadViewed = false
     @State private var suppressAutoMarkViewed = false
     @State private var isUnread: Bool
+    @State private var isOpeningRepository = false
 
     init(
         thread: InboxThreadSummary,
@@ -119,6 +120,41 @@ struct ThreadDetailView: View {
                     .padding(.vertical, 4)
                 }
 
+                Section("Related") {
+                    Button {
+                        appState.navigateToMailingList(
+                            InboxMailingListReference(
+                                id: thread.listID,
+                                rid: thread.listRID,
+                                name: thread.listName,
+                                owner: thread.listOwner
+                            )
+                        )
+                    } label: {
+                        Label(thread.listDisplayName, systemImage: "list.bullet")
+                    }
+
+                    if let repo = self.thread.repo {
+                        Button {
+                            openRepository(named: repo, ownerCanonicalName: thread.listOwner.canonicalName)
+                        } label: {
+                            HStack {
+                                Label("\(thread.listOwner.canonicalName)/\(repo)", systemImage: "book.closed")
+                                Spacer()
+                                if isOpeningRepository {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                        .disabled(isOpeningRepository)
+                    }
+                }
+
                 if let partialWarning = viewModel.partialWarning {
                     Section {
                         Text(partialWarning)
@@ -179,6 +215,21 @@ struct ThreadDetailView: View {
         }
         parts.append(thread.lastActivityAt.relativeDescription)
         return parts.joined(separator: " • ")
+    }
+
+    private func openRepository(named repositoryName: String, ownerCanonicalName: String) {
+        guard !isOpeningRepository else { return }
+        isOpeningRepository = true
+        Task {
+            defer { isOpeningRepository = false }
+            do {
+                let ownerUsername = ownerCanonicalName.hasPrefix("~") ? String(ownerCanonicalName.dropFirst()) : ownerCanonicalName
+                let repository = try await appState.resolveRepository(owner: ownerUsername, name: repositoryName)
+                appState.navigateToRepository(repository)
+            } catch {
+                appState.presentRepositoryDeepLinkError()
+            }
+        }
     }
 }
 

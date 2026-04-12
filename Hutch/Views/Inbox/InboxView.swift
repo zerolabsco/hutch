@@ -42,6 +42,17 @@ struct InboxView: View {
         @Bindable var vm = viewModel
 
         List {
+            Section {
+                Picker("Filter", selection: $vm.filter) {
+                    ForEach(InboxThreadFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             ForEach(viewModel.filteredThreads) { thread in
                 Button {
                     selectThread(thread)

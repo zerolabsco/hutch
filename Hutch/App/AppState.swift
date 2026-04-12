@@ -261,22 +261,48 @@ final class AppState {
 
     func openProjectSource(_ source: Project.SourceRepo) async throws {
         let repository = try await resolveProjectSource(source)
-        pendingTabNavigation = .repository(repository)
-        selectedTab = .repositories
+        navigateToRepository(repository)
     }
 
     func openProjectTracker(_ tracker: Project.Tracker) async throws {
         let resolvedTracker = try await resolveProjectTracker(tracker)
-        pendingTabNavigation = .tracker(resolvedTracker)
-        selectedTab = .tickets
+        navigateToTracker(resolvedTracker)
     }
 
     func openMailingList(_ mailingList: InboxMailingListReference) {
+        navigateToMailingList(mailingList)
+    }
+
+    func openSystemStatus() {
+        navigateToSystemStatus()
+    }
+
+    func navigateToRepository(_ repository: RepositorySummary) {
+        pendingTabNavigation = .repository(repository)
+        selectedTab = .repositories
+    }
+
+    func navigateToTracker(_ tracker: TrackerSummary) {
+        pendingTabNavigation = .tracker(tracker)
+        selectedTab = .tickets
+    }
+
+    func navigateToBuild(jobId: Int) {
+        pendingDeepLink = .build(jobId: jobId)
+        selectedTab = .builds
+    }
+
+    func navigateToTicket(ownerUsername: String, trackerName: String, ticketId: Int) {
+        pendingDeepLink = .ticket(owner: ownerUsername, tracker: trackerName, ticketId: ticketId)
+        selectedTab = .tickets
+    }
+
+    func navigateToMailingList(_ mailingList: InboxMailingListReference) {
         pendingTabNavigation = .mailingList(mailingList)
         selectedTab = .more
     }
 
-    func openSystemStatus() {
+    func navigateToSystemStatus() {
         pendingTabNavigation = .systemStatus
         selectedTab = .more
     }

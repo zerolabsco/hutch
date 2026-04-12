@@ -19,6 +19,12 @@ private struct SubmittedJob: Decodable, Sendable {
     let id: Int
 }
 
+enum BuildListFilter: String, CaseIterable, Sendable {
+    case attention = "Attention"
+    case active = "Active"
+    case all = "All"
+}
+
 // MARK: - View Model
 
 @Observable
@@ -31,6 +37,7 @@ final class BuildListViewModel {
     private(set) var isRefreshing = false
     private(set) var isSubmitting = false
     var error: String?
+    var filter: BuildListFilter = .attention
     var searchText = ""
 
     private var cursor: String?
@@ -44,9 +51,10 @@ final class BuildListViewModel {
     }
 
     var filteredJobs: [JobSummary] {
+        let statusFiltered = Self.filterJobs(jobs, filter: filter)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return jobs }
-        return jobs.filter {
+        guard !q.isEmpty else { return statusFiltered }
+        return statusFiltered.filter {
             String($0.id).contains(q) ||
             $0.tags.contains { $0.lowercased().contains(q) } ||
             ($0.note?.lowercased().contains(q) == true) ||
@@ -271,5 +279,28 @@ final class BuildListViewModel {
         }
 
         let cancel: CancelResult
+    }
+
+    nonisolated static func filterJobs(_ jobs: [JobSummary], filter: BuildListFilter) -> [JobSummary] {
+        jobs.filter { job in
+            switch filter {
+            case .attention:
+                switch job.status {
+                case .failed, .timeout, .running, .queued, .pending:
+                    return true
+                case .success, .cancelled:
+                    return false
+                }
+            case .active:
+                switch job.status {
+                case .running, .queued, .pending:
+                    return true
+                case .success, .failed, .cancelled, .timeout:
+                    return false
+                }
+            case .all:
+                return true
+            }
+        }
     }
 }

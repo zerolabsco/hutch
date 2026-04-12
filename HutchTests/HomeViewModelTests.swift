@@ -59,6 +59,19 @@ struct HomeViewModelTests {
         #expect(repository?.name == "hutch")
     }
 
+    @Test
+    func buildItemsAreSortedForTriage() {
+        let jobs = [
+            makeJob(id: 1, status: .success, created: Date(timeIntervalSince1970: 10)),
+            makeJob(id: 2, status: .running, created: Date(timeIntervalSince1970: 20)),
+            makeJob(id: 3, status: .failed, created: Date(timeIntervalSince1970: 30))
+        ]
+
+        let sorted = HomeViewModel.buildItems(from: jobs)
+
+        #expect(sorted.map(\.job.id) == [3, 2, 1])
+    }
+
     private func makeJob(id: Int, status: JobStatus, created: Date) -> HomeJobPayload {
         HomeJobPayload(
             id: id,

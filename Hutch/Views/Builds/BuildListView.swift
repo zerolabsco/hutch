@@ -65,6 +65,17 @@ struct BuildListView: View {
         @Bindable var vm = viewModel
 
         List {
+            Section {
+                Picker("Filter", selection: $vm.filter) {
+                    ForEach(BuildListFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             ForEach(viewModel.filteredJobs) { job in
                 NavigationLink(value: job) {
                     BuildRowView(job: job)

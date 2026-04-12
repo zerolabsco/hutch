@@ -9,6 +9,7 @@ struct BuildDetailView: View {
     @State private var selectedTaskName: String?
     @State private var showEditResubmitSheet = false
     @State private var showCancelConfirmation = false
+    @State private var isOpeningRepository = false
 
     private var isPresentingLogSheet: Bool {
         selectedTaskName != nil
@@ -158,6 +159,28 @@ struct BuildDetailView: View {
                     LabeledContent("Updated", value: job.updated.relativeDescription)
                 }
 
+                if let repositoryReference = HomeViewModel.primaryRepositoryReference(in: job.manifest) {
+                    Section("Source") {
+                        Button {
+                            openRepository(ownerCanonicalName: repositoryReference.ownerCanonicalName, repositoryName: repositoryReference.name)
+                        } label: {
+                            HStack {
+                                Label("\(repositoryReference.ownerCanonicalName)/\(repositoryReference.name)", systemImage: "book.closed")
+                                Spacer()
+                                if isOpeningRepository {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                        .disabled(isOpeningRepository)
+                    }
+                }
+
                 // Per-task logs
                 if !job.tasks.isEmpty {
                     ForEach(job.tasks) { task in
@@ -239,6 +262,21 @@ struct BuildDetailView: View {
                 get: { viewModel.error },
                 set: { viewModel.error = $0 }
             ))
+        }
+    }
+
+    private func openRepository(ownerCanonicalName: String, repositoryName: String) {
+        guard !isOpeningRepository else { return }
+        isOpeningRepository = true
+        Task {
+            defer { isOpeningRepository = false }
+            do {
+                let ownerUsername = ownerCanonicalName.hasPrefix("~") ? String(ownerCanonicalName.dropFirst()) : ownerCanonicalName
+                let repository = try await appState.resolveRepository(owner: ownerUsername, name: repositoryName)
+                appState.navigateToRepository(repository)
+            } catch {
+                appState.presentRepositoryDeepLinkError()
+            }
         }
     }
 }

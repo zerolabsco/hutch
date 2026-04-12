@@ -55,7 +55,9 @@ struct HomeView: View {
     @ViewBuilder
     private func content(_ viewModel: HomeViewModel) -> some View {
         List {
+            attentionSection(viewModel)
             systemStatusBannerSection(viewModel)
+            inboxSection(viewModel)
             projectsSection(viewModel)
             assignedTicketsSection(viewModel)
             recentBuildsSection(viewModel)
@@ -63,15 +65,17 @@ struct HomeView: View {
         .listStyle(.insetGrouped)
         .overlay {
             if viewModel.isLoadingProjects && viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&
-                viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty {
+                viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
+                viewModel.unreadInboxThreads.isEmpty {
                 SRHTLoadingStateView(message: "Loading Home…")
             } else if !viewModel.isLoadingProjects && !viewModel.isLoadingAssignedTickets && !viewModel.isLoadingRecentBuilds &&
                         viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
+                        viewModel.unreadInboxThreads.isEmpty &&
                         viewModel.assignedTicketsError == nil && viewModel.recentBuildsError == nil {
                 ContentUnavailableView(
                     "All Clear",
                     systemImage: "checkmark.circle",
-                    description: Text("There are no assigned tickets or recent builds right now.")
+                    description: Text("There are no unread threads, assigned tickets, or urgent builds right now.")
                 )
             }
         }
@@ -80,6 +84,41 @@ struct HomeView: View {
         }
         .connectivityOverlay(hasContent: viewModel.hasDashboardContent) {
             await viewModel.loadDashboard()
+        }
+    }
+
+    @ViewBuilder
+    private func attentionSection(_ viewModel: HomeViewModel) -> some View {
+        Section("Needs Attention") {
+            HomeAttentionSummaryRow(
+                title: viewModel.needsAttentionCount == 0 ? "All clear" : "\(viewModel.needsAttentionCount) things need attention",
+                summary: viewModel.attentionSummaryText
+            )
+
+            HomeAttentionLinkRow(
+                title: "Inbox",
+                summary: viewModel.inboxSummaryText,
+                countText: viewModel.unreadInboxThreadCount.map(String.init) ?? "?"
+            ) {
+                InboxView()
+            }
+
+            HomeAttentionLinkRow(
+                title: "Assigned Tickets",
+                summary: viewModel.ticketsSummaryText,
+                countText: String(viewModel.assignedTickets.count)
+            ) {
+                HomeAssignedTicketsListView(viewModel: viewModel)
+            }
+
+            HomeAttentionLinkRow(
+                title: "Builds",
+                summary: viewModel.buildsSummaryText,
+                countText: String(viewModel.failedBuildCount + viewModel.activeBuildCount),
+                action: {
+                    appState.selectedTab = .builds
+                }
+            )
         }
     }
 
@@ -97,6 +136,40 @@ struct HomeView: View {
                 )
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func inboxSection(_ viewModel: HomeViewModel) -> some View {
+        Section {
+            if let unreadCount = viewModel.unreadInboxThreadCount, unreadCount == 0 {
+                HomeSectionMessageRow(
+                    text: "No unread inbox threads.",
+                    systemImage: "tray"
+                )
+            } else if viewModel.unreadInboxThreads.isEmpty {
+                HomeSectionMessageRow(
+                    text: viewModel.inboxSummaryText,
+                    systemImage: "tray"
+                )
+            } else {
+                ForEach(viewModel.unreadInboxThreads.prefix(previewLimit)) { thread in
+                    NavigationLink {
+                        ThreadDetailView(
+                            thread: thread,
+                            onViewed: { viewModel.markInboxThreadRead(thread) },
+                            onMarkRead: { viewModel.markInboxThreadRead(thread) },
+                            onMarkUnread: { viewModel.markInboxThreadUnread(thread) }
+                        )
+                    } label: {
+                        HomeInboxThreadRow(thread: thread)
+                    }
+                }
+            }
+        } header: {
+            HomeSectionHeader("Inbox") {
+                InboxView()
+            }
         }
     }
 
@@ -312,41 +385,55 @@ private struct HomeProjectsListView: View {
 }
 
 private struct HomeBuildRow: View {
+    @Environment(AppState.self) private var appState
     let build: HomeBuildItem
 
     var body: some View {
-        HStack(spacing: 12) {
-            JobStatusIcon(status: build.job.status)
-                .frame(width: 20)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                JobStatusIcon(status: build.job.status)
+                    .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(primaryTitle)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(primaryTitle)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Text("Job #\(build.job.id)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Text("Job #\(build.job.id)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
-                    Text("•")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        Text("•")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
 
-                    Text(build.job.status.rawValue.capitalized)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Text(build.job.status.rawValue.capitalized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
-                    Text("•")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        Text("•")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
 
-                    Text(build.job.created.relativeDescription)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        Text(build.job.created.relativeDescription)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
 
-                    Spacer()
+                        Spacer()
+                    }
                 }
+            }
+
+            if let repositoryDisplayName = build.repositoryDisplayName {
+                Button {
+                    openRepository()
+                } label: {
+                    Label(repositoryDisplayName, systemImage: "book.closed")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.vertical, 2)
@@ -358,37 +445,147 @@ private struct HomeBuildRow: View {
         }
         return build.job.displayLabel
     }
+
+    private func openRepository() {
+        guard let repositoryName = build.repositoryName,
+              let repositoryOwner = build.repositoryOwner else { return }
+        Task {
+            do {
+                let repository = try await appState.resolveRepository(
+                    owner: repositoryOwner.hasPrefix("~") ? String(repositoryOwner.dropFirst()) : repositoryOwner,
+                    name: repositoryName
+                )
+                appState.navigateToRepository(repository)
+            } catch {
+                appState.presentRepositoryDeepLinkError()
+            }
+        }
+    }
 }
 
 private struct HomeAssignedTicketRow: View {
+    @Environment(AppState.self) private var appState
     let ticket: HomeAssignedTicket
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            TicketStatusIcon(status: ticket.ticket.status)
-                .frame(width: 20)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 12) {
+                TicketStatusIcon(status: ticket.ticket.status)
+                    .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(ticket.ticket.title)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ticket.ticket.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
 
-                Text("\(ticket.ownerCanonicalName)/\(ticket.trackerName) • #\(ticket.ticket.id) • \(ticket.ticket.created.relativeDescription)")
-                    .font(.caption)
+                    Text("\(ticket.ownerCanonicalName)/\(ticket.trackerName) • #\(ticket.ticket.id) • \(ticket.ticket.created.relativeDescription)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(ticket.ticket.status.displayName)
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize()
             }
 
-            Spacer(minLength: 8)
-
-            Text(ticket.ticket.status.displayName)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
+            Button {
+                openTracker()
+            } label: {
+                Label("\(ticket.ownerCanonicalName)/\(ticket.trackerName)", systemImage: "checklist")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 2)
+    }
+
+    private func openTracker() {
+        Task {
+            do {
+                let tracker = try await appState.resolveTracker(owner: ticket.ownerUsername, name: ticket.trackerName)
+                appState.navigateToTracker(tracker)
+            } catch {
+                appState.presentTicketDeepLinkError()
+            }
+        }
+    }
+}
+
+private struct HomeInboxThreadRow: View {
+    @Environment(AppState.self) private var appState
+    let thread: InboxThreadSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 6)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(thread.displaySubject)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
+
+                    Text(thread.metadataLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    appState.navigateToMailingList(
+                        InboxMailingListReference(
+                            id: thread.listID,
+                            rid: thread.listRID,
+                            name: thread.listName,
+                            owner: thread.listOwner
+                        )
+                    )
+                } label: {
+                    Label(thread.listName, systemImage: "list.bullet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                if let repo = thread.repo {
+                    Button {
+                        openRepository(named: repo)
+                    } label: {
+                        Label(repo, systemImage: "book.closed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func openRepository(named repositoryName: String) {
+        Task {
+            do {
+                let ownerUsername = thread.listOwner.canonicalName.hasPrefix("~")
+                    ? String(thread.listOwner.canonicalName.dropFirst())
+                    : thread.listOwner.canonicalName
+                let repository = try await appState.resolveRepository(owner: ownerUsername, name: repositoryName)
+                appState.navigateToRepository(repository)
+            } catch {
+                appState.presentRepositoryDeepLinkError()
+            }
+        }
     }
 }
 
@@ -428,6 +625,95 @@ private struct HomeSectionHeader<Destination: View>: View {
             .buttonStyle(.plain)
         }
         .textCase(nil)
+    }
+}
+
+private struct HomeAttentionSummaryRow: View {
+    let title: String
+    let summary: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct HomeAttentionLinkRow<Destination: View>: View {
+    let title: String
+    let summary: String
+    let countText: String
+    let destination: Destination?
+    let action: (() -> Void)?
+
+    init(
+        title: String,
+        summary: String,
+        countText: String,
+        @ViewBuilder destination: () -> Destination
+    ) {
+        self.title = title
+        self.summary = summary
+        self.countText = countText
+        self.destination = destination()
+        self.action = nil
+    }
+
+    init(
+        title: String,
+        summary: String,
+        countText: String,
+        action: @escaping () -> Void
+    ) where Destination == EmptyView {
+        self.title = title
+        self.summary = summary
+        self.countText = countText
+        self.destination = nil
+        self.action = action
+    }
+
+    var body: some View {
+        Group {
+            if let destination {
+                NavigationLink {
+                    destination
+                } label: {
+                    content
+                }
+            } else if let action {
+                Button(action: action) {
+                    content
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text(countText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(.secondarySystemFill), in: Capsule())
+        }
+        .padding(.vertical, 2)
     }
 }
 
