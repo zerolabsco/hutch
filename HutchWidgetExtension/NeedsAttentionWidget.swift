@@ -302,5 +302,6 @@ private struct NeedsAttentionWidgetView: View {
 struct HutchWidgets: WidgetBundle {
     var body: some Widget {
         NeedsAttentionWidget()
+        ContributionGraphWidget()
     }
 }
