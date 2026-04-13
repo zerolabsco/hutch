@@ -55,3 +55,37 @@ struct RepositorySummary: Codable, Sendable, Identifiable, Hashable {
         self.head = try container.decodeIfPresent(Reference.self, forKey: .head)
     }
 }
+
+extension RepositorySummary {
+    var defaultBranchName: String? {
+        head?.name.replacingOccurrences(of: "refs/heads/", with: "")
+    }
+
+    func updating(
+        name: String? = nil,
+        description: String? = nil,
+        visibility: Visibility? = nil,
+        updated: Date? = nil,
+        head: Reference? = nil
+    ) -> RepositorySummary {
+        RepositorySummary(
+            id: id,
+            rid: rid,
+            service: service,
+            name: name ?? self.name,
+            description: description ?? self.description,
+            visibility: visibility ?? self.visibility,
+            updated: updated ?? self.updated,
+            owner: owner,
+            head: head ?? self.head
+        )
+    }
+
+    static func displayBranchName(for reference: Reference) -> String {
+        displayBranchName(for: reference.name)
+    }
+
+    static func displayBranchName(for referenceName: String) -> String {
+        referenceName.replacingOccurrences(of: "refs/heads/", with: "")
+    }
+}

@@ -208,6 +208,17 @@ final class RepositoryListViewModel {
         repositories.removeAll { $0.id == id }
     }
 
+    func updateRepository(_ repository: RepositorySummary) {
+        if let index = repositories.firstIndex(where: { $0.id == repository.id }) {
+            repositories[index] = repository
+            repositories.sort(by: repositorySortOrder)
+        }
+
+        let updatedRepositories = repositoriesForSearchIndex
+            .filter { $0.id != repository.id } + [repository]
+        updateSearchIndex(with: updatedRepositories)
+    }
+
     func createRepository(
         service: RepositoryCreationService,
         name: String,

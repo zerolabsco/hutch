@@ -119,7 +119,9 @@ struct UserProfileView: View {
                     } else {
                         ForEach(viewModel.repositories.prefix(4)) { repo in
                             NavigationLink {
-                                RepositoryDetailView(repository: repo)
+                                RepositoryDetailView(repository: repo) { updatedRepository in
+                                    viewModel.updateRepository(updatedRepository)
+                                }
                             } label: {
                                 RepositoryRowView(repository: repo, buildStatus: .none)
                             }

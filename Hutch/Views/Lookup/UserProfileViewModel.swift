@@ -61,6 +61,17 @@ final class UserProfileViewModel {
         }
     }
 
+    func updateRepository(_ repository: RepositorySummary) {
+        guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
+        repositories[index] = repository
+        repositories.sort { lhs, rhs in
+            if lhs.updated == rhs.updated {
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            return lhs.updated > rhs.updated
+        }
+    }
+
     func loadTrackers() async {
         isLoadingTrackers = true
         trackersError = nil

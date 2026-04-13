@@ -89,6 +89,32 @@ struct RepositorySettingsViewModelTests {
         #expect(viewModel.selectedHeadReferenceForSave() == nil)
     }
 
+    @Test
+    @MainActor
+    func metadataValidationRejectsEmptyOrInvalidNames() {
+        #expect(RepositorySettingsViewModel.metadataValidationMessage(for: "") == "Enter a repository name.")
+        #expect(RepositorySettingsViewModel.metadataValidationMessage(for: "repo/name") == "Repository names can't contain '/'.")
+        #expect(RepositorySettingsViewModel.metadataValidationMessage(for: "repo name") == "Repository names can't contain spaces.")
+    }
+
+    @Test
+    @MainActor
+    func metadataDirtyStateTracksNormalizedInputs() {
+        let viewModel = RepositorySettingsViewModel(
+            repository: makeRepository(headName: "refs/heads/main"),
+            branches: [ReferenceDetail(name: "refs/heads/main", target: nil, date: nil)],
+            client: SRHTClient(token: "test-token")
+        )
+
+        #expect(viewModel.isMetadataDirty == false)
+        viewModel.editedDescription = "  updated  "
+        #expect(viewModel.isMetadataDirty)
+
+        viewModel.editedDescription = "desc"
+        viewModel.editedName = "  repo  "
+        #expect(viewModel.isMetadataDirty == false)
+    }
+
     @MainActor
     private func makeRepository(headName: String?) -> RepositorySummary {
         RepositorySummary(

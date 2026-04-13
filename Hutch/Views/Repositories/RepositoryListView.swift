@@ -45,7 +45,13 @@ struct RepositoryListView: View {
             }
         )) {
             if let createdRepository {
-                RepositoryDetailView(repository: createdRepository) {
+                RepositoryDetailView(
+                    repository: createdRepository,
+                    onRepositoryUpdated: { updatedRepository in
+                        self.createdRepository = updatedRepository
+                        viewModel?.updateRepository(updatedRepository)
+                    }
+                ) {
                     viewModel?.removeRepository(id: createdRepository.id)
                 }
             }
@@ -139,7 +145,12 @@ struct RepositoryListView: View {
             }
         }
         .navigationDestination(for: RepositorySummary.self) { repo in
-            RepositoryDetailView(repository: repo) {
+            RepositoryDetailView(
+                repository: repo,
+                onRepositoryUpdated: { updatedRepository in
+                    viewModel.updateRepository(updatedRepository)
+                }
+            ) {
                 viewModel.removeRepository(id: repo.id)
             }
         }

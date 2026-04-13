@@ -7,7 +7,9 @@ struct UserRepositoriesView: View {
         List {
             ForEach(viewModel.repositories) { repo in
                 NavigationLink {
-                    RepositoryDetailView(repository: repo)
+                    RepositoryDetailView(repository: repo) { updatedRepository in
+                        viewModel.updateRepository(updatedRepository)
+                    }
                 } label: {
                     RepositoryRowView(repository: repo, buildStatus: .none)
                 }

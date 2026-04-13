@@ -41,8 +41,8 @@ struct RepositoryRowView: View {
             }
 
             HStack(spacing: 12) {
-                if let head = repository.head {
-                    Label(head.name, systemImage: "arrow.triangle.branch")
+                if let defaultBranchName = repository.defaultBranchName {
+                    Label(defaultBranchName, systemImage: "arrow.triangle.branch")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RepositoryDetailView: View {
-    var repository: RepositorySummary
+    let onRepositoryUpdated: ((RepositorySummary) -> Void)?
     var onDeleted: (() -> Void)?
 
     @Environment(AppState.self) private var appState
@@ -10,22 +10,26 @@ struct RepositoryDetailView: View {
     @State private var selectedTab: RepositoryDetailViewModel.Tab = .summary
     @State private var showSettings = false
     @State private var showACLs = false
-    @State private var displayName: String
+    @State private var currentRepository: RepositorySummary
 
     private var canManageRepository: Bool {
         guard let currentUser = appState.currentUser else { return false }
-        return normalizedUsername(currentUser.username) == normalizedUsername(repository.owner.canonicalName)
+        return normalizedUsername(currentUser.username) == normalizedUsername(currentRepository.owner.canonicalName)
     }
 
-    init(repository: RepositorySummary, onDeleted: (() -> Void)? = nil) {
-        self.repository = repository
+    init(
+        repository: RepositorySummary,
+        onRepositoryUpdated: ((RepositorySummary) -> Void)? = nil,
+        onDeleted: (() -> Void)? = nil
+    ) {
+        self.onRepositoryUpdated = onRepositoryUpdated
         self.onDeleted = onDeleted
-        self._displayName = State(initialValue: repository.name)
+        self._currentRepository = State(initialValue: repository)
     }
 
     var body: some View {
-        if repository.service == .hg {
-            HgRepositoryDetailView(repository: repository, onDeleted: onDeleted)
+        if currentRepository.service == .hg {
+            HgRepositoryDetailView(repository: currentRepository, onDeleted: onDeleted)
         } else {
             Group {
                 if let viewModel {
@@ -34,11 +38,11 @@ struct RepositoryDetailView: View {
                     SRHTLoadingStateView(message: "Loading repository…")
                 }
             }
-            .navigationTitle(displayName)
+            .navigationTitle(currentRepository.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    SRHTShareButton(url: SRHTWebURL.repository(repository), target: .repository) {
+                    SRHTShareButton(url: SRHTWebURL.repository(currentRepository), target: .repository) {
                         Image(systemName: "square.and.arrow.up")
                     }
 
@@ -59,11 +63,12 @@ struct RepositoryDetailView: View {
             }
             .sheet(isPresented: $showSettings) {
                 RepositorySettingsView(
-                    repository: repository,
+                    repository: currentRepository,
                     branches: viewModel?.branches ?? [],
                     client: appState.client,
-                    onRenamed: { newName in
-                        displayName = newName
+                    onUpdated: { updatedRepository in
+                        currentRepository = updatedRepository
+                        onRepositoryUpdated?(updatedRepository)
                     },
                     onDeleted: {
                         dismiss()
@@ -74,7 +79,7 @@ struct RepositoryDetailView: View {
             .sheet(isPresented: $showACLs) {
                 NavigationStack {
                     RepositoryACLView(
-                        repository: repository,
+                        repository: currentRepository,
                         client: appState.client,
                         showsDoneButton: true
                     )
@@ -83,7 +88,7 @@ struct RepositoryDetailView: View {
             .task {
                 if viewModel == nil {
                     viewModel = RepositoryDetailViewModel(
-                        repository: repository,
+                        repository: currentRepository,
                         client: appState.client
                     )
                 }
@@ -110,7 +115,7 @@ struct RepositoryDetailView: View {
                 ReadmeView(viewModel: viewModel)
             case .tree:
                 FileTreeView(
-                    repository: repository,
+                    repository: currentRepository,
                     client: appState.client
                 )
             case .log:

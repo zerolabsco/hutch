@@ -1,72 +1,119 @@
 import Foundation
 
-// MARK: - Response types
-
-private struct UpdateRepoResponse: Decodable, Sendable {
-    let updateRepository: UpdatedRepo
+private struct UpdateRepositoryResponse: Decodable, Sendable {
+    let updateRepository: UpdatedRepositoryPayload
 }
 
-private struct UpdateRepoInfoResponse: Decodable, Sendable {
-    let updateRepository: UpdatedRepoInfo
-}
-
-private struct UpdatedRepo: Decodable, Sendable {
-    let id: Int?
-    let rid: String?
+private struct UpdatedRepositoryPayload: Decodable, Sendable {
+    let id: Int
+    let rid: String
     let name: String
     let description: String?
-    let visibility: Visibility?
+    let visibility: Visibility
+    let updated: Date
+    let head: Reference?
+
+    enum CodingKeys: String, CodingKey {
+        case id, rid, name, description, visibility, updated
+        case head = "HEAD"
+    }
+
+    func repositorySummary(using owner: Entity, service: SRHTService) -> RepositorySummary {
+        RepositorySummary(
+            id: id,
+            rid: rid,
+            service: service,
+            name: name,
+            description: description,
+            visibility: visibility,
+            updated: updated,
+            owner: owner,
+            head: head
+        )
+    }
 }
 
-private struct UpdatedRepoInfo: Decodable, Sendable {
+private struct DeleteRepositoryResponse: Decodable, Sendable {
+    let deleteRepository: DeletedRepositoryPayload
+}
+
+private struct DeletedRepositoryPayload: Decodable, Sendable {
     let id: Int
 }
-
-private struct DeleteRepoResponse: Decodable, Sendable {
-    let deleteRepository: DeletedRepo
-}
-
-private struct DeletedRepo: Decodable, Sendable {
-    let id: Int
-}
-
-// MARK: - View Model
 
 @Observable
 @MainActor
 final class RepositorySettingsViewModel {
-
     let repositoryId: Int
     let repositoryRid: String
     let service: SRHTService
+
     private let client: SRHTClient
+    private(set) var repository: RepositorySummary
 
-    // MARK: - Info fields
-
+    var editedName: String
     var editedDescription: String
     var editedVisibility: Visibility
     var editedHead: String
-    private let originalEditedHead: String
-    var isSavingInfo = false
 
-    // MARK: - Rename fields
-
-    var editedName: String
-    var isRenaming = false
-
-    // MARK: - Delete state
-
+    private(set) var branches: [ReferenceDetail]
+    var isSavingMetadata = false
+    var isSavingDefaultBranch = false
+    var isUpdatingVisibility = false
     var isDeleting = false
-
-    // MARK: - Branches (for HEAD picker)
-
-    var branches: [ReferenceDetail]
-
-    // MARK: - Results
-
     var error: String?
-    var updatedName: String?
     var didDelete = false
+
+    var isMutating: Bool {
+        isSavingMetadata || isSavingDefaultBranch || isUpdatingVisibility || isDeleting
+    }
+
+    var currentDefaultBranchName: String {
+        repository.defaultBranchName ?? "Not set"
+    }
+
+    var availableBranchNames: [String] {
+        branches.map { RepositorySummary.displayBranchName(for: $0.name) }
+    }
+
+    var normalizedEditedName: String {
+        editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedEditedDescription: String {
+        editedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var metadataValidationMessage: String? {
+        Self.metadataValidationMessage(for: normalizedEditedName)
+    }
+
+    var defaultBranchValidationMessage: String? {
+        guard !branches.isEmpty else {
+            return "This repository doesn't have any branches yet."
+        }
+        let normalizedHead = editedHead.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedHead.isEmpty else {
+            return "Select a default branch."
+        }
+        guard availableBranchNames.contains(normalizedHead) else {
+            return "Select one of the available branches."
+        }
+        return nil
+    }
+
+    var isMetadataDirty: Bool {
+        normalizedEditedName != repository.name ||
+        normalizedEditedDescription != (repository.description ?? "")
+    }
+
+    var isDefaultBranchDirty: Bool {
+        editedHead.trimmingCharacters(in: .whitespacesAndNewlines) != (repository.defaultBranchName ?? "")
+    }
+
+    var isVisibilityDirty: Bool {
+        editedVisibility != repository.visibility
+    }
 
     init(
         repository: RepositorySummary,
@@ -77,87 +124,154 @@ final class RepositorySettingsViewModel {
         self.repositoryRid = repository.rid
         self.service = repository.service
         self.client = client
+        self.repository = repository
+        self.branches = branches
+        self.editedName = repository.name
         self.editedDescription = repository.description ?? ""
         self.editedVisibility = repository.visibility
-        self.editedName = repository.name
-        self.branches = branches
-
-        // Extract branch name from HEAD reference
-        let initialEditedHead: String
-        if let head = repository.head?.name {
-            initialEditedHead = head.replacingOccurrences(of: "refs/heads/", with: "")
-        } else {
-            initialEditedHead = "main"
-        }
-        self.editedHead = initialEditedHead
-        self.originalEditedHead = initialEditedHead
+        self.editedHead = repository.defaultBranchName ?? ""
     }
 
-    // MARK: - Update Repository Info
-
-    private static let updateRepoMutation = """
-    mutation updateRepository($id: Int!, $input: RepoInput!) {
-        updateRepository(id: $id, input: $input) {
-            id rid name description visibility
-        }
-    }
-    """
-
-    private static let updateRepoInfoMutation = """
+    private static let updateRepositoryMutation = """
     mutation updateRepository($id: Int!, $input: RepoInput!) {
         updateRepository(id: $id, input: $input) {
             id
+            rid
+            name
+            description
+            visibility
+            updated
+            HEAD { name target }
         }
     }
     """
 
-    func saveInfo() async -> Bool {
-        isSavingInfo = true
-        defer { isSavingInfo = false }
+    private static let deleteRepositoryMutation = """
+    mutation deleteRepository($id: Int!) {
+        deleteRepository(id: $id) { id }
+    }
+    """
+
+    func saveMetadata() async -> RepositorySummary? {
+        guard !isMutating else { return nil }
+        if let metadataValidationMessage {
+            error = metadataValidationMessage
+            return nil
+        }
+        guard isMetadataDirty else { return repository }
+
+        isSavingMetadata = true
+        defer { isSavingMetadata = false }
         error = nil
 
+        let input: [String: any Sendable] = [
+            "name": normalizedEditedName,
+            "description": normalizedEditedDescription
+        ]
+
         do {
-            var input: [String: any Sendable] = [
-                "description": editedDescription,
-                "visibility": editedVisibility.rawValue
-            ]
-            if let headReference = selectedHeadReferenceForSave() {
-                input["HEAD"] = headReference
-            }
-            _ = try await client.execute(
-                service: service,
-                query: Self.updateRepoInfoMutation,
-                variables: ["id": repositoryId, "input": input],
-                responseType: UpdateRepoInfoResponse.self
-            )
-            return true
+            return try await updateRepository(with: input)
         } catch {
-            self.error = error.userFacingMessage
-            return false
+            self.error = "Couldn't update repository details. \(error.userFacingMessage)"
+            return nil
         }
     }
 
-    // MARK: - Rename
+    func saveDefaultBranch() async -> RepositorySummary? {
+        guard !isMutating else { return nil }
+        if let defaultBranchValidationMessage {
+            error = defaultBranchValidationMessage
+            return nil
+        }
+        guard isDefaultBranchDirty else { return repository }
+        guard let headReference = selectedHeadReferenceForSave() else {
+            error = "Select one of the available branches."
+            return nil
+        }
 
-    func rename() async {
-        isRenaming = true
-        defer { isRenaming = false }
+        isSavingDefaultBranch = true
+        defer { isSavingDefaultBranch = false }
         error = nil
 
         do {
-            let input: [String: any Sendable] = [
-                "name": editedName
-            ]
-            let result = try await client.execute(
+            return try await updateRepository(with: ["HEAD": headReference])
+        } catch {
+            self.error = "Couldn't update the default branch. \(error.userFacingMessage)"
+            return nil
+        }
+    }
+
+    func updateVisibility() async -> RepositorySummary? {
+        guard !isMutating else { return nil }
+        guard isVisibilityDirty else { return repository }
+
+        isUpdatingVisibility = true
+        defer { isUpdatingVisibility = false }
+        error = nil
+
+        do {
+            return try await updateRepository(with: ["visibility": editedVisibility.rawValue])
+        } catch {
+            self.error = "Couldn't update visibility. \(error.userFacingMessage)"
+            editedVisibility = repository.visibility
+            return nil
+        }
+    }
+
+    func deleteRepository() async {
+        guard !isMutating else { return }
+
+        isDeleting = true
+        defer { isDeleting = false }
+        error = nil
+
+        do {
+            _ = try await client.execute(
                 service: service,
-                query: Self.updateRepoMutation,
-                variables: ["id": repositoryId, "input": input],
-                responseType: UpdateRepoResponse.self
+                query: Self.deleteRepositoryMutation,
+                variables: ["id": repositoryId],
+                responseType: DeleteRepositoryResponse.self
             )
-            updatedName = result.updateRepository.name
+            didDelete = true
         } catch {
             self.error = error.userFacingMessage
         }
+    }
+
+    private func updateRepository(with input: [String: any Sendable]) async throws -> RepositorySummary {
+        let result = try await client.execute(
+            service: service,
+            query: Self.updateRepositoryMutation,
+            variables: ["id": repositoryId, "input": input],
+            responseType: UpdateRepositoryResponse.self
+        )
+        let updatedRepository = result.updateRepository.repositorySummary(
+            using: repository.owner,
+            service: service
+        )
+        apply(updatedRepository)
+        return updatedRepository
+    }
+
+    private func apply(_ updatedRepository: RepositorySummary) {
+        repository = updatedRepository
+        editedName = updatedRepository.name
+        editedDescription = updatedRepository.description ?? ""
+        editedVisibility = updatedRepository.visibility
+        editedHead = updatedRepository.defaultBranchName ?? ""
+    }
+
+    static func metadataValidationMessage(for name: String) -> String? {
+        guard !name.isEmpty else {
+            return "Enter a repository name."
+        }
+        guard !name.contains("/") else {
+            return "Repository names can't contain '/'."
+        }
+        guard name.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else {
+            return "Repository names can't contain spaces."
+        }
+        return nil
     }
 
     static func gitHeadReference(from input: String) -> String {
@@ -171,38 +285,12 @@ final class RepositorySettingsViewModel {
 
     func selectedHeadReferenceForSave() -> String? {
         let normalizedEditedHead = editedHead.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedEditedHead != originalEditedHead else {
+        guard normalizedEditedHead != (repository.defaultBranchName ?? "") else {
             return nil
         }
 
         return branches.first {
-            $0.name.replacingOccurrences(of: "refs/heads/", with: "") == normalizedEditedHead
+            RepositorySummary.displayBranchName(for: $0.name) == normalizedEditedHead
         }?.name
-    }
-
-    // MARK: - Delete Repository
-
-    private static let deleteRepoMutation = """
-    mutation deleteRepository($id: Int!) {
-        deleteRepository(id: $id) { id }
-    }
-    """
-
-    func deleteRepository() async {
-        isDeleting = true
-        defer { isDeleting = false }
-        error = nil
-
-        do {
-            _ = try await client.execute(
-                service: service,
-                query: Self.deleteRepoMutation,
-                variables: ["id": repositoryId],
-                responseType: DeleteRepoResponse.self
-            )
-            didDelete = true
-        } catch {
-            self.error = error.userFacingMessage
-        }
     }
 }

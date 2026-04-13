@@ -4,14 +4,13 @@ struct RepositorySettingsView: View {
     let repository: RepositorySummary
     let branches: [ReferenceDetail]
     let client: SRHTClient
-    let onRenamed: (String) -> Void
+    let onUpdated: (RepositorySummary) -> Void
     let onDeleted: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: RepositorySettingsViewModel?
+    @State private var showVisibilityConfirmation = false
     @State private var showDeleteConfirmation = false
-    @State private var showRenameConfirmation = false
-    @State private var saveResultAlert: SaveResultAlert?
 
     var body: some View {
         NavigationStack {
@@ -32,12 +31,11 @@ struct RepositorySettingsView: View {
         }
         .task {
             if viewModel == nil {
-                let vm = RepositorySettingsViewModel(
+                viewModel = RepositorySettingsViewModel(
                     repository: repository,
                     branches: branches,
                     client: client
                 )
-                viewModel = vm
             }
         }
     }
@@ -47,37 +45,36 @@ struct RepositorySettingsView: View {
         @Bindable var vm = viewModel
 
         Form {
-            infoSection(viewModel)
-            renameSection(viewModel)
-            accessSection()
+            currentConfigurationSection(viewModel)
+            metadataSection(viewModel)
+            defaultBranchSection(viewModel)
+            visibilitySection(viewModel)
             deleteSection(viewModel)
         }
         .srhtErrorBanner(error: $vm.error)
         .alert(
-            "Rename repository to \(viewModel.editedName.trimmingCharacters(in: .whitespacesAndNewlines))?",
-            isPresented: $showRenameConfirmation
+            visibilityConfirmationTitle(for: viewModel),
+            isPresented: $showVisibilityConfirmation
         ) {
             Button("Cancel", role: .cancel) {
-                // Alert dismissal is implicit; no additional action required.
+                viewModel.editedVisibility = viewModel.repository.visibility
             }
-            Button("Rename", role: .destructive) {
+            Button("Apply", role: .destructive) {
                 Task {
-                    await viewModel.rename()
-                    if let newName = viewModel.updatedName {
-                        onRenamed(newName)
-                        dismiss()
+                    if let updatedRepository = await viewModel.updateVisibility() {
+                        onUpdated(updatedRepository)
                     }
                 }
             }
         } message: {
-            Text("This will change the repository URL. Existing clones will be redirected but links may break.")
+            Text(visibilityConfirmationMessage(for: viewModel))
         }
         .alert(
-            "Permanently delete \(repository.owner.canonicalName)/\(repository.name)?",
+            "Permanently delete \(viewModel.repository.owner.canonicalName)/\(viewModel.repository.name)?",
             isPresented: $showDeleteConfirmation
         ) {
             Button("Cancel", role: .cancel) {
-                // Alert dismissal is implicit; no additional action required.
+                // Alert dismissal is implicit.
             }
             Button("Delete", role: .destructive) {
                 Task {
@@ -91,114 +88,155 @@ struct RepositorySettingsView: View {
         } message: {
             Text("This cannot be undone.")
         }
-        .alert(item: $saveResultAlert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
 
-    // MARK: - Info Section
-
     @ViewBuilder
-    private func infoSection(_ viewModel: RepositorySettingsViewModel) -> some View {
-        Section("Info") {
-            LabeledContent("Name") {
-                Text(repository.name)
+    private func currentConfigurationSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+        Section("Current Configuration") {
+            LabeledContent("Repository") {
+                Text("\(viewModel.repository.owner.canonicalName)/\(viewModel.repository.name)")
                     .font(.body.monospaced())
             }
 
-            TextField("Description", text: Bindable(viewModel).editedDescription, axis: .vertical)
-                .lineLimit(3...6)
+            LabeledContent("Default Branch") {
+                Text(viewModel.currentDefaultBranchName)
+                    .font(.body.monospaced())
+            }
 
+            LabeledContent("Visibility") {
+                Text(repositoryVisibilityLabel(viewModel.repository.visibility))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func metadataSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+        Section {
+            TextField("Repository name", text: Bindable(viewModel).editedName)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            TextField("Description", text: Bindable(viewModel).editedDescription, axis: .vertical)
+                .lineLimit(2...4)
+
+            if let metadataValidationMessage = viewModel.metadataValidationMessage {
+                Text(metadataValidationMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            } else if viewModel.normalizedEditedName != viewModel.repository.name {
+                Text("Changing the repository name updates the repository URL.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Name and description stay pending until you save this section.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                Task {
+                    if let updatedRepository = await viewModel.saveMetadata() {
+                        onUpdated(updatedRepository)
+                    }
+                }
+            } label: {
+                if viewModel.isSavingMetadata {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Save Details")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .disabled(
+                viewModel.isMutating ||
+                !viewModel.isMetadataDirty ||
+                viewModel.metadataValidationMessage != nil
+            )
+        } header: {
+            Text("Repository Details")
+        }
+    }
+
+    @ViewBuilder
+    private func defaultBranchSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+        Section {
+            LabeledContent("Current") {
+                Text(viewModel.currentDefaultBranchName)
+                    .font(.body.monospaced())
+            }
+
+            if viewModel.branches.isEmpty {
+                Text("This repository doesn't have any branches yet.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Branch", selection: Bindable(viewModel).editedHead) {
+                    ForEach(viewModel.availableBranchNames, id: \.self) { branch in
+                        Text(branch)
+                            .font(.body.monospaced())
+                            .tag(branch)
+                    }
+                }
+
+                Text("Changes stay pending until you set the new default branch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    Task {
+                        if let updatedRepository = await viewModel.saveDefaultBranch() {
+                            onUpdated(updatedRepository)
+                        }
+                    }
+                } label: {
+                    if viewModel.isSavingDefaultBranch {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Set Default Branch")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(
+                    viewModel.isMutating ||
+                    !viewModel.isDefaultBranchDirty ||
+                    viewModel.defaultBranchValidationMessage != nil
+                )
+            }
+        } header: {
+            Text("Default Branch")
+        }
+    }
+
+    @ViewBuilder
+    private func visibilitySection(_ viewModel: RepositorySettingsViewModel) -> some View {
+        Section {
             Picker("Visibility", selection: Bindable(viewModel).editedVisibility) {
                 Text("Public").tag(Visibility.public)
                 Text("Unlisted").tag(Visibility.unlisted)
                 Text("Private").tag(Visibility.private)
             }
 
-            if !viewModel.branches.isEmpty {
-                Picker("Default Branch", selection: Bindable(viewModel).editedHead) {
-                    ForEach(viewModel.branches, id: \.name) { branch in
-                        let name = branch.name.replacingOccurrences(of: "refs/heads/", with: "")
-                        Text(name).tag(name)
-                    }
-                }
-            }
-
-            Button {
-                Task {
-                    let didSave = await viewModel.saveInfo()
-                    saveResultAlert = SaveResultAlert(
-                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
-                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
-                    )
-                }
-            } label: {
-                if viewModel.isSavingInfo {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Save Changes")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .disabled(viewModel.isSavingInfo)
-        }
-    }
-
-    // MARK: - Rename Section
-
-    @ViewBuilder
-    private func renameSection(_ viewModel: RepositorySettingsViewModel) -> some View {
-        Section {
-            TextField("New repository name", text: Bindable(viewModel).editedName)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-
-            Text("This will change the repository URL. Existing clones will be redirected but links may break.")
+            Text("Visibility changes apply immediately after you confirm them.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             Button {
-                showRenameConfirmation = true
+                showVisibilityConfirmation = true
             } label: {
-                if viewModel.isRenaming {
+                if viewModel.isUpdatingVisibility {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                 } else {
-                    Text("Rename Repository")
+                    Text("Apply Visibility Change")
                         .frame(maxWidth: .infinity)
                 }
             }
-            .disabled(viewModel.isRenaming || viewModel.editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(viewModel.isMutating || !viewModel.isVisibilityDirty)
         } header: {
-            Text("Rename")
+            Text("Sensitive Settings")
         }
     }
-
-    // MARK: - Access Section
-
-    @ViewBuilder
-    private func accessSection() -> some View {
-        Section {
-            NavigationLink {
-                RepositoryACLView(repository: repository, client: client, showsDoneButton: false)
-            } label: {
-                Label("Manage Access", systemImage: "person.2")
-            }
-
-            Text("Review and update repository access without leaving settings.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } header: {
-            Text("Access")
-        }
-    }
-
-    // MARK: - Delete Section
 
     @ViewBuilder
     private func deleteSection(_ viewModel: RepositorySettingsViewModel) -> some View {
@@ -214,14 +252,24 @@ struct RepositorySettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .disabled(viewModel.isDeleting)
+            .disabled(viewModel.isMutating)
+        } header: {
+            Text("Danger Zone")
         }
     }
 
-    private struct SaveResultAlert: Identifiable {
-        let title: String
-        let message: String
+    private func visibilityConfirmationTitle(for viewModel: RepositorySettingsViewModel) -> String {
+        "Change visibility to \(repositoryVisibilityLabel(viewModel.editedVisibility))?"
+    }
 
-        var id: String { "\(title)-\(message)" }
+    private func visibilityConfirmationMessage(for viewModel: RepositorySettingsViewModel) -> String {
+        switch viewModel.editedVisibility {
+        case .public:
+            "Anyone will be able to find and view this repository."
+        case .unlisted:
+            "People with the link can view this repository, but it won't appear in public listings."
+        case .private:
+            "Only people with explicit access will be able to view this repository."
+        }
     }
 }
