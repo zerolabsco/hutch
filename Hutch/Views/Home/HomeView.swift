@@ -795,7 +795,15 @@ private struct HomeAttentionLinkRow<Destination: View>: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color(.secondarySystemFill), in: Capsule())
+
+            if action != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.vertical, 2)
     }
 }
