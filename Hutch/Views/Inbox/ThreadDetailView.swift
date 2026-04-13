@@ -19,6 +19,7 @@ struct ThreadDetailView: View {
     @State private var suppressAutoMarkViewed = false
     @State private var isUnread: Bool
     @State private var isOpeningRepository = false
+    @State private var collapsedMessageIDs: Set<Int> = []
 
     init(
         thread: InboxThreadSummary,
@@ -51,7 +52,11 @@ struct ThreadDetailView: View {
             hasMarkedCurrentThreadViewed = false
             suppressAutoMarkViewed = false
             isUnread = thread.isUnread
+            collapsedMessageIDs = []
             await vm.loadThread()
+            if let messages = vm.thread?.messages, messages.count > 1 {
+                collapsedMessageIDs = Set(messages.dropLast().map(\.id))
+            }
         }
         .onChange(of: viewModel?.thread?.id) { _, threadID in
             guard threadID != nil, !hasMarkedCurrentThreadViewed, !suppressAutoMarkViewed else { return }
@@ -164,7 +169,20 @@ struct ThreadDetailView: View {
                 }
 
                 ForEach(thread.messages) { message in
-                    InboxMessageRow(message: message)
+                    InboxMessageRow(
+                        message: message,
+                        isCollapsed: collapsedMessageIDs.contains(message.id),
+                        canCollapse: thread.messages.count > 1,
+                        onToggleCollapse: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if collapsedMessageIDs.contains(message.id) {
+                                    collapsedMessageIDs.remove(message.id)
+                                } else {
+                                    collapsedMessageIDs.insert(message.id)
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -235,43 +253,60 @@ struct ThreadDetailView: View {
 
 private struct InboxMessageRow: View {
     let message: InboxMessage
+    var isCollapsed: Bool = false
+    var canCollapse: Bool = false
+    var onToggleCollapse: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(senderLine)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(2)
-                    Text(message.date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: isCollapsed ? 0 : 10) {
+            Button {
+                onToggleCollapse?()
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    if canCollapse {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 4)
+                    }
 
-                Spacer()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isCollapsed ? message.senderDisplayName : senderLine)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(isCollapsed ? 1 : 2)
+                        Text(message.date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-                if message.isPatch {
-                    Text("Patch")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    Spacer()
+
+                    if message.isPatch {
+                        Text("Patch")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            .buttonStyle(.plain)
 
-            ForEach(Array(message.contentBlocks.enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .plainText(let text):
-                    Text(text)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                case .diff(let diff):
-                    DiffView(diff: diff)
-                        .textSelection(.enabled)
+            if !isCollapsed {
+                ForEach(Array(message.contentBlocks.enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .plainText(let text):
+                        Text(text)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .diff(let diff):
+                        DiffView(diff: diff)
+                            .textSelection(.enabled)
+                    }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, isCollapsed ? 4 : 6)
         .listRowSeparator(.visible)
     }
 
