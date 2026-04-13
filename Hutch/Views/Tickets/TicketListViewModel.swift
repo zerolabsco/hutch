@@ -55,7 +55,7 @@ private struct MutationEventRef: Decodable, Sendable {
 
 // MARK: - Filter
 
-enum TicketFilter: String, CaseIterable, Sendable {
+enum TicketFilter: String, CaseIterable, Codable, Sendable {
     case open = "Open"
     case resolved = "Resolved"
     case all = "All"
@@ -77,32 +77,46 @@ final class TicketListViewModel {
     private(set) var isCreatingTicket = false
     private(set) var isPerformingAction = false
     private(set) var trackerLabels: [TicketLabel] = []
+    private(set) var savedFilters: [SavedTicketFilter]
     var error: String?
     var filter: TicketFilter = .open {
         didSet {
-            UserDefaults.standard.set(filter.rawValue, forKey: filterDefaultsKey)
+            persistFilterState()
+        }
+    }
+    var selectedLabelIDs: Set<Int> = [] {
+        didSet {
+            persistFilterState()
         }
     }
     var searchText = ""
+    private(set) var activeSavedFilterID: SavedTicketFilter.ID?
 
     private var cursor: String?
     private var hasMore = true
     private let client: SRHTClient
+    private let defaults: UserDefaults
 
-    private var filterDefaultsKey: String {
-        "ticketFilter_\(trackerRid)"
-    }
-
-    init(ownerUsername: String, trackerName: String, trackerId: Int, trackerRid: String, client: SRHTClient) {
+    init(
+        ownerUsername: String,
+        trackerName: String,
+        trackerId: Int,
+        trackerRid: String,
+        client: SRHTClient,
+        defaults: UserDefaults = .standard
+    ) {
         self.ownerUsername = ownerUsername
         self.trackerName = trackerName
         self.trackerId = trackerId
         self.trackerRid = trackerRid
         self.client = client
-        if let raw = UserDefaults.standard.string(forKey: filterDefaultsKey),
-           let restored = TicketFilter(rawValue: raw) {
-            self.filter = restored
-        }
+        self.defaults = defaults
+
+        let restoredState = TicketSavedFilterStore.loadCurrentState(for: trackerRid, defaults: defaults)
+        self.filter = restoredState.status
+        self.selectedLabelIDs = Set(restoredState.labelIDs)
+        self.savedFilters = TicketSavedFilterStore.loadSavedFilters(for: trackerRid, defaults: defaults)
+        self.activeSavedFilterID = self.savedFilters.first(where: { $0.state == restoredState })?.id
     }
 
     // MARK: - Query
@@ -186,25 +200,43 @@ final class TicketListViewModel {
 
     // MARK: - Computed
 
-    /// Tickets filtered by the selected status filter.
+    var currentFilterState: TicketListFilterState {
+        TicketListFilterState(status: filter, labelIDs: Array(selectedLabelIDs))
+    }
+
+    var availableLabels: [TicketLabel] {
+        let combinedLabels = trackerLabels + tickets.flatMap(\.labels)
+        let deduplicated = combinedLabels.reduce(into: [Int: TicketLabel]()) { partialResult, label in
+            partialResult[label.id] = label
+        }
+        return deduplicated.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    var selectedLabels: [TicketLabel] {
+        availableLabels.filter { selectedLabelIDs.contains($0.id) }
+    }
+
+    var suggestedSavedFilterName: String {
+        let labelNames = selectedLabels.map(\.name).sorted()
+        var components: [String] = []
+
+        if filter != .open || !labelNames.isEmpty {
+            components.append(filter.rawValue)
+        }
+        if !labelNames.isEmpty {
+            components.append(labelNames.joined(separator: ", "))
+        }
+
+        return components.isEmpty ? "Open Tickets" : components.joined(separator: " • ")
+    }
+
+    var hasCustomFilterSelection: Bool {
+        !currentFilterState.isDefault
+    }
+
+    /// Tickets filtered by the selected status and label filters.
     var filteredTickets: [TicketSummary] {
-        let statusFiltered: [TicketSummary]
-        switch filter {
-        case .open:
-            statusFiltered = tickets.filter { $0.status.isOpen }
-        case .resolved:
-            statusFiltered = tickets.filter { !$0.status.isOpen }
-        case .all:
-            statusFiltered = tickets
-        }
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return statusFiltered }
-        return statusFiltered.filter {
-            String($0.id).contains(q) ||
-            $0.title.lowercased().contains(q) ||
-            $0.submitter.canonicalName.lowercased().contains(q) ||
-            $0.labels.contains { $0.name.lowercased().contains(q) }
-        }
+        Self.filterTickets(tickets, state: currentFilterState, query: searchText)
     }
 
     // MARK: - Public API
@@ -401,6 +433,54 @@ final class TicketListViewModel {
         }
     }
 
+    func toggleLabelSelection(_ label: TicketLabel) {
+        if selectedLabelIDs.contains(label.id) {
+            selectedLabelIDs.remove(label.id)
+        } else {
+            selectedLabelIDs.insert(label.id)
+        }
+    }
+
+    func clearLabelSelection() {
+        selectedLabelIDs = []
+    }
+
+    func resetFilters() {
+        filter = .open
+        selectedLabelIDs = []
+    }
+
+    func applySavedFilter(_ savedFilter: SavedTicketFilter) {
+        filter = savedFilter.state.status
+        selectedLabelIDs = Set(savedFilter.state.labelIDs)
+        activeSavedFilterID = savedFilter.id
+    }
+
+    func saveCurrentFilter(named name: String) {
+        guard let savedFilter = TicketSavedFilterStore.saveFilter(
+            named: name,
+            state: currentFilterState,
+            for: trackerRid,
+            defaults: defaults
+        ) else {
+            return
+        }
+
+        savedFilters.removeAll {
+            $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
+        savedFilters.insert(savedFilter, at: 0)
+        activeSavedFilterID = savedFilter.id
+    }
+
+    func deleteSavedFilter(_ savedFilter: SavedTicketFilter) {
+        TicketSavedFilterStore.deleteFilter(id: savedFilter.id, for: trackerRid, defaults: defaults)
+        savedFilters.removeAll { $0.id == savedFilter.id }
+        if activeSavedFilterID == savedFilter.id {
+            activeSavedFilterID = savedFilters.first(where: { $0.state == currentFilterState })?.id
+        }
+    }
+
     func labelTicket(_ ticket: TicketSummary, label: TicketLabel) async {
         guard !isPerformingAction else { return }
         isPerformingAction = true
@@ -568,5 +648,45 @@ final class TicketListViewModel {
             labels: ticket.labels,
             assignees: ticket.assignees
         )
+    }
+
+    private func persistFilterState() {
+        TicketSavedFilterStore.saveCurrentState(currentFilterState, for: trackerRid, defaults: defaults)
+        activeSavedFilterID = savedFilters.first(where: { $0.state == currentFilterState })?.id
+    }
+
+    static func filterTickets(
+        _ tickets: [TicketSummary],
+        state: TicketListFilterState,
+        query: String
+    ) -> [TicketSummary] {
+        let statusFiltered: [TicketSummary]
+        switch state.status {
+        case .open:
+            statusFiltered = tickets.filter { $0.status.isOpen }
+        case .resolved:
+            statusFiltered = tickets.filter { !$0.status.isOpen }
+        case .all:
+            statusFiltered = tickets
+        }
+
+        let labelFiltered: [TicketSummary]
+        if state.labelIDs.isEmpty {
+            labelFiltered = statusFiltered
+        } else {
+            let selectedLabelIDs = Set(state.labelIDs)
+            labelFiltered = statusFiltered.filter { ticket in
+                !selectedLabelIDs.isDisjoint(with: ticket.labels.map(\.id))
+            }
+        }
+
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return labelFiltered }
+        return labelFiltered.filter {
+            String($0.id).contains(q) ||
+            $0.title.lowercased().contains(q) ||
+            $0.submitter.canonicalName.lowercased().contains(q) ||
+            $0.labels.contains { $0.name.lowercased().contains(q) }
+        }
     }
 }

@@ -407,7 +407,7 @@ private struct LogScrollTarget: Equatable {
     let range: LogTextRange
 }
 
-func logMatchRanges(in text: String, query: String, limit: Int = 2_000) -> [LogTextRange] {
+nonisolated func logMatchRanges(in text: String, query: String, limit: Int = 2_000) -> [LogTextRange] {
     let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedQuery.isEmpty else { return [] }
 
@@ -433,7 +433,7 @@ func logMatchRanges(in text: String, query: String, limit: Int = 2_000) -> [LogT
     return matches
 }
 
-func detectLogAnchors(in text: String, limit: Int = 24) -> [LogAnchor] {
+nonisolated func detectLogAnchors(in text: String, limit: Int = 24) -> [LogAnchor] {
     let nsText = text as NSString
     let strongMarkers = [
         "fatal error",

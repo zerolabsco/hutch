@@ -11,7 +11,11 @@ struct TicketListViewModelTests {
             makeTicket(id: 2, title: "Already fixed", status: .resolved, submitter: "~owner", labels: [])
         ]
 
-        let filtered = filterTickets(tickets, filter: .open, query: "")
+        let filtered = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .open),
+            query: ""
+        )
 
         #expect(filtered.map(\.id) == [1])
     }
@@ -23,8 +27,16 @@ struct TicketListViewModelTests {
             makeTicket(id: 99, title: "Settings polish", status: .reported, submitter: "~owner", labels: [])
         ]
 
-        let titleMatches = filterTickets(tickets, filter: .all, query: "settings")
-        let idMatches = filterTickets(tickets, filter: .all, query: "42")
+        let titleMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "settings"
+        )
+        let idMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "42"
+        )
 
         #expect(titleMatches.map(\.id) == [99])
         #expect(idMatches.map(\.id) == [42])
@@ -37,11 +49,36 @@ struct TicketListViewModelTests {
             makeTicket(id: 2, title: "Needs triage", status: .reported, submitter: "~triage", labels: [makeLabel(id: 2, name: "needs-info")])
         ]
 
-        let submitterMatches = filterTickets(tickets, filter: .all, query: "~triage")
-        let labelMatches = filterTickets(tickets, filter: .all, query: "bug")
+        let submitterMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "~triage"
+        )
+        let labelMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "bug"
+        )
 
         #expect(submitterMatches.map(\.id) == [2])
         #expect(labelMatches.map(\.id) == [1])
+    }
+
+    @Test
+    func filteredTicketsMatchesAnySelectedLabel() {
+        let tickets = [
+            makeTicket(id: 1, title: "Crash on launch", status: .reported, submitter: "~owner", labels: [makeLabel(id: 1, name: "bug")]),
+            makeTicket(id: 2, title: "Needs triage", status: .reported, submitter: "~triage", labels: [makeLabel(id: 2, name: "needs-info")]),
+            makeTicket(id: 3, title: "Unlabeled", status: .reported, submitter: "~owner", labels: [])
+        ]
+
+        let filtered = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all, labelIDs: [2, 3]),
+            query: ""
+        )
+
+        #expect(filtered.map(\.id) == [2])
     }
 
     @Test
@@ -65,25 +102,12 @@ struct TicketListViewModelTests {
         #expect(input["resolution"] == nil)
     }
 
-    private func filterTickets(_ tickets: [TicketSummary], filter: TicketFilter, query: String) -> [TicketSummary] {
-        let statusFiltered: [TicketSummary]
-        switch filter {
-        case .open:
-            statusFiltered = tickets.filter { $0.status.isOpen }
-        case .resolved:
-            statusFiltered = tickets.filter { !$0.status.isOpen }
-        case .all:
-            statusFiltered = tickets
-        }
-
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return statusFiltered }
-        return statusFiltered.filter {
-            String($0.id).contains(q) ||
-            $0.title.lowercased().contains(q) ||
-            $0.submitter.canonicalName.lowercased().contains(q) ||
-            $0.labels.contains { $0.name.lowercased().contains(q) }
-        }
+    private func filterTickets(
+        _ tickets: [TicketSummary],
+        state: TicketListFilterState,
+        query: String
+    ) -> [TicketSummary] {
+        TicketListViewModel.filterTickets(tickets, state: state, query: query)
     }
 
     private func makeTicket(
