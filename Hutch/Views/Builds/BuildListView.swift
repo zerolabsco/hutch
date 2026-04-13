@@ -167,8 +167,25 @@ struct BuildListView: View {
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search builds"
+            prompt: "Search builds by job ID, tag, note, or status"
         )
+        .searchSuggestions {
+            if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                RecentSearchSuggestions(
+                    title: "Recent Build Searches",
+                    entries: viewModel.recentSearches
+                ) { query in
+                    vm.searchText = query
+                } onClear: {
+                    viewModel.clearRecentSearches()
+                }
+            }
+        }
+        .onSubmit(of: .search) {
+            let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return }
+            viewModel.recordRecentSearch(query)
+        }
         .overlay {
             if viewModel.isLoading, viewModel.jobs.isEmpty {
                 SRHTLoadingStateView(message: "Loading builds…")
@@ -178,8 +195,13 @@ struct BuildListView: View {
                     message: error,
                     retryAction: { await viewModel.loadJobs() }
                 )
-            } else if !viewModel.jobs.isEmpty, viewModel.filteredJobs.isEmpty {
-                ContentUnavailableView.search(text: viewModel.searchText)
+            } else if !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      viewModel.filteredJobs.isEmpty {
+                ContentUnavailableView(
+                    "No Build Matches",
+                    systemImage: "magnifyingglass",
+                    description: Text("No builds matched “\(viewModel.searchText)”.")
+                )
             } else if viewModel.jobs.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "No Builds",

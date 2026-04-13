@@ -74,6 +74,10 @@ enum TicketFilter: String, CaseIterable, Codable, Sendable {
 @Observable
 @MainActor
 final class TicketListViewModel {
+    private static func searchHistoryScopeID(for trackerRid: String) -> String {
+        "tickets.\(trackerRid)"
+    }
+
     let ownerUsername: String
     let trackerName: String
     let trackerId: Int
@@ -85,6 +89,7 @@ final class TicketListViewModel {
     private(set) var isCreatingTicket = false
     private(set) var isPerformingAction = false
     private(set) var trackerLabels: [TicketLabel] = []
+    private(set) var recentSearches: [ScopedSearchHistoryEntry]
     private(set) var savedFilters: [SavedTicketFilter]
     private(set) var isSelectionMode = false
     private(set) var selectedTicketIDs: Set<Int> = []
@@ -123,10 +128,15 @@ final class TicketListViewModel {
         self.defaults = defaults
 
         let restoredState = TicketSavedFilterStore.loadCurrentState(for: trackerRid, defaults: defaults)
+        let savedFilters = TicketSavedFilterStore.loadSavedFilters(for: trackerRid, defaults: defaults)
         self.filter = restoredState.status
         self.selectedLabelIDs = Set(restoredState.labelIDs)
-        self.savedFilters = TicketSavedFilterStore.loadSavedFilters(for: trackerRid, defaults: defaults)
-        self.activeSavedFilterID = self.savedFilters.first(where: { $0.state == restoredState })?.id
+        self.savedFilters = savedFilters
+        self.activeSavedFilterID = savedFilters.first(where: { $0.state == restoredState })?.id
+        self.recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID(for: trackerRid),
+            defaults: defaults
+        )
     }
 
     // MARK: - Query
@@ -503,6 +513,26 @@ final class TicketListViewModel {
     func resetFilters() {
         filter = .open
         selectedLabelIDs = []
+    }
+
+    func recordRecentSearch(_ query: String) {
+        ScopedSearchHistoryStore.record(
+            query: query,
+            scopeID: Self.searchHistoryScopeID(for: trackerRid),
+            defaults: defaults
+        )
+        recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID(for: trackerRid),
+            defaults: defaults
+        )
+    }
+
+    func clearRecentSearches() {
+        ScopedSearchHistoryStore.clear(
+            scopeID: Self.searchHistoryScopeID(for: trackerRid),
+            defaults: defaults
+        )
+        recentSearches = []
     }
 
     func applySavedFilter(_ savedFilter: SavedTicketFilter) {
@@ -938,7 +968,9 @@ final class TicketListViewModel {
             String($0.id).contains(q) ||
             $0.title.lowercased().contains(q) ||
             $0.submitter.canonicalName.lowercased().contains(q) ||
-            $0.labels.contains { $0.name.lowercased().contains(q) }
+            $0.labels.contains { $0.name.lowercased().contains(q) } ||
+            $0.assignees.contains { $0.canonicalName.lowercased().contains(q) } ||
+            $0.status.displayName.lowercased().contains(q)
         }
     }
 }

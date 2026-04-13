@@ -66,6 +66,42 @@ struct TicketListViewModelTests {
     }
 
     @Test
+    func filteredTicketsMatchesAssigneeAndStatus() {
+        let tickets = [
+            makeTicket(
+                id: 1,
+                title: "Crash on launch",
+                status: .inProgress,
+                submitter: "~owner",
+                labels: [],
+                assignees: [Entity(canonicalName: "~alice")]
+            ),
+            makeTicket(
+                id: 2,
+                title: "Settings polish",
+                status: .resolved,
+                submitter: "~owner",
+                labels: [],
+                assignees: []
+            )
+        ]
+
+        let assigneeMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "~alice"
+        )
+        let statusMatches = filterTickets(
+            tickets,
+            state: TicketListFilterState(status: .all),
+            query: "resolved"
+        )
+
+        #expect(assigneeMatches.map(\.id) == [1])
+        #expect(statusMatches.map(\.id) == [2])
+    }
+
+    @Test
     func filteredTicketsMatchesAnySelectedLabel() {
         let tickets = [
             makeTicket(id: 1, title: "Crash on launch", status: .reported, submitter: "~owner", labels: [makeLabel(id: 1, name: "bug")]),
@@ -153,7 +189,8 @@ struct TicketListViewModelTests {
         title: String,
         status: TicketStatus,
         submitter: String,
-        labels: [TicketLabel]
+        labels: [TicketLabel],
+        assignees: [Entity] = []
     ) -> TicketSummary {
         TicketSummary(
             id: id,
@@ -163,7 +200,7 @@ struct TicketListViewModelTests {
             created: Date(),
             submitter: Entity(canonicalName: submitter),
             labels: labels,
-            assignees: []
+            assignees: assignees
         )
     }
 

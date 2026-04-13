@@ -29,6 +29,18 @@ struct BuildListViewModelTests {
     }
 
     @Test
+    func filteredJobsMatchesByStatus() {
+        let jobs = [
+            makeJob(id: 1, status: .running, tags: []),
+            makeJob(id: 2, status: .success, tags: [])
+        ]
+
+        let filtered = filterJobs(jobs, query: "running")
+
+        #expect(filtered.map(\.id) == [1])
+    }
+
+    @Test
     func buildFilterPrioritizesActionableStates() {
         let jobs = [
             makeJob(id: 1, status: .success, tags: []),
@@ -45,14 +57,7 @@ struct BuildListViewModelTests {
     }
 
     private func filterJobs(_ jobs: [JobSummary], query: String) -> [JobSummary] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return jobs }
-        return jobs.filter {
-            String($0.id).contains(q) ||
-            $0.tags.contains { $0.lowercased().contains(q) } ||
-            ($0.note?.lowercased().contains(q) == true) ||
-            ($0.image?.lowercased().contains(q) == true)
-        }
+        BuildListViewModel.searchJobs(jobs, matching: query)
     }
 
     private func makeJob(id: Int, status: JobStatus = .success, tags: [String]) -> JobSummary {

@@ -44,8 +44,10 @@ enum AutoRefreshInterval: Int, CaseIterable, Sendable {
 @Observable
 @MainActor
 final class BuildListViewModel {
+    private static let searchHistoryScopeID = "builds"
 
     private(set) var jobs: [JobSummary] = []
+    private(set) var recentSearches: [ScopedSearchHistoryEntry]
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isRefreshing = false
@@ -60,13 +62,19 @@ final class BuildListViewModel {
     private var cursor: String?
     private var hasMore = true
     private let client: SRHTClient
+    private let defaults: UserDefaults
     private var refreshTask: Task<Void, Never>?
     private var isAutoRefreshing = false
 
     private static let cacheKey = "builds.jobs"
 
-    init(client: SRHTClient) {
+    init(client: SRHTClient, defaults: UserDefaults = .standard) {
         self.client = client
+        self.defaults = defaults
+        self.recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
     }
 
     /// Unique tags across all loaded jobs, sorted alphabetically.
@@ -82,14 +90,7 @@ final class BuildListViewModel {
             result = result.filter { $0.tags.contains(repoFilter) }
         }
 
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return result }
-        return result.filter {
-            String($0.id).contains(q) ||
-            $0.tags.contains { $0.lowercased().contains(q) } ||
-            ($0.note?.lowercased().contains(q) == true) ||
-            ($0.image?.lowercased().contains(q) == true)
-        }
+        return Self.searchJobs(result, matching: searchText)
     }
 
     // MARK: - Auto-Refresh
@@ -291,6 +292,26 @@ final class BuildListViewModel {
         }
     }
 
+    func recordRecentSearch(_ query: String) {
+        ScopedSearchHistoryStore.record(
+            query: query,
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+        recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+    }
+
+    func clearRecentSearches() {
+        ScopedSearchHistoryStore.clear(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+        recentSearches = []
+    }
+
     // MARK: - Private
 
     private func fetchPage(cursor: String?, useCache: Bool) async throws -> JobsPage {
@@ -361,6 +382,19 @@ final class BuildListViewModel {
             case .all:
                 return true
             }
+        }
+    }
+
+    nonisolated static func searchJobs(_ jobs: [JobSummary], matching query: String) -> [JobSummary] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else { return jobs }
+
+        return jobs.filter {
+            String($0.id).contains(normalizedQuery) ||
+            $0.status.rawValue.lowercased().contains(normalizedQuery) ||
+            $0.tags.contains { $0.lowercased().contains(normalizedQuery) } ||
+            ($0.note?.lowercased().contains(normalizedQuery) == true) ||
+            ($0.image?.lowercased().contains(normalizedQuery) == true)
         }
     }
 }

@@ -4,6 +4,7 @@ struct RepositoryListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: RepositoryListViewModel?
     @State private var searchTask: Task<Void, Never>?
+    @State private var immediateSearchTask: Task<Void, Never>?
     @State private var showCreateRepositorySheet = false
     @State private var createdRepository: RepositorySummary?
 
@@ -68,6 +69,17 @@ struct RepositoryListView: View {
         @Bindable var vm = viewModel
 
         List {
+            if viewModel.isSearching {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Searching repositories…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .listRowSeparator(.hidden)
+            }
+
             ForEach(viewModel.repositories) { repo in
                 NavigationLink(value: repo) {
                     RepositoryRowView(
@@ -92,7 +104,28 @@ struct RepositoryListView: View {
         }
         .themedList()
         .listStyle(.plain)
-        .searchable(text: $vm.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search repositories")
+        .searchable(
+            text: $vm.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search repositories by name, owner, or description"
+        )
+        .searchSuggestions {
+            if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                RecentSearchSuggestions(
+                    title: "Recent Repository Searches",
+                    entries: viewModel.recentSearches
+                ) { query in
+                    searchTask?.cancel()
+                    immediateSearchTask?.cancel()
+                    vm.searchText = query
+                    immediateSearchTask = Task {
+                        await viewModel.loadRepositories(search: query)
+                    }
+                } onClear: {
+                    viewModel.clearRecentSearches()
+                }
+            }
+        }
         .overlay {
             if viewModel.isLoading, viewModel.repositories.isEmpty {
                 SRHTLoadingStateView(message: "Loading repositories…")
@@ -110,7 +143,11 @@ struct RepositoryListView: View {
                         description: Text("You don't have any repositories yet.")
                     )
                 } else {
-                    ContentUnavailableView.search
+                    ContentUnavailableView(
+                        "No Repository Matches",
+                        systemImage: "magnifyingglass",
+                        description: Text("No repositories matched “\(viewModel.searchText)”.")
+                    )
                 }
             }
         }
@@ -124,9 +161,21 @@ struct RepositoryListView: View {
         .task {
             await viewModel.loadRepositories()
         }
+        .onSubmit(of: .search) {
+            let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return }
+
+            searchTask?.cancel()
+            immediateSearchTask?.cancel()
+            viewModel.recordRecentSearch(query)
+            immediateSearchTask = Task {
+                await viewModel.loadRepositories(search: query)
+            }
+        }
         .onChange(of: viewModel.searchText) { oldValue, newValue in
             // Cancel previous search task
             searchTask?.cancel()
+            immediateSearchTask?.cancel()
             
             // Clear results immediately when search text is cleared
             if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

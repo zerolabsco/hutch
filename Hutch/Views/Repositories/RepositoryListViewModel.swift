@@ -25,9 +25,11 @@ enum RepositoryCreationService: String, CaseIterable, Identifiable, Sendable {
 @Observable
 @MainActor
 final class RepositoryListViewModel {
+    private static let searchHistoryScopeID = "repositories"
 
     private(set) var repositories: [RepositorySummary] = []
     private(set) var latestBuildStatuses: [String: RepositoryBuildStatus] = [:]
+    private(set) var recentSearches: [ScopedSearchHistoryEntry]
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isRefreshing = false
@@ -42,6 +44,7 @@ final class RepositoryListViewModel {
     private(set) var hasLoadedSearchIndex = false
     private var searchIndex: [RepositorySummary] = []
     private let client: SRHTClient
+    private let defaults: UserDefaults
     private var buildStatusTask: Task<Void, Never>?
 
     private static let gitCacheKey = "git.repositories"
@@ -49,8 +52,13 @@ final class RepositoryListViewModel {
     private static let buildsCacheKey = "builds.repository-status"
     private static let minimumRemoteSearchLength = 3
 
-    init(client: SRHTClient) {
+    init(client: SRHTClient, defaults: UserDefaults = .standard) {
         self.client = client
+        self.defaults = defaults
+        self.recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
     }
 
     // MARK: - Queries
@@ -300,6 +308,26 @@ final class RepositoryListViewModel {
         cursor = nil
         hasMore = false
         isSearching = false
+    }
+
+    func recordRecentSearch(_ query: String) {
+        ScopedSearchHistoryStore.record(
+            query: query,
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+        recentSearches = ScopedSearchHistoryStore.load(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+    }
+
+    func clearRecentSearches() {
+        ScopedSearchHistoryStore.clear(
+            scopeID: Self.searchHistoryScopeID,
+            defaults: defaults
+        )
+        recentSearches = []
     }
 
     // MARK: - Private
@@ -696,9 +724,13 @@ final class RepositoryListViewModel {
     }
 
     static func filterRepositories(_ repositories: [RepositorySummary], matching query: String) -> [RepositorySummary] {
-        let lowercasedQuery = query.lowercased()
+        let lowercasedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowercasedQuery.isEmpty else { return repositories }
+
         return repositories.filter { repo in
             repo.name.lowercased().contains(lowercasedQuery) ||
+            repo.owner.canonicalName.lowercased().contains(lowercasedQuery) ||
+            repo.defaultBranchName?.lowercased().contains(lowercasedQuery) ?? false ||
             repo.description?.lowercased().contains(lowercasedQuery) ?? false
         }
     }

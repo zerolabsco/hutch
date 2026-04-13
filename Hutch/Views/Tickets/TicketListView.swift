@@ -328,8 +328,25 @@ struct TicketListView: View {
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search tickets"
+            prompt: "Search tickets in \(tracker.name)"
         )
+        .searchSuggestions {
+            if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                RecentSearchSuggestions(
+                    title: "Recent Ticket Searches",
+                    entries: viewModel.recentSearches
+                ) { query in
+                    vm.searchText = query
+                } onClear: {
+                    viewModel.clearRecentSearches()
+                }
+            }
+        }
+        .onSubmit(of: .search) {
+            let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return }
+            viewModel.recordRecentSearch(query)
+        }
         .overlay {
             if viewModel.isLoading, viewModel.tickets.isEmpty {
                 SRHTLoadingStateView(message: "Loading tickets…")
@@ -341,7 +358,11 @@ struct TicketListView: View {
                 )
             } else if !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       viewModel.filteredTickets.isEmpty {
-                ContentUnavailableView.search(text: viewModel.searchText)
+                ContentUnavailableView(
+                    "No Ticket Matches",
+                    systemImage: "magnifyingglass",
+                    description: Text("No tickets in \(tracker.name) matched “\(viewModel.searchText)”.")
+                )
             } else if viewModel.filteredTickets.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
                     "No Tickets",

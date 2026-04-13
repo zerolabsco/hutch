@@ -5,6 +5,7 @@ enum AppStorageKeys {
     static let activeAccountID = "activeAccountID"
     static let wrapRepositoryFileLines = "wrapRepositoryFileLines"
     static let lookupHistory = "lookupHistory"
+    static let scopedSearchHistory = "scopedSearchHistory"
     static let hutchStatsBaseURL = "hutchStatsBaseURL"
     static let systemStatusSnapshotCache = "systemStatusSnapshotCache"
     static let systemStatusIncidentCache = "systemStatusIncidentCache"

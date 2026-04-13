@@ -29,6 +29,21 @@ struct RepositoryListViewModelTests {
     }
 
     @Test
+    @MainActor
+    func filterRepositoriesMatchesOwnerAndDefaultBranchLocally() {
+        let repositories = [
+            makeRepository(id: 1, service: .git, name: "Hutch", description: nil, owner: "~alice", branch: "main"),
+            makeRepository(id: 2, service: .hg, name: "Mail", description: nil, owner: "~bob", branch: "stable")
+        ]
+
+        let ownerMatches = RepositoryListViewModel.filterRepositories(repositories, matching: "~bob")
+        let branchMatches = RepositoryListViewModel.filterRepositories(repositories, matching: "main")
+
+        #expect(ownerMatches.map(\.id) == [2])
+        #expect(branchMatches.map(\.id) == [1])
+    }
+
+    @Test
     func buildStatusKeysParsesSourceHutRepositoryURLsFromManifest() {
         let manifest = """
         image: alpine/latest
@@ -59,7 +74,9 @@ struct RepositoryListViewModelTests {
         id: Int,
         service: SRHTService,
         name: String,
-        description: String?
+        description: String?,
+        owner: String = "~owner",
+        branch: String = "main"
     ) -> RepositorySummary {
         RepositorySummary(
             id: id,
@@ -69,8 +86,8 @@ struct RepositoryListViewModelTests {
             description: description,
             visibility: .public,
             updated: Date(timeIntervalSince1970: TimeInterval(id)),
-            owner: Entity(canonicalName: "~owner"),
-            head: Reference(name: "main", target: nil)
+            owner: Entity(canonicalName: owner),
+            head: Reference(name: branch, target: nil)
         )
     }
 }
