@@ -122,8 +122,27 @@ struct JobDetail: Codable, Sendable, Equatable {
     let image: String?
     let manifest: String?
     var tasks: [BuildTask]
+    let artifacts: [BuildArtifact]
     let log: BuildLog?
     let owner: Entity
+}
+
+/// A downloadable artifact emitted by a build job.
+struct BuildArtifact: Codable, Sendable, Identifiable, Equatable {
+    let id: Int
+    let created: Date
+    let path: String
+    let size: Int
+    let url: URL?
+
+    var filename: String {
+        let pathComponents = path.split(separator: "/")
+        return pathComponents.last.map(String.init) ?? path
+    }
+
+    var isDownloadable: Bool {
+        url != nil
+    }
 }
 
 /// The log associated with a build job.

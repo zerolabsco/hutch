@@ -86,6 +86,7 @@ final class BuildDetailViewModel {
             image
             manifest
             tasks { name status log { fullURL } }
+            artifacts { id created path size url }
             log { fullURL }
             owner { canonicalName }
         }
@@ -237,6 +238,7 @@ final class BuildDetailViewModel {
             status: .cancelled, note: job.note, tags: job.tags,
             visibility: job.visibility, image: job.image,
             manifest: job.manifest, tasks: job.tasks,
+            artifacts: job.artifacts,
             log: job.log, owner: job.owner
         )
         stopAutoRefresh()

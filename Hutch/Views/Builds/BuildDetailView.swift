@@ -4,6 +4,7 @@ struct BuildDetailView: View {
     let jobId: Int
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
     @State private var viewModel: BuildDetailViewModel?
     @State private var rebuiltJobId: Int?
     @State private var selectedTaskName: String?
@@ -181,6 +182,23 @@ struct BuildDetailView: View {
                     }
                 }
 
+                if !job.artifacts.isEmpty {
+                    Section {
+                        ForEach(job.artifacts) { artifact in
+                            BuildArtifactRow(artifact: artifact) {
+                                guard let url = artifact.url else { return }
+                                openURL(url)
+                            }
+                        }
+                    } header: {
+                        Text("Artifacts")
+                    } footer: {
+                        if job.artifacts.contains(where: { !$0.isDownloadable }) {
+                            Text("Artifacts without a download URL are no longer available for download.")
+                        }
+                    }
+                }
+
                 // Per-task logs
                 if !job.tasks.isEmpty {
                     ForEach(job.tasks) { task in
@@ -282,6 +300,51 @@ struct BuildDetailView: View {
                 appState.presentRepositoryDeepLinkError()
             }
         }
+    }
+}
+
+private struct BuildArtifactRow: View {
+    let artifact: BuildArtifact
+    let onDownload: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(artifact.filename)
+                    .font(.subheadline.weight(.medium))
+
+                if artifact.path != artifact.filename {
+                    Text(artifact.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                Text(metadataText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                onDownload()
+            } label: {
+                Image(systemName: artifact.isDownloadable ? "arrow.down.circle" : "archivebox")
+                    .imageScale(.large)
+            }
+            .disabled(!artifact.isDownloadable)
+            .accessibilityLabel(artifact.isDownloadable ? "Download \(artifact.filename)" : "\(artifact.filename) is unavailable")
+        }
+    }
+
+    private var metadataText: String {
+        var parts = [artifact.size.formattedByteCount]
+        parts.append("Created \(artifact.created.relativeDescription)")
+        if !artifact.isDownloadable {
+            parts.append("Unavailable")
+        }
+        return parts.joined(separator: " • ")
     }
 }
 
