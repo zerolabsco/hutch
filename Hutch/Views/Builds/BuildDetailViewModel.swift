@@ -45,10 +45,30 @@ final class BuildDetailViewModel {
     private(set) var isRebuilding = false
     private(set) var isSubmittingEditedBuild = false
     var error: String?
+    /// Transient error shown for action failures (cancel, rebuild, submit).
+    /// Separate from `error` so auto-refresh doesn't immediately clear it.
+    private(set) var actionError: String?
+    private var actionErrorDismissTask: Task<Void, Never>?
 
     init(jobId: Int, client: SRHTClient) {
         self.jobId = jobId
         self.client = client
+    }
+
+    func dismissActionError() {
+        actionError = nil
+        actionErrorDismissTask?.cancel()
+        actionErrorDismissTask = nil
+    }
+
+    private func setActionError(_ message: String) {
+        actionError = message
+        actionErrorDismissTask?.cancel()
+        actionErrorDismissTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            actionError = nil
+        }
     }
 
     // MARK: - Queries
@@ -208,8 +228,18 @@ final class BuildDetailViewModel {
 
     func cancelJob() async {
         guard let job, job.status.isCancellable, !isCancelling else { return }
+        let originalJob = job
         isCancelling = true
-        error = nil
+
+        // Optimistic update: show cancelled status immediately.
+        self.job = JobDetail(
+            id: job.id, created: job.created, updated: job.updated,
+            status: .cancelled, note: job.note, tags: job.tags,
+            visibility: job.visibility, image: job.image,
+            manifest: job.manifest, tasks: job.tasks,
+            log: job.log, owner: job.owner
+        )
+        stopAutoRefresh()
 
         do {
             _ = try await client.execute(
@@ -218,10 +248,14 @@ final class BuildDetailViewModel {
                 variables: ["id": jobId],
                 responseType: CancelResponse.self
             )
-            // Reload job to get updated status.
             await loadJob()
         } catch {
-            self.error = error.userFacingMessage
+            // Revert optimistic update on failure.
+            self.job = originalJob
+            if !originalJob.status.isTerminal {
+                startAutoRefresh()
+            }
+            setActionError("Couldn't cancel build. \(error.userFacingMessage)")
         }
 
         isCancelling = false
@@ -233,7 +267,7 @@ final class BuildDetailViewModel {
         }
 
         isRebuilding = true
-        error = nil
+        dismissActionError()
         defer { isRebuilding = false }
 
         var variables: [String: any Sendable] = [
@@ -258,7 +292,7 @@ final class BuildDetailViewModel {
             )
             return result.submit.id
         } catch {
-            self.error = error.userFacingMessage
+            setActionError("Couldn't rebuild. \(error.userFacingMessage)")
             return nil
         }
     }
@@ -275,12 +309,12 @@ final class BuildDetailViewModel {
 
         let trimmedManifest = manifest.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedManifest.isEmpty else {
-            error = "Paste a build manifest."
+            setActionError("Paste a build manifest.")
             return nil
         }
 
         isSubmittingEditedBuild = true
-        error = nil
+        dismissActionError()
         defer { isSubmittingEditedBuild = false }
 
         var variables: [String: any Sendable] = [
@@ -306,7 +340,7 @@ final class BuildDetailViewModel {
             )
             return result.submit.id
         } catch {
-            self.error = "Couldn’t submit the build. \(error.userFacingMessage)"
+            setActionError("Couldn’t submit the build. \(error.userFacingMessage)")
             return nil
         }
     }

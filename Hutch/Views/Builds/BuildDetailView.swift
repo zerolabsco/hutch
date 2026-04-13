@@ -262,6 +262,10 @@ struct BuildDetailView: View {
                 get: { viewModel.error },
                 set: { viewModel.error = $0 }
             ))
+            .srhtErrorBanner(error: Binding(
+                get: { viewModel.actionError },
+                set: { _ in viewModel.dismissActionError() }
+            ))
         }
     }
 
@@ -287,7 +291,6 @@ private struct EditResubmitBuildSheet: View {
     let onSubmitted: (Int) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Bindable var viewModelBindable: BuildDetailViewModel
     @State private var manifest: String
     @State private var tagsText: String
     @State private var note: String
@@ -297,7 +300,6 @@ private struct EditResubmitBuildSheet: View {
 
     init(viewModel: BuildDetailViewModel, job: JobDetail, onSubmitted: @escaping (Int) -> Void) {
         self.viewModel = viewModel
-        self._viewModelBindable = Bindable(viewModel)
         self.job = job
         self.onSubmitted = onSubmitted
         _manifest = State(initialValue: job.manifest ?? "")
@@ -337,10 +339,10 @@ private struct EditResubmitBuildSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if let error = viewModel.error {
+                if let actionError = viewModel.actionError {
                     Section {
                         Label {
-                            Text(error)
+                            Text(actionError)
                         } icon: {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.red)
@@ -352,12 +354,12 @@ private struct EditResubmitBuildSheet: View {
             .navigationTitle("Edit & Resubmit")
             .navigationBarTitleDisplayMode(.inline)
             .onDisappear {
-                viewModelBindable.error = nil
+                viewModel.dismissActionError()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        viewModelBindable.error = nil
+                        viewModel.dismissActionError()
                         dismiss()
                     }
                 }
