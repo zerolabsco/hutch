@@ -73,6 +73,7 @@ struct PasteListView: View {
             ForEach(viewModel.filteredPastes) { paste in
                 NavigationLink(value: paste) {
                     PasteRowView(paste: paste)
+                        .equatable()
                 }
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                     if swipeActionsEnabled {
@@ -208,7 +209,7 @@ struct PasteListView: View {
     }
 }
 
-private struct PasteRowView: View {
+private struct PasteRowView: View, Equatable {
     let paste: Paste
 
     var body: some View {

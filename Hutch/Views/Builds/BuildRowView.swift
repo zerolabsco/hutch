@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct BuildRowView: View {
+struct BuildRowView: View, Equatable {
     let job: JobSummary
 
     var body: some View {

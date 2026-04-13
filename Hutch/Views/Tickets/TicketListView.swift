@@ -290,6 +290,7 @@ struct TicketListView: View {
                                     ticket: ticket,
                                     isSelected: viewModel.selectedTicketIDs.contains(ticket.id)
                                 )
+                                .equatable()
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -303,6 +304,7 @@ struct TicketListView: View {
                                 )
                             } label: {
                                 TicketRowView(ticket: ticket)
+                                    .equatable()
                             }
                             .contextMenu {
                                 if let url = SRHTWebURL.ticket(ownerUsername: ownerUsername(for: tracker), trackerName: tracker.name, ticketId: ticket.id) {
@@ -1180,7 +1182,7 @@ private struct BulkAssignSheet: View {
     }
 }
 
-private struct SelectableTicketRow: View {
+private struct SelectableTicketRow: View, Equatable {
     let ticket: TicketSummary
     let isSelected: Bool
 
@@ -1200,7 +1202,7 @@ private struct SelectableTicketRow: View {
 
 // MARK: - Ticket Row
 
-private struct TicketRowView: View {
+private struct TicketRowView: View, Equatable {
     let ticket: TicketSummary
 
     var body: some View {

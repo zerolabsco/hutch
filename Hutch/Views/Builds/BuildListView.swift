@@ -137,6 +137,7 @@ struct BuildListView: View {
             ForEach(viewModel.filteredJobs) { job in
                 NavigationLink(value: job) {
                     BuildRowView(job: job)
+                        .equatable()
                 }
                 .contextMenu {
                     Button {

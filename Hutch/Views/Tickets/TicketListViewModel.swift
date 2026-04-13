@@ -83,7 +83,9 @@ final class TicketListViewModel {
     let trackerId: Int
     let trackerRid: String
 
-    private(set) var tickets: [TicketSummary] = []
+    private(set) var tickets: [TicketSummary] = [] {
+        didSet { updateFilteredTickets() }
+    }
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isCreatingTicket = false
@@ -97,15 +99,21 @@ final class TicketListViewModel {
     var filter: TicketFilter = .open {
         didSet {
             persistFilterState()
+            updateFilteredTickets()
         }
     }
     var selectedLabelIDs: Set<Int> = [] {
         didSet {
             persistFilterState()
+            updateFilteredTickets()
         }
     }
-    var searchText = ""
+    var searchText = "" {
+        didSet { updateFilteredTickets() }
+    }
     private(set) var activeSavedFilterID: SavedTicketFilter.ID?
+    // Cached filtered result. See updateFilteredTickets().
+    private(set) var filteredTickets: [TicketSummary] = []
 
     private var cursor: String?
     private var hasMore = true
@@ -268,9 +276,11 @@ final class TicketListViewModel {
         !currentFilterState.isDefault
     }
 
-    /// Tickets filtered by the selected status and label filters.
-    var filteredTickets: [TicketSummary] {
-        Self.filterTickets(tickets, state: currentFilterState, query: searchText)
+    private func updateFilteredTickets() {
+        let updated = Self.filterTickets(tickets, state: currentFilterState, query: searchText)
+        if updated != filteredTickets {
+            filteredTickets = updated
+        }
     }
 
     // MARK: - Public API

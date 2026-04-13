@@ -3,13 +3,18 @@ import Foundation
 @Observable
 @MainActor
 final class PasteListViewModel {
-    private(set) var pastes: [Paste] = []
+    private(set) var pastes: [Paste] = [] {
+        didSet { updateFilteredPastes() }
+    }
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isRefreshing = false
     private(set) var isCreatingPaste = false
     var error: String?
-    var searchText = ""
+    var searchText = "" {
+        didSet { updateFilteredPastes() }
+    }
+    private(set) var filteredPastes: [Paste] = []
 
     private var cursor: String?
     private var hasMore = true
@@ -19,14 +24,21 @@ final class PasteListViewModel {
         self.service = service
     }
 
-    var filteredPastes: [Paste] {
+    private func updateFilteredPastes() {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return pastes }
-        return pastes.filter {
-            $0.files.contains {
-                ($0.filename?.lowercased().contains(q) == true) ||
-                $0.hash.lowercased().hasPrefix(q)
+        let updated: [Paste]
+        if q.isEmpty {
+            updated = pastes
+        } else {
+            updated = pastes.filter {
+                $0.files.contains {
+                    ($0.filename?.lowercased().contains(q) == true) ||
+                    $0.hash.lowercased().hasPrefix(q)
+                }
             }
+        }
+        if updated != filteredPastes {
+            filteredPastes = updated
         }
     }
 

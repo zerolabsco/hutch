@@ -46,18 +46,33 @@ enum AutoRefreshInterval: Int, CaseIterable, Sendable {
 final class BuildListViewModel {
     private static let searchHistoryScopeID = "builds"
 
-    private(set) var jobs: [JobSummary] = []
+    private(set) var jobs: [JobSummary] = [] {
+        didSet { updateFilteredJobs() }
+    }
     private(set) var recentSearches: [ScopedSearchHistoryEntry]
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isRefreshing = false
     private(set) var isSubmitting = false
     var error: String?
-    var filter: BuildListFilter = .attention
-    var searchText = ""
-    var repoFilter: String = "" {
-        didSet { if repoFilter != oldValue { repoFilterDidChange() } }
+    var filter: BuildListFilter = .attention {
+        didSet { updateFilteredJobs() }
     }
+    var searchText = "" {
+        didSet { updateFilteredJobs() }
+    }
+    var repoFilter: String = "" {
+        didSet {
+            guard repoFilter != oldValue else { return }
+            repoFilterDidChange()
+            updateFilteredJobs()
+        }
+    }
+    // Cached filtered result. Updated whenever jobs, filter, searchText, or
+    // repoFilter changes. Only notifies observers when the content actually
+    // differs, which prevents the list from re-rendering on auto-refresh when
+    // no visible data changed.
+    private(set) var filteredJobs: [JobSummary] = []
 
     private var cursor: String?
     private var hasMore = true
@@ -83,14 +98,18 @@ final class BuildListViewModel {
         return allTags.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    var filteredJobs: [JobSummary] {
+    private func updateFilteredJobs() {
         var result = Self.filterJobs(jobs, filter: filter)
-
         if !repoFilter.isEmpty {
             result = result.filter { $0.tags.contains(repoFilter) }
         }
-
-        return Self.searchJobs(result, matching: searchText)
+        let updated = Self.searchJobs(result, matching: searchText)
+        // Skip the assignment (and the resulting observer notification) when the
+        // filtered list hasn't actually changed — e.g. on auto-refresh when no
+        // builds have been added or updated.
+        if updated != filteredJobs {
+            filteredJobs = updated
+        }
     }
 
     // MARK: - Auto-Refresh
