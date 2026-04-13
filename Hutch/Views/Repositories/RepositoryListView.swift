@@ -84,6 +84,7 @@ struct RepositoryListView: View {
                 .listRowSeparator(.hidden)
             }
         }
+        .themedList()
         .listStyle(.plain)
         .searchable(text: $vm.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search repositories")
         .overlay {

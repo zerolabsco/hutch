@@ -63,6 +63,7 @@ struct MoreView: View {
                 Text("These SourceHut services are not supported in-app, as the SourceHut API does not support them, and will open in your browser.")
             }
         }
+        .themedList()
         .navigationTitle("More")
         .refreshable {
             await ensureViewModel().loadSystemStatus(forceRefresh: true)

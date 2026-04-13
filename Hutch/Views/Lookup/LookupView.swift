@@ -411,6 +411,7 @@ struct LookupView: View {
                 }
             }
         }
+        .themedList()
         .formStyle(.grouped)
         .srhtErrorBanner(error: $vm.error)
         .sheet(item: vm.resultBinding) { result in

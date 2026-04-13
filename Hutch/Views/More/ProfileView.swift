@@ -87,6 +87,7 @@ struct ProfileView: View {
                 patSection(viewModel)
             }
         }
+        .themedList()
         .overlay {
             if viewModel.isLoading, viewModel.profile == nil {
                 SRHTLoadingStateView(message: "Loading profile…")

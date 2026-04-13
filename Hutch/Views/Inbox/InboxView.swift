@@ -68,6 +68,7 @@ struct InboxView: View {
                 }
             }
         }
+        .themedList()
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),

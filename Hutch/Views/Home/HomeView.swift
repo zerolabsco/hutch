@@ -65,6 +65,7 @@ struct HomeView: View {
             assignedTicketsSection(viewModel)
             recentBuildsSection(viewModel)
         }
+        .themedList()
         .listStyle(.insetGrouped)
         .overlay {
             if viewModel.isLoadingProjects && viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&

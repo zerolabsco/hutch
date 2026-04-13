@@ -162,6 +162,7 @@ struct BuildListView: View {
                 .listRowSeparator(.hidden)
             }
         }
+        .themedList()
         .listStyle(.plain)
         .searchable(
             text: $vm.searchText,

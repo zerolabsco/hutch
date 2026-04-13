@@ -259,6 +259,7 @@ private struct PasteVisibilitySheet: View {
                     ProgressView()
                 }
             }
+            .themedList()
         }
     }
 

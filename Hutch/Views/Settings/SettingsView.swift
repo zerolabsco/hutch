@@ -2,16 +2,20 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage(AppStorageKeys.appTheme) private var appTheme: AppTheme = .system
+    @AppStorage(AppStorageKeys.displayDensity) private var displayDensity: DisplayDensity = .standard
     @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.contributionGraphsEnabled) private var contributionGraphsEnabled = true
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
 
     var body: some View {
         Form {
+            appearanceSection()
             behaviorSection()
             authenticationSection()
             aboutSection()
         }
+        .themedList()
         .navigationTitle("Settings")
         .alert(
             pendingDestructiveAction?.title ?? "",
@@ -41,6 +45,26 @@ struct SettingsView: View {
             if let pendingDestructiveAction {
                 Text(pendingDestructiveAction.message)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func appearanceSection() -> some View {
+        Section {
+            Picker("Theme", selection: $appTheme) {
+                ForEach(AppTheme.allCases) { theme in
+                    Text(theme.label).tag(theme)
+                }
+            }
+            Picker("Density", selection: $displayDensity) {
+                ForEach(DisplayDensity.allCases) { density in
+                    Text(density.label).tag(density)
+                }
+            }
+        } header: {
+            Text("Appearance")
+        } footer: {
+            Text("Compact density reduces spacing throughout the app.")
         }
     }
 
@@ -192,6 +216,7 @@ private struct AboutView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .themedList()
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
     }

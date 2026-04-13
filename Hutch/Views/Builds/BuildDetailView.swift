@@ -392,6 +392,7 @@ private struct EditResubmitBuildSheet: View {
                     .disabled(manifest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSubmittingEditedBuild)
                 }
             }
+            .themedList()
         }
     }
 }
