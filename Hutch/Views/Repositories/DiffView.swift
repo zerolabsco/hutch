@@ -76,16 +76,118 @@ private struct DiffBlockView: View {
     let lines: [String]
 
     var body: some View {
+        let hunks = DiffHunk.split(lines: lines)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(hunks) { hunk in
+                DiffHunkView(hunk: hunk)
+            }
+        }
+        .font(.system(.caption, design: .monospaced))
+        .background(Color(.secondarySystemBackground))
+    }
+}
+
+private struct DiffHunk: Identifiable {
+    let id: Int
+    let header: String?
+    let lines: [String]
+    let isFileHeader: Bool
+
+    static func split(lines: [String]) -> [DiffHunk] {
+        var hunks: [DiffHunk] = []
+        var current: [String] = []
+        var hunkIndex = 0
+        var headerLines: [String] = []
+        var passedFirstHunk = false
+
+        for line in lines {
+            if line.hasPrefix("@@") {
+                if !passedFirstHunk {
+                    // Collect file header lines before first hunk
+                    if !current.isEmpty {
+                        headerLines = current
+                        hunks.append(DiffHunk(id: hunkIndex, header: nil, lines: headerLines, isFileHeader: true))
+                        hunkIndex += 1
+                    }
+                    current = [line]
+                    passedFirstHunk = true
+                } else {
+                    // End previous hunk, start new one
+                    if !current.isEmpty {
+                        let header = current.first
+                        hunks.append(DiffHunk(id: hunkIndex, header: header, lines: current, isFileHeader: false))
+                        hunkIndex += 1
+                    }
+                    current = [line]
+                }
+            } else {
+                current.append(line)
+            }
+        }
+
+        if !current.isEmpty {
+            if passedFirstHunk {
+                let header = current.first(where: { $0.hasPrefix("@@") }) ?? current.first
+                hunks.append(DiffHunk(id: hunkIndex, header: header, lines: current, isFileHeader: false))
+            } else {
+                hunks.append(DiffHunk(id: hunkIndex, header: nil, lines: current, isFileHeader: true))
+            }
+        }
+
+        return hunks
+    }
+}
+
+private struct DiffHunkView: View {
+    let hunk: DiffHunk
+    @State private var isExpanded = true
+
+    private var isCollapsible: Bool {
+        !hunk.isFileHeader && hunk.lines.count > 1
+    }
+
+    var body: some View {
+        if isCollapsible {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 10)
+
+                    Text(hunk.header ?? "")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color(.systemBackground).opacity(0.5))
+
+            if isExpanded {
+                hunkContent(lines: hunk.lines.dropFirst().map { $0 })
+            }
+        } else {
+            hunkContent(lines: hunk.lines)
+        }
+    }
+
+    @ViewBuilder
+    private func hunkContent(lines: [String]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                     DiffLineView(line: line)
                 }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
-        .font(.system(.caption, design: .monospaced))
-        .background(Color(.secondarySystemBackground))
     }
 }
 
@@ -171,8 +273,10 @@ private struct DiffLineView: View {
 
     var body: some View {
         Text(line.isEmpty ? " " : line)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
+            .padding(.vertical, 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(backgroundColor)
             .foregroundStyle(foregroundColor)
             .fontWeight(isHeader ? .semibold : .regular)

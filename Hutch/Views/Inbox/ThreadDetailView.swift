@@ -266,11 +266,8 @@ private struct InboxMessageRow: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 case .diff(let diff):
-                    ScrollView(.horizontal) {
-                        DiffView(diff: diff)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    DiffView(diff: diff)
+                        .textSelection(.enabled)
                 }
             }
         }
