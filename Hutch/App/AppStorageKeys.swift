@@ -9,6 +9,7 @@ enum AppStorageKeys {
     static let systemStatusSnapshotCache = "systemStatusSnapshotCache"
     static let systemStatusIncidentCache = "systemStatusIncidentCache"
     static let homeProjectsExpanded = "homeProjectsExpanded"
+    static let pinnedHomeProjects = "pinnedHomeProjects"
     static let homeAssignedTicketsExpanded = "homeAssignedTicketsExpanded"
     static let homeBuildsExpanded = "homeBuildsExpanded"
     static let buildsAutoRefreshInterval = "buildsAutoRefreshInterval"

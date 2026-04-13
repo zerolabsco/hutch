@@ -34,6 +34,7 @@ private struct ProjectDetailPayload: Decodable, Sendable {
     let website: String?
     let visibility: Visibility
     let tags: [String]
+    let updated: Date
     let mailingLists: ProjectMailingListPage
     let sources: ProjectSourcePage
     let trackers: ProjectTrackerPage
@@ -110,6 +111,7 @@ struct ProjectService: Sendable {
             website
             visibility
             tags
+            updated
             mailingLists(cursor: $mailingListsCursor) {
                 results {
                     rid
@@ -150,22 +152,11 @@ struct ProjectService: Sendable {
     }
 
     func fetchProjects() async throws -> [Project] {
-        let summaries = try await fetchProjectSummaries()
-        guard !summaries.isEmpty else { return [] }
+        try await fetchProjectSummaries().map(Self.makeSummaryProject)
+    }
 
-        return try await withThrowingTaskGroup(of: Project.self) { group in
-            for summary in summaries {
-                group.addTask {
-                    try await self.fetchProjectDetail(summary: summary)
-                }
-            }
-
-            var projects: [Project] = []
-            for try await project in group {
-                projects.append(project)
-            }
-            return projects.sorted { $0.updated > $1.updated }
-        }
+    func fetchProjectDetail(rid: String) async throws -> Project {
+        try await fetchProjectDetailPayload(rid: rid)
     }
 
     private func fetchProjectSummaries() async throws -> [ProjectSummaryPayload] {
@@ -192,10 +183,10 @@ struct ProjectService: Sendable {
             cursor = nextCursor
         }
 
-        return results
+        return results.sorted { $0.updated > $1.updated }
     }
 
-    private func fetchProjectDetail(summary: ProjectSummaryPayload) async throws -> Project {
+    private func fetchProjectDetailPayload(rid: String) async throws -> Project {
         var mailingLists: [Project.MailingList] = []
         var sources: [Project.SourceRepo] = []
         var trackers: [Project.Tracker] = []
@@ -204,7 +195,7 @@ struct ProjectService: Sendable {
         var trackersCursor: String?
 
         while true {
-            var variables: [String: any Sendable] = ["rid": summary.rid]
+            var variables: [String: any Sendable] = ["rid": rid]
             if let mailingListsCursor {
                 variables["mailingListsCursor"] = mailingListsCursor
             }
@@ -269,13 +260,30 @@ struct ProjectService: Sendable {
                     website: project.website,
                     visibility: project.visibility,
                     tags: project.tags,
-                    updated: summary.updated,
+                    updated: project.updated,
                     mailingLists: deduplicate(mailingLists),
                     sources: deduplicate(sources),
-                    trackers: deduplicate(trackers)
+                    trackers: deduplicate(trackers),
+                    isFullyLoaded: true
                 )
             }
         }
+    }
+
+    private static func makeSummaryProject(from summary: ProjectSummaryPayload) -> Project {
+        Project(
+            id: summary.rid,
+            name: summary.name,
+            description: summary.description,
+            website: summary.website,
+            visibility: summary.visibility,
+            tags: summary.tags,
+            updated: summary.updated,
+            mailingLists: [],
+            sources: [],
+            trackers: [],
+            isFullyLoaded: false
+        )
     }
 
     private func deduplicate<T: Identifiable & Hashable>(_ items: [T]) -> [T] where T.ID: Hashable {

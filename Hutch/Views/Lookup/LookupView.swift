@@ -422,6 +422,8 @@ struct LookupView: View {
                 switch route {
                 case .lookup:
                     LookupView()
+                case .projects:
+                    ProjectsListView()
                 case .lists:
                     MailingListListView()
                 case .pastes:

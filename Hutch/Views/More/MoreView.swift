@@ -19,6 +19,10 @@ struct MoreView: View {
             }
 
             Section("Other Services") {
+                NavigationLink(value: MoreRoute.projects) {
+                    Label("Projects", systemImage: "square.stack.3d.up")
+                }
+
                 NavigationLink(value: MoreRoute.lists) {
                     Label("Mailing Lists", systemImage: "list.bullet.rectangle")
                 }

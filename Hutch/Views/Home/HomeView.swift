@@ -69,11 +69,11 @@ struct HomeView: View {
         .listStyle(.insetGrouped)
         .overlay {
             if viewModel.isLoadingProjects && viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&
-                viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
+                viewModel.pinnedProjects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
                 viewModel.unreadInboxThreads.isEmpty {
                 SRHTLoadingStateView(message: "Loading Home…")
             } else if !viewModel.isLoadingProjects && !viewModel.isLoadingAssignedTickets && !viewModel.isLoadingRecentBuilds &&
-                        viewModel.projects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
+                        viewModel.pinnedProjects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
                         viewModel.unreadInboxThreads.isEmpty &&
                         viewModel.assignedTicketsError == nil && viewModel.recentBuildsError == nil {
                 ContentUnavailableView(
@@ -179,17 +179,17 @@ struct HomeView: View {
 
     @ViewBuilder
     private func projectsSection(_ viewModel: HomeViewModel) -> some View {
-        if !viewModel.projects.isEmpty {
-            HomeSectionView("Projects", isExpanded: $projectsExpanded) {
+        if !viewModel.pinnedProjects.isEmpty {
+            HomeSectionView("Pinned Projects", isExpanded: $projectsExpanded) {
                 NavigationLink {
-                    HomeProjectsListView(viewModel: viewModel)
+                    ProjectsListView()
                 } label: {
                     Text("See All")
                         .font(.caption.weight(.medium))
                 }
                 .buttonStyle(.plain)
             } content: {
-                ForEach(viewModel.projects.prefix(projectPreviewLimit)) { project in
+                ForEach(viewModel.pinnedProjects.prefix(projectPreviewLimit)) { project in
                     NavigationLink {
                         ProjectDetailView(project: project)
                     } label: {
@@ -408,32 +408,6 @@ private struct HomeProjectRow: View {
             }
         }
         .padding(.vertical, 2)
-    }
-}
-
-private struct HomeProjectsListView: View {
-    let viewModel: HomeViewModel
-
-    var body: some View {
-        List {
-            ForEach(viewModel.projects) { project in
-                NavigationLink {
-                    ProjectDetailView(project: project)
-                } label: {
-                    HomeProjectRow(project: project)
-                }
-            }
-        }
-        .navigationTitle("Projects")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await viewModel.loadDashboard()
-        }
-        .overlay {
-            if viewModel.isLoadingProjects && viewModel.projects.isEmpty {
-                SRHTLoadingStateView(message: "Loading projects…")
-            }
-        }
     }
 }
 

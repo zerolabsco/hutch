@@ -69,6 +69,33 @@ struct Project: Identifiable, Hashable, Sendable {
     let mailingLists: [MailingList]
     let sources: [SourceRepo]
     let trackers: [Tracker]
+    let isFullyLoaded: Bool
+
+    init(
+        id: String,
+        name: String,
+        description: String?,
+        website: String?,
+        visibility: Visibility,
+        tags: [String],
+        updated: Date,
+        mailingLists: [MailingList],
+        sources: [SourceRepo],
+        trackers: [Tracker],
+        isFullyLoaded: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.website = website
+        self.visibility = visibility
+        self.tags = tags
+        self.updated = updated
+        self.mailingLists = mailingLists
+        self.sources = sources
+        self.trackers = trackers
+        self.isFullyLoaded = isFullyLoaded
+    }
 
     var resourceSummary: String? {
         let parts = [

@@ -195,6 +195,10 @@ final class HomeViewModel {
     private let ticketFetchConcurrencyLimit = 6
     private let inboxUnreadConcurrencyLimit = 4
 
+    private var currentUserKey: String {
+        currentUser.canonicalName
+    }
+
     private static let jobsQuery = """
     query jobs {
         jobs {
@@ -392,7 +396,15 @@ final class HomeViewModel {
     }
 
     var hasDashboardContent: Bool {
-        !projects.isEmpty || !assignedTickets.isEmpty || !recentBuilds.isEmpty || !unreadInboxThreads.isEmpty || systemStatusSnapshot != nil
+        !pinnedProjects.isEmpty || !assignedTickets.isEmpty || !recentBuilds.isEmpty || !unreadInboxThreads.isEmpty || systemStatusSnapshot != nil
+    }
+
+    var pinnedProjects: [Project] {
+        let pinnedIDs = ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey)
+        guard !pinnedIDs.isEmpty else { return [] }
+
+        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        return pinnedIDs.compactMap { projectsByID[$0] }
     }
 
     var failedBuildCount: Int {
