@@ -19,6 +19,9 @@ struct TicketListView: View {
     @State private var showTrackerACLs = false
     @State private var showTrackerLabels = false
     @State private var showDeleteTrackerConfirmation = false
+    @State private var showBulkCloseSheet = false
+    @State private var showBulkAssignSheet = false
+    @State private var bulkActionResult: TicketBulkActionResult?
 
     private var isOwnedByCurrentUser: Bool {
         guard let currentUser = appState.currentUser else { return false }
@@ -46,27 +49,46 @@ struct TicketListView: View {
         .navigationTitle(tracker.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                SRHTShareButton(
-                    url: SRHTWebURL.tracker(
-                        ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
-                        trackerName: tracker.name
-                    ),
-                    target: .tracker
-                ) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-
-                if viewModel != nil {
-                    Button {
-                        showCreateTicketSheet = true
-                    } label: {
-                        Image(systemName: "plus")
+            ToolbarItem(placement: .topBarLeading) {
+                if let viewModel, viewModel.isSelectionMode {
+                    Button("Cancel") {
+                        viewModel.setSelectionMode(false)
                     }
-                    .accessibilityLabel("Create ticket")
+                }
+            }
 
-                    if isOwnedByCurrentUser {
-                        trackerActionsMenu
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if viewModel != nil {
+                    if let viewModel, viewModel.isSelectionMode {
+                        Button("All") {
+                            viewModel.selectVisibleTickets(viewModel.filteredTickets)
+                        }
+                        .disabled(viewModel.filteredTickets.isEmpty || viewModel.isPerformingAction)
+                    } else {
+                        SRHTShareButton(
+                            url: SRHTWebURL.tracker(
+                                ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
+                                trackerName: tracker.name
+                            ),
+                            target: .tracker
+                        ) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+
+                        Button {
+                            showCreateTicketSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Create ticket")
+
+                        Button("Select") {
+                            viewModel?.setSelectionMode(true)
+                        }
+
+                        if isOwnedByCurrentUser {
+                            trackerActionsMenu
+                        }
                     }
                 }
             }
@@ -130,10 +152,35 @@ struct TicketListView: View {
                     .presentationDetents([.large])
             }
         }
-        .sheet(isPresented: $showTrackerLabels) {
+        .sheet(isPresented: $showTrackerLabels, onDismiss: syncTrackerLabelsIntoTicketList) {
             if let trackerManagementViewModel {
                 TrackerLabelManagementSheet(viewModel: trackerManagementViewModel)
                     .presentationDetents([.large])
+            }
+        }
+        .sheet(isPresented: $showBulkCloseSheet) {
+            if let viewModel {
+                BulkResolveSheet(
+                    viewModel: viewModel,
+                    isPresented: $showBulkCloseSheet,
+                    onComplete: { result in
+                        bulkActionResult = result
+                    }
+                )
+                    .presentationDetents([.medium])
+            }
+        }
+        .sheet(isPresented: $showBulkAssignSheet) {
+            if let viewModel {
+                BulkAssignSheet(
+                    viewModel: viewModel,
+                    currentUser: appState.currentUser,
+                    isPresented: $showBulkAssignSheet,
+                    onComplete: { result in
+                        bulkActionResult = result
+                    }
+                )
+                .presentationDetents([.medium])
             }
         }
         .alert("Delete Tracker?", isPresented: $showDeleteTrackerConfirmation) {
@@ -152,6 +199,13 @@ struct TicketListView: View {
             }
         } message: {
             Text("“\(tracker.name)” will be permanently deleted.")
+        }
+        .alert(item: $bulkActionResult) { result in
+            Alert(
+                title: Text(result.title),
+                message: Text(result.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
         .navigationDestination(isPresented: Binding(
             get: { createdTicket != nil },
@@ -199,6 +253,8 @@ struct TicketListView: View {
                     savedFilters: viewModel.savedFilters,
                     activeSavedFilterID: viewModel.activeSavedFilterID,
                     canSaveCurrentFilter: viewModel.hasCustomFilterSelection,
+                    isSelectionMode: viewModel.isSelectionMode,
+                    selectedTicketCount: viewModel.selectedTicketCount,
                     filter: $vm.filter
                 ) {
                     showLabelFilterSheet = true
@@ -216,26 +272,40 @@ struct TicketListView: View {
                 .listRowSeparator(.hidden)
 
                 ForEach(viewModel.filteredTickets) { ticket in
-                    NavigationLink {
-                        TicketDetailView(
-                            ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
-                            trackerName: tracker.name,
-                            trackerId: tracker.id,
-                            trackerRid: tracker.rid,
-                            ticketId: ticket.id
-                        )
-                    } label: {
-                        TicketRowView(ticket: ticket)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if swipeActionsEnabled {
-                            ticketAssignSwipeAction(ticket, viewModel: viewModel)
-                        }
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if swipeActionsEnabled {
-                            ticketStatusSwipeAction(ticket, viewModel: viewModel)
-                            ticketLabelSwipeAction(ticket, viewModel: viewModel)
+                    Group {
+                        if viewModel.isSelectionMode {
+                            Button {
+                                viewModel.toggleTicketSelection(ticket)
+                            } label: {
+                                SelectableTicketRow(
+                                    ticket: ticket,
+                                    isSelected: viewModel.selectedTicketIDs.contains(ticket.id)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            NavigationLink {
+                                TicketDetailView(
+                                    ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
+                                    trackerName: tracker.name,
+                                    trackerId: tracker.id,
+                                    trackerRid: tracker.rid,
+                                    ticketId: ticket.id
+                                )
+                            } label: {
+                                TicketRowView(ticket: ticket)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if swipeActionsEnabled {
+                                    ticketAssignSwipeAction(ticket, viewModel: viewModel)
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if swipeActionsEnabled {
+                                    ticketStatusSwipeAction(ticket, viewModel: viewModel)
+                                    ticketLabelSwipeAction(ticket, viewModel: viewModel)
+                                }
+                            }
                         }
                     }
                     .task {
@@ -287,6 +357,20 @@ struct TicketListView: View {
         .refreshable {
             await viewModel.loadTickets()
         }
+        .safeAreaInset(edge: .bottom) {
+            if viewModel.isSelectionMode {
+                TicketBulkActionBar(
+                    selectedCount: viewModel.selectedTicketCount,
+                    isPerformingAction: viewModel.isPerformingAction,
+                    onClose: {
+                        showBulkCloseSheet = true
+                    },
+                    onAssign: {
+                        showBulkAssignSheet = true
+                    }
+                )
+            }
+        }
     }
 
     private func emptyStateDescription(for viewModel: TicketListViewModel) -> String {
@@ -294,6 +378,11 @@ struct TicketListView: View {
             return "No \(viewModel.filter.rawValue.lowercased()) tickets found for the selected labels."
         }
         return "No \(viewModel.filter.rawValue.lowercased()) tickets found."
+    }
+
+    private func syncTrackerLabelsIntoTicketList() {
+        guard let trackerManagementViewModel, let viewModel else { return }
+        viewModel.syncTrackerLabels(trackerManagementViewModel.labels)
     }
 
     private var trackerActionsMenu: some View {
@@ -535,6 +624,8 @@ private struct TicketListFilterHeader: View {
     let savedFilters: [SavedTicketFilter]
     let activeSavedFilterID: SavedTicketFilter.ID?
     let canSaveCurrentFilter: Bool
+    let isSelectionMode: Bool
+    let selectedTicketCount: Int
     @Binding var filter: TicketFilter
     let onShowLabels: () -> Void
     let onSaveFilter: () -> Void
@@ -544,12 +635,19 @@ private struct TicketListFilterHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if isSelectionMode {
+                Text(selectionSummary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
             Picker("Filter", selection: $filter) {
                 ForEach(TicketFilter.allCases, id: \.self) { filter in
                     Text(filter.rawValue).tag(filter)
                 }
             }
             .pickerStyle(.segmented)
+            .disabled(isSelectionMode)
 
             TicketQuickFilterBar(
                 selectedLabels: selectedLabels,
@@ -562,10 +660,15 @@ private struct TicketListFilterHeader: View {
                 onApplySavedFilter: onApplySavedFilter,
                 onDeleteSavedFilter: onDeleteSavedFilter
             )
+            .disabled(isSelectionMode)
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
         .padding(.bottom, 10)
+    }
+
+    private var selectionSummary: String {
+        selectedTicketCount == 0 ? "Select tickets for bulk actions." : "\(selectedTicketCount) selected"
     }
 }
 
@@ -807,6 +910,181 @@ private struct TicketListLabelToggleRow: View {
             }
         }
         .disabled(isLoading)
+    }
+}
+
+private struct TicketBulkActionBar: View {
+    let selectedCount: Int
+    let isPerformingAction: Bool
+    let onClose: () -> Void
+    let onAssign: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text(selectedCount == 0 ? "Select tickets to continue" : "\(selectedCount) selected")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                Button("Close") {
+                    onClose()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(selectedCount == 0 || isPerformingAction)
+
+                Button("Assign") {
+                    onAssign()
+                }
+                .buttonStyle(.bordered)
+                .disabled(selectedCount == 0 || isPerformingAction)
+
+                if isPerformingAction {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct BulkResolveSheet: View {
+    let viewModel: TicketListViewModel
+    @Binding var isPresented: Bool
+    let onComplete: (TicketBulkActionResult) -> Void
+    @State private var selectedResolution: TicketResolution = .fixed
+
+    private static let resolutionOptions: [TicketResolution] = [
+        .closed, .fixed, .implemented, .wontFix,
+        .byDesign, .invalid, .duplicate, .notOurBug
+    ]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("\(viewModel.selectedTicketCount) ticket\(viewModel.selectedTicketCount == 1 ? "" : "s") selected")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Resolution") {
+                    Picker("Resolution", selection: $selectedResolution) {
+                        ForEach(Self.resolutionOptions, id: \.self) { resolution in
+                            Text(resolution.displayName).tag(resolution)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+            }
+            .navigationTitle("Close Tickets")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") {
+                        Task {
+                            if let result = await viewModel.closeSelectedTickets(resolution: selectedResolution) {
+                                onComplete(result)
+                                isPresented = false
+                            }
+                        }
+                    }
+                    .disabled(viewModel.selectedTicketCount == 0 || viewModel.isPerformingAction)
+                }
+            }
+        }
+    }
+}
+
+private struct BulkAssignSheet: View {
+    let viewModel: TicketListViewModel
+    let currentUser: User?
+    @Binding var isPresented: Bool
+    let onComplete: (TicketBulkActionResult) -> Void
+    @State private var username = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("\(viewModel.selectedTicketCount) ticket\(viewModel.selectedTicketCount == 1 ? "" : "s") selected")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let currentUser {
+                    Section {
+                        Button("Assign to Me") {
+                            Task {
+                                if let result = await viewModel.assignSelectedTickets(username: currentUser.username) {
+                                    onComplete(result)
+                                    isPresented = false
+                                }
+                            }
+                        }
+                        .disabled(viewModel.selectedTicketCount == 0 || viewModel.isPerformingAction)
+                    }
+                }
+
+                Section("Assign User") {
+                    TextField("Username or ~username", text: $username)
+                        .textContentType(.username)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+            }
+            .navigationTitle("Assign Tickets")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Assign") {
+                        Task {
+                            if let result = await viewModel.assignSelectedTickets(username: username) {
+                                onComplete(result)
+                                isPresented = false
+                            }
+                        }
+                    }
+                    .disabled(
+                        username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || viewModel.selectedTicketCount == 0
+                        || viewModel.isPerformingAction
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct SelectableTicketRow: View {
+    let ticket: TicketSummary
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                .padding(.top, 4)
+
+            TicketRowView(ticket: ticket)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 

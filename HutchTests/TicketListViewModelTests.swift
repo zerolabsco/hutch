@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import Hutch
 
+@MainActor
 struct TicketListViewModelTests {
 
     @Test
@@ -79,6 +80,43 @@ struct TicketListViewModelTests {
         )
 
         #expect(filtered.map(\.id) == [2])
+    }
+
+    @Test
+    func synchronizeTicketsReplacesEditedLabelsAndRemovesDeletedOnes() {
+        let existing = [
+            makeTicket(
+                id: 7,
+                title: "Triage me",
+                status: .reported,
+                submitter: "~owner",
+                labels: [
+                    makeLabel(id: 1, name: "bug"),
+                    makeLabel(id: 2, name: "stale")
+                ]
+            )
+        ]
+
+        let updated = TicketListViewModel.synchronizeTickets(
+            existing,
+            with: [makeLabel(id: 1, name: "bugfix")]
+        )
+
+        #expect(updated.first?.labels.map(\.id) == [1])
+        #expect(updated.first?.labels.first?.name == "bugfix")
+    }
+
+    @Test
+    func reconciledSelectedLabelIDsRemovesUnknownIDs() {
+        let reconciled = TicketListViewModel.reconciledSelectedLabelIDs(
+            [1, 2, 5],
+            availableLabels: [
+                makeLabel(id: 2, name: "triage"),
+                makeLabel(id: 3, name: "qa")
+            ]
+        )
+
+        #expect(reconciled == [2])
     }
 
     @Test

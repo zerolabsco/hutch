@@ -53,6 +53,14 @@ private struct MutationEventRef: Decodable, Sendable {
     let eventType: String
 }
 
+private struct TicketListUserLookupResponse: Decodable, Sendable {
+    let user: TicketListUserIDPayload?
+}
+
+private struct TicketListUserIDPayload: Decodable, Sendable {
+    let id: Int
+}
+
 // MARK: - Filter
 
 enum TicketFilter: String, CaseIterable, Codable, Sendable {
@@ -78,6 +86,8 @@ final class TicketListViewModel {
     private(set) var isPerformingAction = false
     private(set) var trackerLabels: [TicketLabel] = []
     private(set) var savedFilters: [SavedTicketFilter]
+    private(set) var isSelectionMode = false
+    private(set) var selectedTicketIDs: Set<Int> = []
     var error: String?
     var filter: TicketFilter = .open {
         didSet {
@@ -198,6 +208,12 @@ final class TicketListViewModel {
     }
     """
 
+    private static let userLookupQuery = """
+    query userLookup($username: String!) {
+        user(username: $username) { id }
+    }
+    """
+
     // MARK: - Computed
 
     var currentFilterState: TicketListFilterState {
@@ -214,6 +230,14 @@ final class TicketListViewModel {
 
     var selectedLabels: [TicketLabel] {
         availableLabels.filter { selectedLabelIDs.contains($0.id) }
+    }
+
+    var selectedTickets: [TicketSummary] {
+        tickets.filter { selectedTicketIDs.contains($0.id) }
+    }
+
+    var selectedTicketCount: Int {
+        selectedTicketIDs.count
     }
 
     var suggestedSavedFilterName: String {
@@ -252,6 +276,7 @@ final class TicketListViewModel {
             tickets = page.results
             cursor = page.cursor
             hasMore = page.cursor != nil
+            reconcileSelectionWithLoadedTickets()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -274,6 +299,7 @@ final class TicketListViewModel {
             tickets.append(contentsOf: page.results)
             cursor = page.cursor
             hasMore = page.cursor != nil
+            reconcileSelectionWithLoadedTickets()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -427,10 +453,16 @@ final class TicketListViewModel {
                 variables: ["rid": trackerRid],
                 responseType: TrackerLabelsResponse.self
             )
-            trackerLabels = result.tracker.labels.results
+            syncTrackerLabels(result.tracker.labels.results)
         } catch {
             self.error = error.userFacingMessage
         }
+    }
+
+    func syncTrackerLabels(_ labels: [TicketLabel]) {
+        trackerLabels = labels.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        tickets = Self.synchronizeTickets(tickets, with: trackerLabels)
+        selectedLabelIDs = Self.reconciledSelectedLabelIDs(selectedLabelIDs, availableLabels: trackerLabels)
     }
 
     func toggleLabelSelection(_ label: TicketLabel) {
@@ -443,6 +475,29 @@ final class TicketListViewModel {
 
     func clearLabelSelection() {
         selectedLabelIDs = []
+    }
+
+    func setSelectionMode(_ enabled: Bool) {
+        isSelectionMode = enabled
+        if !enabled {
+            clearTicketSelection()
+        }
+    }
+
+    func toggleTicketSelection(_ ticket: TicketSummary) {
+        if selectedTicketIDs.contains(ticket.id) {
+            selectedTicketIDs.remove(ticket.id)
+        } else {
+            selectedTicketIDs.insert(ticket.id)
+        }
+    }
+
+    func selectVisibleTickets(_ tickets: [TicketSummary]) {
+        selectedTicketIDs = Set(tickets.map(\.id))
+    }
+
+    func clearTicketSelection() {
+        selectedTicketIDs = []
     }
 
     func resetFilters() {
@@ -564,6 +619,72 @@ final class TicketListViewModel {
         tickets.first(where: { $0.id == ticketId })
     }
 
+    func closeSelectedTickets(resolution: TicketResolution) async -> TicketBulkActionResult? {
+        await performBulkAction(
+            kind: .close,
+            prepare: { ticket in
+                guard ticket.status != .resolved else { return .unchanged }
+
+                let input = Self.bulkStatusUpdateInput(resolution: resolution)
+                let updatedTicket = updatedTicket(from: ticket, input: input)
+                return .request(updatedTicket: updatedTicket) {
+                    try await self.executeBulkStatusUpdate(ticketID: ticket.id, input: input)
+                }
+            }
+        )
+    }
+
+    func assignSelectedTickets(username: String) async -> TicketBulkActionResult? {
+        let normalizedUsername = Self.normalizedUsername(username)
+        guard !normalizedUsername.isEmpty else {
+            error = "Enter a SourceHut username."
+            return nil
+        }
+
+        do {
+            let userResult = try await client.execute(
+                service: .todo,
+                query: Self.userLookupQuery,
+                variables: ["username": normalizedUsername],
+                responseType: TicketListUserLookupResponse.self
+            )
+            guard let userID = userResult.user?.id else {
+                error = "That user couldn’t be found."
+                return nil
+            }
+
+            let assignee = Entity(canonicalName: Self.normalizedCanonicalName(normalizedUsername))
+            return await performBulkAction(
+                kind: .assign,
+                prepare: { ticket in
+                    guard !ticket.assignees.contains(where: {
+                        Self.normalizedCanonicalName($0.canonicalName) == assignee.canonicalName
+                    }) else {
+                        return .unchanged
+                    }
+
+                    let updatedTicket = TicketSummary(
+                        id: ticket.id,
+                        title: ticket.title,
+                        status: ticket.status,
+                        resolution: ticket.resolution,
+                        created: ticket.created,
+                        submitter: ticket.submitter,
+                        labels: ticket.labels,
+                        assignees: ticket.assignees + [assignee]
+                    )
+
+                    return .request(updatedTicket: updatedTicket) {
+                        try await self.executeBulkAssign(ticketID: ticket.id, userID: userID)
+                    }
+                }
+            )
+        } catch {
+            self.error = error.userFacingMessage
+            return nil
+        }
+    }
+
     // MARK: - Private
 
     private func performStatusUpdate(ticket: TicketSummary, input: [String: any Sendable]) async {
@@ -655,6 +776,137 @@ final class TicketListViewModel {
         activeSavedFilterID = savedFilters.first(where: { $0.state == currentFilterState })?.id
     }
 
+    private func reconcileSelectionWithLoadedTickets() {
+        let loadedTicketIDs = Set(tickets.map(\.id))
+        selectedTicketIDs.formIntersection(loadedTicketIDs)
+        if isSelectionMode, selectedTicketIDs.isEmpty {
+            isSelectionMode = false
+        }
+    }
+
+    private func performBulkAction(
+        kind: TicketBulkActionKind,
+        prepare: (TicketSummary) -> TicketBulkTicketOperation
+    ) async -> TicketBulkActionResult? {
+        guard !isPerformingAction else { return nil }
+
+        let selected = selectedTickets
+        guard !selected.isEmpty else { return nil }
+
+        isPerformingAction = true
+        error = nil
+
+        var updatedCount = 0
+        var unchangedCount = 0
+        var failures: [TicketBulkActionFailure] = []
+        var failedTicketIDs = Set<Int>()
+
+        for ticket in selected {
+            switch prepare(ticket) {
+            case .unchanged:
+                unchangedCount += 1
+            case .request(let updatedTicket, let request):
+                replaceTicket(updatedTicket)
+                do {
+                    try await request()
+                    updatedCount += 1
+                } catch {
+                    replaceTicket(ticket)
+                    failedTicketIDs.insert(ticket.id)
+                    failures.append(
+                        TicketBulkActionFailure(
+                            ticketID: ticket.id,
+                            message: error.userFacingMessage
+                        )
+                    )
+                }
+            }
+        }
+
+        isPerformingAction = false
+
+        let result = TicketBulkActionResult(
+            action: kind,
+            totalCount: selected.count,
+            updatedCount: updatedCount,
+            unchangedCount: unchangedCount,
+            failures: failures
+        )
+
+        if failedTicketIDs.isEmpty {
+            clearTicketSelection()
+            isSelectionMode = false
+        } else {
+            selectedTicketIDs = failedTicketIDs
+            isSelectionMode = true
+        }
+
+        return result
+    }
+
+    private func replaceTicket(_ ticket: TicketSummary) {
+        guard let index = tickets.firstIndex(where: { $0.id == ticket.id }) else { return }
+        tickets[index] = ticket
+    }
+
+    private func executeBulkStatusUpdate(ticketID: Int, input: [String: any Sendable]) async throws {
+        _ = try await client.execute(
+            service: .todo,
+            query: Self.updateStatusMutation,
+            variables: [
+                "trackerId": trackerId,
+                "ticketId": ticketID,
+                "input": input
+            ],
+            responseType: UpdateStatusResponse.self
+        )
+    }
+
+    private func executeBulkAssign(ticketID: Int, userID: Int) async throws {
+        _ = try await client.execute(
+            service: .todo,
+            query: Self.assignUserMutation,
+            variables: [
+                "trackerId": trackerId,
+                "ticketId": ticketID,
+                "userId": userID
+            ],
+            responseType: AssignmentMutationResponse.self
+        )
+    }
+
+    private static func bulkStatusUpdateInput(resolution: TicketResolution) -> [String: any Sendable] {
+        [
+            "status": TicketStatus.resolved.rawValue,
+            "resolution": resolution.rawValue
+        ]
+    }
+
+    static func synchronizeTickets(_ tickets: [TicketSummary], with labels: [TicketLabel]) -> [TicketSummary] {
+        let labelsByID = Dictionary(uniqueKeysWithValues: labels.map { ($0.id, $0) })
+
+        return tickets.map { ticket in
+            let updatedLabels = ticket.labels.compactMap { labelsByID[$0.id] }
+            return TicketSummary(
+                id: ticket.id,
+                title: ticket.title,
+                status: ticket.status,
+                resolution: ticket.resolution,
+                created: ticket.created,
+                submitter: ticket.submitter,
+                labels: updatedLabels,
+                assignees: ticket.assignees
+            )
+        }
+    }
+
+    static func reconciledSelectedLabelIDs(
+        _ selectedLabelIDs: Set<Int>,
+        availableLabels: [TicketLabel]
+    ) -> Set<Int> {
+        selectedLabelIDs.intersection(Set(availableLabels.map(\.id)))
+    }
+
     static func filterTickets(
         _ tickets: [TicketSummary],
         state: TicketListFilterState,
@@ -689,4 +941,9 @@ final class TicketListViewModel {
             $0.labels.contains { $0.name.lowercased().contains(q) }
         }
     }
+}
+
+private enum TicketBulkTicketOperation {
+    case unchanged
+    case request(updatedTicket: TicketSummary, operation: @Sendable () async throws -> Void)
 }

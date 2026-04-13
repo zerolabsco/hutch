@@ -1069,6 +1069,12 @@ struct TrackerLabelManagementSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Text("Labels are managed here and reused throughout the tracker.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 if viewModel.isLoadingLabels {
                     HStack {
                         Spacer()
@@ -1083,10 +1089,12 @@ struct TrackerLabelManagementSheet: View {
                     )
                 } else {
                     ForEach(viewModel.labels) { label in
-                        HStack {
-                            LabelPill(label: label)
-                            Spacer()
+                        Button {
+                            editingLabel = label
+                        } label: {
+                            TrackerLabelManagementRow(label: label)
                         }
+                        .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
                                 editingLabel = label
@@ -1174,6 +1182,44 @@ struct TrackerLabelManagementSheet: View {
                     Text("“\(pendingDeletion.name)” will be removed from this tracker and from any tickets using it.")
                 }
             }
+        }
+    }
+}
+
+private struct TrackerLabelManagementRow: View {
+    let label: TicketLabel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                LabelPill(label: label)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(spacing: 12) {
+                colorSwatch(hex: label.backgroundColor, title: "Background")
+                colorSwatch(hex: label.foregroundColor, title: "Text")
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func colorSwatch(hex: String, title: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(Color(hex: hex) ?? .clear)
+                .frame(width: 10, height: 10)
+                .overlay {
+                    Circle()
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
+
+            Text("\(title): \(hex.uppercased())")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
