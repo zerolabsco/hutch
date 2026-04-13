@@ -108,8 +108,10 @@ struct BuildListView: View {
                 vm.repoFilter = savedRepoFilter
                 viewModel = vm
                 await vm.loadJobs()
-                vm.startAutoRefresh(interval: autoRefreshInterval)
             }
+            // Restart auto-refresh every time the view (re)appears, since
+            // onDisappear stops it when navigating away.
+            viewModel?.startAutoRefresh(interval: autoRefreshInterval)
         }
         .onDisappear {
             viewModel?.stopAutoRefresh()

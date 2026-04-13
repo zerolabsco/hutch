@@ -46,6 +46,7 @@ final class RepositoryListViewModel {
     private let client: SRHTClient
     private let defaults: UserDefaults
     private var buildStatusTask: Task<Void, Never>?
+    private var lastBuildStatusRefresh: Date?
 
     private static let gitCacheKey = "git.repositories"
     private static let hgCacheKey = "hg.repositories"
@@ -147,7 +148,8 @@ final class RepositoryListViewModel {
     /// Fetch the first page of repositories. Shows cached data instantly if available,
     /// then refreshes from the network in the background.
     /// - Parameter search: Optional search string. Pass `nil` to use the current `searchText`.
-    func loadRepositories(search: String? = nil) async {
+    /// - Parameter forceRefresh: When true, bypass the build-status TTL (e.g. pull-to-refresh).
+    func loadRepositories(search: String? = nil, forceRefresh: Bool = false) async {
         let query = (search ?? searchText).trimmingCharacters(in: .whitespacesAndNewlines)
         let isSearch = !query.isEmpty
 
@@ -193,7 +195,7 @@ final class RepositoryListViewModel {
             }
 
             repositories = filteredResults.sorted(by: repositorySortOrder)
-            scheduleBuildStatusRefresh()
+            scheduleBuildStatusRefresh(force: forceRefresh)
         } catch {
             // Only show error if we have no cached data to fall back on
             if repositories.isEmpty {
@@ -583,7 +585,13 @@ final class RepositoryListViewModel {
         }
     }
 
-    private func scheduleBuildStatusRefresh() {
+    private func scheduleBuildStatusRefresh(force: Bool = false) {
+        // Skip if we already refreshed recently (120-second TTL). Pull-to-refresh
+        // passes force: true to bypass this check.
+        if !force, let last = lastBuildStatusRefresh,
+           Date().timeIntervalSince(last) < 120 {
+            return
+        }
         let repositoriesSnapshot = repositories
         buildStatusTask?.cancel()
         buildStatusTask = Task { [weak self] in
@@ -635,6 +643,7 @@ final class RepositoryListViewModel {
             await MainActor.run {
                 guard repositories == self.repositories else { return }
                 latestBuildStatuses = finalStatuses
+                lastBuildStatusRefresh = Date()
             }
         } catch {
             // Build status is auxiliary data for the list. Leave the default gray state on failure.

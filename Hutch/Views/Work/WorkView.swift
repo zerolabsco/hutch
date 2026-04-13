@@ -30,7 +30,7 @@ struct WorkView: View {
             await ensureViewModel(currentUser: currentUser).loadDashboard()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active, let viewModel else { return }
+            guard newPhase == .active, let viewModel, viewModel.needsRefresh() else { return }
             Task {
                 await viewModel.loadDashboard()
             }

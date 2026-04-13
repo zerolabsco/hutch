@@ -88,9 +88,6 @@ struct RepositoryListView: View {
                     )
                 }
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .task {
-                    await viewModel.loadMoreIfNeeded(currentItem: repo)
-                }
             }
 
             if viewModel.isLoadingMore {
@@ -156,7 +153,7 @@ struct RepositoryListView: View {
         }
         .srhtErrorBanner(error: $vm.error)
         .refreshable {
-            await viewModel.loadRepositories()
+            await viewModel.loadRepositories(forceRefresh: true)
         }
         .task {
             await viewModel.loadRepositories()

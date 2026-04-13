@@ -188,6 +188,7 @@ final class HomeViewModel {
     private(set) var projectsError: String?
     private(set) var assignedTicketsError: String?
     private(set) var recentBuildsError: String?
+    private(set) var lastRefreshed: Date?
 
     private let currentUser: User
     private let client: SRHTClient
@@ -405,8 +406,15 @@ final class HomeViewModel {
             systemStatusErrorMessage = error.userFacingMessage
         }
         isLoadingSystemStatus = false
+        lastRefreshed = Date()
         persistNeedsAttentionSnapshot()
         persistSystemStatusWidgetSnapshot()
+    }
+
+    /// Returns true if sufficient time has elapsed since the last dashboard refresh.
+    func needsRefresh(after interval: TimeInterval = 60) -> Bool {
+        guard let lastRefreshed else { return true }
+        return Date().timeIntervalSince(lastRefreshed) > interval
     }
 
     var hasDashboardContent: Bool {

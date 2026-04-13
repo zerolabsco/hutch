@@ -48,7 +48,7 @@ struct HomeView: View {
             loadRecentActivity()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active, let viewModel else { return }
+            guard newPhase == .active, let viewModel, viewModel.needsRefresh() else { return }
             Task {
                 await viewModel.loadDashboard()
                 loadRecentActivity()
