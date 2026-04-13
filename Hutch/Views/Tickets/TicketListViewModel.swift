@@ -341,7 +341,11 @@ final class TicketListViewModel {
             hasMore = page.cursor != nil
             reconcileSelectionWithLoadedTickets()
         } catch {
-            self.error = error.userFacingMessage
+            // Ignore cancellation errors — the SwiftUI .task modifier cancels in-flight
+            // requests when a row scrolls off-screen, which is expected behavior.
+            if !Task.isCancelled {
+                self.error = error.userFacingMessage
+            }
         }
 
         isLoadingMore = false
