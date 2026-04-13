@@ -25,4 +25,17 @@ struct ProjectPinStoreTests {
 
         #expect(ProjectPinStore.loadPinnedProjectIDs(for: "~alice", defaults: defaults).isEmpty)
     }
+
+    @Test
+    func loadPinnedProjectsNormalizesWhitespaceAndDuplicates() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+
+        let encoded = try! JSONEncoder().encode([
+            "~alice": [" project-1 ", "", "project-1", "project-2"]
+        ])
+        defaults.set(encoded, forKey: AppStorageKeys.pinnedHomeProjects)
+
+        #expect(ProjectPinStore.loadPinnedProjectIDs(for: "~alice", defaults: defaults) == ["project-1", "project-2"])
+    }
 }

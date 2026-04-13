@@ -11,6 +11,17 @@ private struct ProjectPageUser: Decodable, Sendable {
 private struct ProjectPage: Decodable, Sendable {
     let results: [ProjectSummaryPayload]
     let cursor: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case results
+        case cursor
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        results = try container.decodeIfPresent([ProjectSummaryPayload].self, forKey: .results) ?? []
+        cursor = try container.decodeIfPresent(String.self, forKey: .cursor)
+    }
 }
 
 private struct ProjectSummaryPayload: Decodable, Sendable {
@@ -21,6 +32,27 @@ private struct ProjectSummaryPayload: Decodable, Sendable {
     let visibility: Visibility
     let tags: [String]
     let updated: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case rid
+        case name
+        case description
+        case website
+        case visibility
+        case tags
+        case updated
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decode(String.self, forKey: .rid)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        website = try container.decodeIfPresent(String.self, forKey: .website)
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        updated = try container.decodeIfPresent(Date.self, forKey: .updated) ?? .distantPast
+    }
 }
 
 private struct ProjectDetailResponse: Decodable, Sendable {
@@ -38,11 +70,40 @@ private struct ProjectDetailPayload: Decodable, Sendable {
     let mailingLists: ProjectMailingListPage
     let sources: ProjectSourcePage
     let trackers: ProjectTrackerPage
+
+    private enum CodingKeys: String, CodingKey {
+        case rid
+        case name
+        case description
+        case website
+        case visibility
+        case tags
+        case updated
+        case mailingLists
+        case sources
+        case trackers
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decode(String.self, forKey: .rid)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        website = try container.decodeIfPresent(String.self, forKey: .website)
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        updated = try container.decodeIfPresent(Date.self, forKey: .updated) ?? .distantPast
+        mailingLists = try container.decodeIfPresent(ProjectMailingListPage.self, forKey: .mailingLists) ?? .empty
+        sources = try container.decodeIfPresent(ProjectSourcePage.self, forKey: .sources) ?? .empty
+        trackers = try container.decodeIfPresent(ProjectTrackerPage.self, forKey: .trackers) ?? .empty
+    }
 }
 
 private struct ProjectMailingListPage: Decodable, Sendable {
     let results: [ProjectMailingListPayload]
     let cursor: String?
+
+    static let empty = ProjectMailingListPage(results: [], cursor: nil)
 }
 
 private struct ProjectMailingListPayload: Decodable, Sendable {
@@ -51,11 +112,30 @@ private struct ProjectMailingListPayload: Decodable, Sendable {
     let description: String?
     let visibility: Visibility
     let owner: Entity
+
+    private enum CodingKeys: String, CodingKey {
+        case rid
+        case name
+        case description
+        case visibility
+        case owner
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decode(String.self, forKey: .rid)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
+    }
 }
 
 private struct ProjectSourcePage: Decodable, Sendable {
     let results: [ProjectSourcePayload]
     let cursor: String?
+
+    static let empty = ProjectSourcePage(results: [], cursor: nil)
 }
 
 private struct ProjectSourcePayload: Decodable, Sendable {
@@ -65,11 +145,32 @@ private struct ProjectSourcePayload: Decodable, Sendable {
     let visibility: Visibility
     let owner: Entity
     let repoType: Project.SourceRepo.RepoType
+
+    private enum CodingKeys: String, CodingKey {
+        case rid
+        case name
+        case description
+        case visibility
+        case owner
+        case repoType
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decode(String.self, forKey: .rid)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
+        repoType = try container.decodeIfPresent(Project.SourceRepo.RepoType.self, forKey: .repoType) ?? .git
+    }
 }
 
 private struct ProjectTrackerPage: Decodable, Sendable {
     let results: [ProjectTrackerPayload]
     let cursor: String?
+
+    static let empty = ProjectTrackerPage(results: [], cursor: nil)
 }
 
 private struct ProjectTrackerPayload: Decodable, Sendable {
@@ -78,6 +179,23 @@ private struct ProjectTrackerPayload: Decodable, Sendable {
     let description: String?
     let visibility: Visibility
     let owner: Entity
+
+    private enum CodingKeys: String, CodingKey {
+        case rid
+        case name
+        case description
+        case visibility
+        case owner
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rid = try container.decode(String.self, forKey: .rid)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
+    }
 }
 
 struct ProjectService: Sendable {

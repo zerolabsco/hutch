@@ -5,6 +5,7 @@ struct ProjectDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var detailProject: Project?
     @State private var isLoading = false
     @State private var error: String?
@@ -27,13 +28,14 @@ struct ProjectDetailView: View {
     var body: some View {
         List {
             headerSection
-            linksSection
             repositoriesSection
             trackersSection
             mailingListsSection
+            linksSection
+            emptyResourcesSection
         }
         .themedList()
-        .navigationTitle(displayedProject.name)
+        .navigationTitle(displayedProject.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if isLoading, detailProject == nil, !project.isFullyLoaded {
@@ -71,19 +73,19 @@ struct ProjectDetailView: View {
     private var headerSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
-                Text(displayedProject.name)
+                Text(displayedProject.displayName)
                     .font(.headline)
 
-                if let description = displayedProject.description, !description.isEmpty {
+                if let description = displayedProject.displayDescription {
                     Text(description)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
-                if !displayedProject.tags.isEmpty {
+                if !displayedProject.displayTags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(displayedProject.tags, id: \.self) { tag in
+                            ForEach(displayedProject.displayTags, id: \.self) { tag in
                                 Text(tag)
                                     .font(.caption.weight(.medium))
                                     .padding(.horizontal, 10)
@@ -94,7 +96,11 @@ struct ProjectDetailView: View {
                     }
                 }
 
+                LabeledContent("Project", value: displayedProject.visibility.displayName)
                 LabeledContent("Updated", value: displayedProject.updated.relativeDescription)
+                if let summary = displayedProject.resourceSummary {
+                    LabeledContent("Linked", value: summary)
+                }
             }
             .padding(.vertical, 4)
         }
@@ -106,10 +112,20 @@ struct ProjectDetailView: View {
         if !links.isEmpty {
             Section("Links") {
                 ForEach(links) { link in
-                    Link(destination: link.url) {
-                        Label(link.title, systemImage: link.systemImage)
-                            .font(.subheadline)
+                    Button {
+                        openURL(link.url)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label(link.title, systemImage: link.systemImage)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -122,14 +138,19 @@ struct ProjectDetailView: View {
                 ForEach(displayedProject.sources) { source in
                     Button {
                         Task {
-                            try? await appState.openProjectSource(source)
-                            dismiss()
+                            do {
+                                try await appState.openProjectSource(source)
+                                dismiss()
+                            } catch {
+                                self.error = "Couldn’t open repository. \(error.userFacingMessage)"
+                            }
                         }
                     } label: {
                         ProjectResourceRow(
-                            title: source.name,
-                            subtitle: source.owner.canonicalName,
-                            detail: source.description
+                            title: source.displayName,
+                            subtitle: source.ownerDisplayName,
+                            detail: source.displayDescription,
+                            systemImage: "book.closed"
                         )
                     }
                     .buttonStyle(.plain)
@@ -145,14 +166,19 @@ struct ProjectDetailView: View {
                 ForEach(displayedProject.trackers) { tracker in
                     Button {
                         Task {
-                            try? await appState.openProjectTracker(tracker)
-                            dismiss()
+                            do {
+                                try await appState.openProjectTracker(tracker)
+                                dismiss()
+                            } catch {
+                                self.error = "Couldn’t open tracker. \(error.userFacingMessage)"
+                            }
                         }
                     } label: {
                         ProjectResourceRow(
-                            title: tracker.name,
-                            subtitle: tracker.owner.canonicalName,
-                            detail: tracker.description
+                            title: tracker.displayName,
+                            subtitle: tracker.ownerDisplayName,
+                            detail: tracker.displayDescription,
+                            systemImage: "checklist"
                         )
                     }
                     .buttonStyle(.plain)
@@ -171,13 +197,27 @@ struct ProjectDetailView: View {
                         dismiss()
                     } label: {
                         ProjectResourceRow(
-                            title: mailingList.name,
-                            subtitle: mailingList.owner.canonicalName,
-                            detail: mailingList.description
+                            title: mailingList.displayName,
+                            subtitle: mailingList.ownerDisplayName,
+                            detail: mailingList.displayDescription,
+                            systemImage: "list.bullet"
                         )
                     }
                     .buttonStyle(.plain)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyResourcesSection: some View {
+        if !displayedProject.hasLinkedResources, displayedProject.websiteURL == nil {
+            Section {
+                ContentUnavailableView(
+                    "No Linked Resources",
+                    systemImage: "square.stack.3d.up.slash",
+                    description: Text("This project doesn’t currently expose repositories, trackers, mailing lists, or external links.")
+                )
             }
         }
     }
@@ -197,7 +237,7 @@ struct ProjectDetailView: View {
             let service = ProjectService(client: appState.client)
             detailProject = try await service.fetchProjectDetail(rid: project.id)
         } catch {
-            self.error = "Failed to load project"
+            self.error = "Couldn’t load project. \(error.userFacingMessage)"
         }
     }
 
@@ -210,31 +250,26 @@ struct ProjectDetailView: View {
     private func projectLinks(for project: Project) -> [ProjectLink] {
         var links: [ProjectLink] = []
 
-        if let website = project.website?.trimmingCharacters(in: .whitespacesAndNewlines),
-           let url = URL(string: website),
-           !website.isEmpty {
-            links.append(ProjectLink(id: "website", title: website, systemImage: "globe", url: url))
+        if let url = project.websiteURL {
+            links.append(ProjectLink(id: "website", title: project.website ?? url.absoluteString, systemImage: "globe", url: url))
         }
 
         if let source = project.sources.first,
-           let url = sourceURL(for: source) {
-            links.append(ProjectLink(id: "primary-repo", title: "\(source.ownerUsername)/\(source.name)", systemImage: "book.closed", url: url))
+           let url = source.webURL {
+            links.append(ProjectLink(id: "primary-repo", title: "\(source.ownerUsername)/\(source.displayName)", systemImage: "book.closed", url: url))
         }
 
         if let tracker = project.trackers.first,
-           let url = SRHTWebURL.tracker(ownerUsername: tracker.ownerUsername, trackerName: tracker.name) {
-            links.append(ProjectLink(id: "primary-tracker", title: "\(tracker.ownerUsername)/\(tracker.name)", systemImage: "checklist", url: url))
+           let url = tracker.webURL {
+            links.append(ProjectLink(id: "primary-tracker", title: "\(tracker.ownerUsername)/\(tracker.displayName)", systemImage: "checklist", url: url))
+        }
+
+        if let mailingList = project.mailingLists.first,
+           let url = SRHTWebURL.mailingList(ownerUsername: mailingList.ownerUsername, listName: mailingList.name) {
+            links.append(ProjectLink(id: "primary-list", title: "\(mailingList.ownerUsername)/\(mailingList.displayName)", systemImage: "list.bullet", url: url))
         }
 
         return links
-    }
-
-    private func sourceURL(for source: Project.SourceRepo) -> URL? {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "\(source.repoType.service.rawValue).sr.ht"
-        components.percentEncodedPath = "/~\(source.ownerUsername)/\(source.name)"
-        return components.url
     }
 }
 
@@ -249,24 +284,39 @@ private struct ProjectResourceRow: View {
     let title: String
     let subtitle: String
     let detail: String?
+    let systemImage: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-
-            Text(subtitle)
-                .font(.caption)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .frame(width: 18, alignment: .leading)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
 
-            if let detail, !detail.isEmpty {
-                Text(detail)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                }
             }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .padding(.vertical, 4)
     }
 }

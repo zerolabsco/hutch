@@ -185,6 +185,7 @@ final class HomeViewModel {
     private(set) var isLoadingProjects = false
     private(set) var isLoadingAssignedTickets = false
     private(set) var isLoadingRecentBuilds = false
+    private(set) var projectsError: String?
     private(set) var assignedTicketsError: String?
     private(set) var recentBuildsError: String?
 
@@ -332,6 +333,7 @@ final class HomeViewModel {
         isLoadingAssignedTickets = true
         isLoadingRecentBuilds = true
         isLoadingSystemStatus = true
+        projectsError = nil
         assignedTicketsError = nil
         recentBuildsError = nil
         isShowingStaleSystemStatus = false
@@ -347,8 +349,9 @@ final class HomeViewModel {
         switch projectsResult {
         case .success(let projects):
             self.projects = projects
-        case .failure:
-            self.projects = []
+            self.projectsError = nil
+        case .failure(let error):
+            self.projectsError = error.userFacingMessage
         }
         isLoadingProjects = false
 
@@ -405,6 +408,10 @@ final class HomeViewModel {
 
         let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
         return pinnedIDs.compactMap { projectsByID[$0] }
+    }
+
+    var hasPinnedProjects: Bool {
+        !ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey).isEmpty
     }
 
     var failedBuildCount: Int {

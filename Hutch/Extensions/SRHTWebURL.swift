@@ -63,6 +63,22 @@ enum SRHTWebURL {
         )
     }
 
+    static func projectSource(_ source: Project.SourceRepo) -> URL? {
+        userScopedURL(
+            host: "\(source.repoType.service.rawValue).sr.ht",
+            ownerUsername: source.ownerUsername,
+            pathComponents: [source.name]
+        )
+    }
+
+    static func mailingList(ownerUsername: String, listName: String) -> URL? {
+        userScopedURL(
+            host: "lists.sr.ht",
+            ownerUsername: ownerUsername,
+            pathComponents: [listName]
+        )
+    }
+
     static func ticket(ownerUsername: String, trackerName: String, ticketId: Int) -> URL? {
         userScopedURL(
             host: "todo.sr.ht",

@@ -71,4 +71,25 @@ struct ProjectTests {
 
         #expect(project.resourceSummary == "Website linked")
     }
+
+    @Test
+    func displayHelpersNormalizeBlankValues() {
+        let project = Project(
+            id: "project-1",
+            name: "  ",
+            description: "\n",
+            website: "https://example.com",
+            visibility: .unlisted,
+            tags: [" docs ", "", "Docs", "ios"],
+            updated: Date(timeIntervalSince1970: 0),
+            mailingLists: [],
+            sources: [],
+            trackers: []
+        )
+
+        #expect(project.displayName == "Untitled Project")
+        #expect(project.displayDescription == nil)
+        #expect(project.displayTags == ["docs", "ios"])
+        #expect(project.metadataLine.contains("Unlisted"))
+    }
 }

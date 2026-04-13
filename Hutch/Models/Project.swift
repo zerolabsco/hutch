@@ -115,15 +115,121 @@ struct Project: Identifiable, Hashable, Sendable {
         return nil
     }
 
+    var displayName: String {
+        Self.normalizedText(name) ?? "Untitled Project"
+    }
+
+    var displayDescription: String? {
+        Self.normalizedText(description)
+    }
+
+    var displayTags: [String] {
+        var seen = Set<String>()
+        return tags.compactMap { tag in
+            guard let normalized = Self.normalizedText(tag) else { return nil }
+            let key = normalized.lowercased()
+            guard seen.insert(key).inserted else { return nil }
+            return normalized
+        }
+    }
+
+    var websiteURL: URL? {
+        guard let website = Self.normalizedText(website) else { return nil }
+        return URL(string: website)
+    }
+
+    var hasLinkedResources: Bool {
+        !sources.isEmpty || !trackers.isEmpty || !mailingLists.isEmpty
+    }
+
+    var metadataLine: String {
+        var parts = [visibility.displayName, updated.relativeDescription]
+        if let summary = resourceSummary {
+            parts.append(summary)
+        }
+        return parts.joined(separator: " • ")
+    }
+
     private static func resourceCountText(count: Int, singular: String) -> String? {
         guard count > 0 else { return nil }
         let label = count == 1 ? singular : "\(singular)s"
         return "\(count) \(label)"
+    }
+
+    fileprivate static func normalizedText(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+}
+
+extension Project.MailingList {
+    var displayName: String {
+        Project.normalizedText(name) ?? "Untitled Mailing List"
+    }
+
+    var displayDescription: String? {
+        Project.normalizedText(description)
+    }
+
+    var ownerDisplayName: String {
+        Project.normalizedText(owner.canonicalName) ?? "~unknown"
+    }
+}
+
+extension Project.SourceRepo {
+    var displayName: String {
+        Project.normalizedText(name) ?? "Untitled Repository"
+    }
+
+    var displayDescription: String? {
+        Project.normalizedText(description)
+    }
+
+    var ownerDisplayName: String {
+        Project.normalizedText(owner.canonicalName) ?? "~unknown"
+    }
+
+    var webURL: URL? {
+        SRHTWebURL.projectSource(self)
+    }
+}
+
+extension Project.Tracker {
+    var displayName: String {
+        Project.normalizedText(name) ?? "Untitled Tracker"
+    }
+
+    var displayDescription: String? {
+        Project.normalizedText(description)
+    }
+
+    var ownerDisplayName: String {
+        Project.normalizedText(owner.canonicalName) ?? "~unknown"
+    }
+
+    var webURL: URL? {
+        SRHTWebURL.tracker(ownerUsername: ownerUsername, trackerName: name)
     }
 }
 
 extension String {
     var srhtUsername: String {
         hasPrefix("~") ? String(dropFirst()) : self
+    }
+}
+
+extension Visibility {
+    var displayName: String {
+        switch self {
+        case .public:
+            "Public"
+        case .unlisted:
+            "Unlisted"
+        case .private:
+            "Private"
+        }
     }
 }

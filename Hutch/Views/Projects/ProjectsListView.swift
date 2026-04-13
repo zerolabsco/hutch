@@ -34,7 +34,11 @@ final class ProjectsListViewModel {
         do {
             projects = try await service.fetchProjects()
         } catch {
-            self.error = "Failed to load projects"
+            if projects.isEmpty {
+                self.error = error.userFacingMessage
+            } else {
+                self.error = "Couldn’t refresh projects. \(error.userFacingMessage)"
+            }
         }
     }
 }
@@ -72,6 +76,8 @@ struct ProjectsListView: View {
                 } label: {
                     ProjectListRow(project: project)
                 }
+                .buttonStyle(.plain)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             }
         }
         .themedList()
@@ -96,7 +102,7 @@ struct ProjectsListView: View {
                 ContentUnavailableView(
                     "No Projects",
                     systemImage: "square.stack.3d.up",
-                    description: Text("Your SourceHut projects will appear here.")
+                    description: Text("Projects from your SourceHut account will appear here when available.")
                 )
             }
         }
@@ -114,33 +120,49 @@ private struct ProjectListRow: View {
     let project: Project
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(project.name)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
 
-                Spacer()
+                    if let description = project.displayDescription {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
 
-                Text(project.updated.relativeDescription)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 8)
+
+                VisibilityBadge(visibility: project.visibility)
             }
 
-            if let description = project.description, !description.isEmpty {
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+            Text(project.metadataLine)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
-            if let summary = project.resourceSummary {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+            if !project.displayTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(project.displayTags.prefix(4), id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(.quaternary, in: Capsule())
+                        }
+                    }
+                }
+                .scrollDisabled(true)
             }
         }
-        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .padding(.vertical, 4)
     }
 }

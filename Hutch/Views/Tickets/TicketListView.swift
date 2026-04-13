@@ -194,75 +194,67 @@ struct TicketListView: View {
 
         List {
             Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    Picker("Filter", selection: $vm.filter) {
-                        ForEach(TicketFilter.allCases, id: \.self) { filter in
-                            Text(filter.rawValue).tag(filter)
+                TicketListFilterHeader(
+                    selectedLabels: viewModel.selectedLabels,
+                    savedFilters: viewModel.savedFilters,
+                    activeSavedFilterID: viewModel.activeSavedFilterID,
+                    canSaveCurrentFilter: viewModel.hasCustomFilterSelection,
+                    filter: $vm.filter
+                ) {
+                    showLabelFilterSheet = true
+                } onSaveFilter: {
+                    showSaveFilterSheet = true
+                } onResetFilters: {
+                    vm.resetFilters()
+                } onApplySavedFilter: { savedFilter in
+                    vm.applySavedFilter(savedFilter)
+                } onDeleteSavedFilter: { savedFilter in
+                    vm.deleteSavedFilter(savedFilter)
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+                ForEach(viewModel.filteredTickets) { ticket in
+                    NavigationLink {
+                        TicketDetailView(
+                            ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
+                            trackerName: tracker.name,
+                            trackerId: tracker.id,
+                            trackerRid: tracker.rid,
+                            ticketId: ticket.id
+                        )
+                    } label: {
+                        TicketRowView(ticket: ticket)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if swipeActionsEnabled {
+                            ticketAssignSwipeAction(ticket, viewModel: viewModel)
                         }
                     }
-                    .pickerStyle(.segmented)
-
-                    TicketQuickFilterBar(
-                        selectedLabels: viewModel.selectedLabels,
-                        savedFilters: viewModel.savedFilters,
-                        activeSavedFilterID: viewModel.activeSavedFilterID,
-                        canSaveCurrentFilter: viewModel.hasCustomFilterSelection
-                    ) {
-                        showLabelFilterSheet = true
-                    } onSaveFilter: {
-                        showSaveFilterSheet = true
-                    } onResetFilters: {
-                        vm.resetFilters()
-                    } onApplySavedFilter: { savedFilter in
-                        vm.applySavedFilter(savedFilter)
-                    } onDeleteSavedFilter: { savedFilter in
-                        vm.deleteSavedFilter(savedFilter)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if swipeActionsEnabled {
+                            ticketStatusSwipeAction(ticket, viewModel: viewModel)
+                            ticketLabelSwipeAction(ticket, viewModel: viewModel)
+                        }
+                    }
+                    .task {
+                        await viewModel.loadMoreIfNeeded(currentItem: ticket)
                     }
                 }
-                .padding(.vertical, 4)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            }
 
-            // Tickets
-            ForEach(viewModel.filteredTickets) { ticket in
-                NavigationLink {
-                    TicketDetailView(
-                        ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
-                        trackerName: tracker.name,
-                        trackerId: tracker.id,
-                        trackerRid: tracker.rid,
-                        ticketId: ticket.id
-                    )
-                } label: {
-                    TicketRowView(ticket: ticket)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    if swipeActionsEnabled {
-                        ticketAssignSwipeAction(ticket, viewModel: viewModel)
+                if viewModel.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
                     }
+                    .listRowSeparator(.hidden)
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if swipeActionsEnabled {
-                        ticketStatusSwipeAction(ticket, viewModel: viewModel)
-                        ticketLabelSwipeAction(ticket, viewModel: viewModel)
-                    }
-                }
-                .task {
-                    await viewModel.loadMoreIfNeeded(currentItem: ticket)
-                }
-            }
-
-            if viewModel.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
+        .listSectionSpacing(.compact)
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),
@@ -538,6 +530,45 @@ private struct TicketLabelsSheet: View {
     }
 }
 
+private struct TicketListFilterHeader: View {
+    let selectedLabels: [TicketLabel]
+    let savedFilters: [SavedTicketFilter]
+    let activeSavedFilterID: SavedTicketFilter.ID?
+    let canSaveCurrentFilter: Bool
+    @Binding var filter: TicketFilter
+    let onShowLabels: () -> Void
+    let onSaveFilter: () -> Void
+    let onResetFilters: () -> Void
+    let onApplySavedFilter: (SavedTicketFilter) -> Void
+    let onDeleteSavedFilter: (SavedTicketFilter) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Filter", selection: $filter) {
+                ForEach(TicketFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            TicketQuickFilterBar(
+                selectedLabels: selectedLabels,
+                savedFilters: savedFilters,
+                activeSavedFilterID: activeSavedFilterID,
+                canSaveCurrentFilter: canSaveCurrentFilter,
+                onShowLabels: onShowLabels,
+                onSaveFilter: onSaveFilter,
+                onResetFilters: onResetFilters,
+                onApplySavedFilter: onApplySavedFilter,
+                onDeleteSavedFilter: onDeleteSavedFilter
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+    }
+}
+
 private struct TicketQuickFilterBar: View {
     let selectedLabels: [TicketLabel]
     let savedFilters: [SavedTicketFilter]
@@ -550,27 +581,8 @@ private struct TicketQuickFilterBar: View {
     let onDeleteSavedFilter: (SavedTicketFilter) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Button(action: onShowLabels) {
-                    Label(labelButtonTitle, systemImage: "tag")
-                        .font(.caption.weight(.medium))
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: onSaveFilter) {
-                    Label("Save Filter", systemImage: "square.and.arrow.down")
-                        .font(.caption.weight(.medium))
-                }
-                .buttonStyle(.bordered)
-                .disabled(!canSaveCurrentFilter)
-
-                if canSaveCurrentFilter {
-                    Button("Reset", action: onResetFilters)
-                        .font(.caption.weight(.medium))
-                        .buttonStyle(.bordered)
-                }
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            actionButtons
 
             if !selectedLabels.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -622,6 +634,51 @@ private struct TicketQuickFilterBar: View {
 
     private var labelButtonTitle: String {
         selectedLabels.isEmpty ? "Labels" : "Labels (\(selectedLabels.count))"
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                labelsButton
+                saveFilterButton
+                if canSaveCurrentFilter {
+                    resetButton
+                }
+                Spacer(minLength: 0)
+            }
+
+            FlowLayout(spacing: 8) {
+                labelsButton
+                saveFilterButton
+                if canSaveCurrentFilter {
+                    resetButton
+                }
+            }
+        }
+    }
+
+    private var labelsButton: some View {
+        Button(action: onShowLabels) {
+            Label(labelButtonTitle, systemImage: "tag")
+                .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var saveFilterButton: some View {
+        Button(action: onSaveFilter) {
+            Label("Save Filter", systemImage: "square.and.arrow.down")
+                .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .disabled(!canSaveCurrentFilter)
+    }
+
+    private var resetButton: some View {
+        Button("Reset", action: onResetFilters)
+            .font(.caption.weight(.medium))
+            .buttonStyle(.bordered)
     }
 }
 

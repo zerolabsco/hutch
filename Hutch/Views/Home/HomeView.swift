@@ -179,7 +179,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private func projectsSection(_ viewModel: HomeViewModel) -> some View {
-        if !viewModel.pinnedProjects.isEmpty {
+        if viewModel.hasPinnedProjects {
             HomeSectionView("Pinned Projects", isExpanded: $projectsExpanded) {
                 NavigationLink {
                     ProjectsListView()
@@ -189,11 +189,27 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
             } content: {
-                ForEach(viewModel.pinnedProjects.prefix(projectPreviewLimit)) { project in
-                    NavigationLink {
-                        ProjectDetailView(project: project)
-                    } label: {
-                        HomeProjectRow(project: project)
+                if viewModel.isLoadingProjects && viewModel.pinnedProjects.isEmpty {
+                    HomeSectionLoadingRow(label: "Loading pinned projects")
+                } else if let error = viewModel.projectsError, viewModel.pinnedProjects.isEmpty {
+                    HomeSectionMessageRow(
+                        text: "Couldn’t load pinned projects.",
+                        systemImage: "exclamationmark.triangle",
+                        emphasized: true,
+                        accessibilityHint: error
+                    )
+                } else if viewModel.pinnedProjects.isEmpty {
+                    HomeSectionMessageRow(
+                        text: "Pinned projects will appear here when they’re available.",
+                        systemImage: "pin"
+                    )
+                } else {
+                    ForEach(viewModel.pinnedProjects.prefix(projectPreviewLimit)) { project in
+                        NavigationLink {
+                            ProjectDetailView(project: project)
+                        } label: {
+                            HomeProjectRow(project: project)
+                        }
                     }
                 }
             }
@@ -388,26 +404,34 @@ private struct HomeProjectRow: View {
     let project: Project
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(project.name)
-                .font(.subheadline.weight(.medium))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if let description = project.displayDescription {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                VisibilityBadge(visibility: project.visibility)
+            }
+
+            Text(project.metadataLine)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
-
-            if let description = project.description, !description.isEmpty {
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            if let summary = project.resourceSummary {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
         }
-        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .padding(.vertical, 4)
     }
 }
 
