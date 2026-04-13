@@ -27,7 +27,42 @@ struct BuildDetailView: View {
         .navigationTitle("Job #\(jobId)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if let browserURL = viewModel?.job.flatMap({ SRHTWebURL.build(jobId: $0.id, ownerCanonicalName: $0.owner.canonicalName) }) {
+                    Menu {
+                        Button {
+                            openURL(browserURL)
+                        } label: {
+                            Label("Open in Browser", systemImage: "safari")
+                        }
+
+                        Button {
+                            appState.copyToPasteboard(browserURL.absoluteString, label: "build URL")
+                        } label: {
+                            Label("Copy URL", systemImage: "doc.on.doc")
+                        }
+
+                        if let job = viewModel?.job {
+                            Button {
+                                appState.copyToPasteboard(String(job.id), label: "job ID")
+                            } label: {
+                                Label("Copy Job ID", systemImage: "number")
+                            }
+
+                            if let note = job.note, !note.isEmpty {
+                                Button {
+                                    appState.copyToPasteboard(note, label: "build note")
+                                } label: {
+                                    Label("Copy Note", systemImage: "text.alignleft")
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Build actions")
+                }
+
                 SRHTShareButton(
                     url: viewModel?.job.flatMap { SRHTWebURL.build(jobId: $0.id, ownerCanonicalName: $0.owner.canonicalName) },
                     target: .build
@@ -102,7 +137,11 @@ struct BuildDetailView: View {
             if viewModel == nil {
                 let vm = BuildDetailViewModel(jobId: jobId, client: appState.client)
                 viewModel = vm
-                await vm.loadJob()
+                if appState.isDebugModeEnabled {
+                    await vm.loadJobWithDebugCapture()
+                } else {
+                    await vm.loadJob()
+                }
                 vm.startAutoRefresh()
             }
         }
@@ -123,11 +162,10 @@ struct BuildDetailView: View {
             SRHTErrorStateView(
                 title: "Couldn't Load Build",
                 message: error,
-                retryAction: { await viewModel.loadJob() }
+                retryAction: { await reloadDetail(viewModel) }
             )
         } else if let job = viewModel.job {
             List {
-                // Status & metadata
                 Section("Details") {
                     HStack {
                         Text("Status")
@@ -158,6 +196,26 @@ struct BuildDetailView: View {
                     LabeledContent("Owner", value: job.owner.canonicalName)
                     LabeledContent("Created", value: job.created.relativeDescription)
                     LabeledContent("Updated", value: job.updated.relativeDescription)
+                }
+
+                if appState.isDebugModeEnabled {
+                    Section("Debug") {
+                        DebugTextBlock(
+                            title: "Diagnostics",
+                            content: """
+                            jobId: \(job.id)
+                            status: \(job.status.rawValue)
+                            tasks: \(job.tasks.count)
+                            artifacts: \(job.artifacts.count)
+                            owner: \(job.owner.canonicalName)
+                            url: \(SRHTWebURL.build(jobId: job.id, ownerCanonicalName: job.owner.canonicalName)?.absoluteString ?? "unavailable")
+                            """
+                        )
+
+                        if let rawJobResponse = viewModel.rawJobResponse {
+                            DebugTextBlock(title: "Raw Response", content: rawJobResponse)
+                        }
+                    }
                 }
 
                 if let repositoryReference = HomeViewModel.primaryRepositoryReference(in: job.manifest) {
@@ -274,7 +332,7 @@ struct BuildDetailView: View {
                 }
             }
             .refreshable {
-                await viewModel.loadJob()
+                await reloadDetail(viewModel)
             }
             .srhtErrorBanner(error: Binding(
                 get: { viewModel.error },
@@ -299,6 +357,14 @@ struct BuildDetailView: View {
             } catch {
                 appState.presentRepositoryDeepLinkError()
             }
+        }
+    }
+
+    private func reloadDetail(_ viewModel: BuildDetailViewModel) async {
+        if appState.isDebugModeEnabled {
+            await viewModel.loadJobWithDebugCapture()
+        } else {
+            await viewModel.loadJob()
         }
     }
 }

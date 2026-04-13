@@ -74,15 +74,6 @@ struct HomeView: View {
                 viewModel.pinnedProjects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
                 viewModel.unreadInboxThreads.isEmpty {
                 SRHTLoadingStateView(message: "Loading Home…")
-            } else if !viewModel.isLoadingProjects && !viewModel.isLoadingAssignedTickets && !viewModel.isLoadingRecentBuilds &&
-                        viewModel.pinnedProjects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
-                        viewModel.unreadInboxThreads.isEmpty &&
-                        viewModel.assignedTicketsError == nil && viewModel.recentBuildsError == nil {
-                ContentUnavailableView(
-                    "All Clear",
-                    systemImage: "checkmark.circle",
-                    description: Text("There are no unread threads, assigned tickets, or urgent builds right now.")
-                )
             }
         }
         .refreshable {

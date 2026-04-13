@@ -5,6 +5,7 @@ struct CommitDetailView: View {
     let repository: RepositorySummary
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
     @State private var viewModel: CommitDetailViewModel?
 
     var body: some View {
@@ -18,7 +19,38 @@ struct CommitDetailView: View {
         .navigationTitle(commitSummary.shortId)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    if let commitURL = SRHTWebURL.commit(repository: repository, commitId: commitSummary.id) {
+                        Button {
+                            openURL(commitURL)
+                        } label: {
+                            Label("Open in Browser", systemImage: "safari")
+                        }
+
+                        Button {
+                            appState.copyToPasteboard(commitURL.absoluteString, label: "commit URL")
+                        } label: {
+                            Label("Copy URL", systemImage: "doc.on.doc")
+                        }
+                    }
+
+                    Button {
+                        appState.copyToPasteboard(commitSummary.id, label: "commit SHA")
+                    } label: {
+                        Label("Copy Full SHA", systemImage: "doc.on.doc")
+                    }
+
+                    Button {
+                        appState.copyToPasteboard(commitSummary.shortId, label: "short commit SHA")
+                    } label: {
+                        Label("Copy Short SHA", systemImage: "number")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("Commit actions")
+
                 SRHTShareButton(url: SRHTWebURL.commit(repository: repository, commitId: commitSummary.id), target: .commit) {
                     Image(systemName: "square.and.arrow.up")
                 }
@@ -109,7 +141,7 @@ struct CommitDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Full hash — tappable to copy
             Button {
-                UIPasteboard.general.string = commit.id
+                appState.copyToPasteboard(commit.id, label: "commit SHA")
             } label: {
                 HStack(spacing: 4) {
                     Text(commit.id)

@@ -12,6 +12,16 @@ enum SRHTWebURL {
         )
     }
 
+    static func httpsCloneURL(_ repositorySummary: RepositorySummary) -> String? {
+        repository(repositorySummary)?.absoluteString
+    }
+
+    static func sshCloneURL(_ repositorySummary: RepositorySummary) -> String {
+        let host = "\(repositorySummary.service.rawValue).sr.ht"
+        let user = repositorySummary.service == .hg ? "hg" : "git"
+        return "\(user)@\(host):\(repositorySummary.owner.canonicalName)/\(repositorySummary.name)"
+    }
+
     static func commit(repository: RepositorySummary, commitId: String) -> URL? {
         userScopedURL(
             host: "\(repository.service.rawValue).sr.ht",
@@ -61,6 +71,10 @@ enum SRHTWebURL {
             ownerUsername: ownerUsername,
             pathComponents: [trackerName]
         )
+    }
+
+    static func tracker(_ trackerSummary: TrackerSummary) -> URL? {
+        tracker(ownerUsername: trackerSummary.owner.canonicalName.srhtUsername, trackerName: trackerSummary.name)
     }
 
     static func projectSource(_ source: Project.SourceRepo) -> URL? {

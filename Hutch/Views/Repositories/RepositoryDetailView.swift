@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct RepositoryDetailView: View {
+    @Environment(\.openURL) private var openURL
+
     let onRepositoryUpdated: ((RepositorySummary) -> Void)?
     var onDeleted: (() -> Void)?
 
@@ -42,22 +44,10 @@ struct RepositoryDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    repositoryActionsMenu
+
                     SRHTShareButton(url: SRHTWebURL.repository(currentRepository), target: .repository) {
                         Image(systemName: "square.and.arrow.up")
-                    }
-
-                    if canManageRepository {
-                        Button {
-                            showACLs = true
-                        } label: {
-                            Image(systemName: "person.2")
-                        }
-
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gear")
-                        }
                     }
                 }
             }
@@ -136,5 +126,62 @@ struct RepositoryDetailView: View {
     private func normalizedUsername(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    private var repositoryActionsMenu: some View {
+        Menu {
+            if let repositoryURL = SRHTWebURL.repository(currentRepository) {
+                Button {
+                    openURL(repositoryURL)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+
+                Button {
+                    appState.copyToPasteboard(repositoryURL.absoluteString, label: "repository URL")
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            if let httpsURL = SRHTWebURL.httpsCloneURL(currentRepository) {
+                Button {
+                    appState.copyToPasteboard(httpsURL, label: "HTTPS clone URL")
+                } label: {
+                    Label("Copy HTTPS URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            Button {
+                appState.copyToPasteboard(SRHTWebURL.sshCloneURL(currentRepository), label: "SSH clone URL")
+            } label: {
+                Label("Copy SSH URL", systemImage: "terminal")
+            }
+
+            Button {
+                appState.copyToPasteboard(currentRepository.rid, label: "repository RID")
+            } label: {
+                Label("Copy RID", systemImage: "number")
+            }
+
+            if canManageRepository {
+                Divider()
+
+                Button {
+                    showACLs = true
+                } label: {
+                    Label("Manage ACLs", systemImage: "person.2")
+                }
+
+                Button {
+                    showSettings = true
+                } label: {
+                    Label("Repository Settings", systemImage: "gear")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("Repository actions")
     }
 }

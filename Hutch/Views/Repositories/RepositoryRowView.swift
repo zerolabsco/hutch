@@ -1,7 +1,9 @@
 import SwiftUI
-import UIKit
 
 struct RepositoryRowView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
+
     let repository: RepositorySummary
     let buildStatus: RepositoryBuildStatus
 
@@ -56,32 +58,43 @@ struct RepositoryRowView: View {
         }
         .padding(.vertical, 2)
         .contextMenu {
+            if let url = SRHTWebURL.repository(repository) {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+            }
+
             Button {
-                UIPasteboard.general.string = httpsCloneURL(for: repository)
+                if let url = SRHTWebURL.repository(repository)?.absoluteString {
+                    appState.copyToPasteboard(url, label: "repository URL")
+                }
+            } label: {
+                Label("Copy URL", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                if let url = SRHTWebURL.httpsCloneURL(repository) {
+                    appState.copyToPasteboard(url, label: "HTTPS clone URL")
+                }
             } label: {
                 Label("Copy HTTPS URL", systemImage: "doc.on.doc")
             }
 
             Button {
-                UIPasteboard.general.string = sshCloneURL(for: repository)
+                appState.copyToPasteboard(SRHTWebURL.sshCloneURL(repository), label: "SSH clone URL")
             } label: {
                 Label("Copy SSH URL", systemImage: "terminal")
             }
+
+            Button {
+                appState.copyToPasteboard(repository.rid, label: "repository RID")
+            } label: {
+                Label("Copy RID", systemImage: "number")
+            }
         }
     }
-}
-
-private func httpsCloneURL(for repository: RepositorySummary) -> String {
-    let host = "\(repository.service.rawValue).sr.ht"
-    let owner = repository.owner.canonicalName
-    return "https://\(host)/\(owner)/\(repository.name)"
-}
-
-private func sshCloneURL(for repository: RepositorySummary) -> String {
-    let host = "\(repository.service.rawValue).sr.ht"
-    let user = repository.service == .hg ? "hg" : "git"
-    let owner = repository.owner.canonicalName
-    return "\(user)@\(host):\(owner)/\(repository.name)"
 }
 
 private struct RepositoryBuildStatusIndicator: View {

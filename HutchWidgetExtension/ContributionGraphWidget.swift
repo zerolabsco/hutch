@@ -154,15 +154,19 @@ private struct ContributionGraphWidgetView: View {
 
     private func displayedWeeks(columnCount: Int) -> [ContributionGraphWeek] {
         var baseWeeks = switch entry.state {
-        case .populated, .indexing, .empty:
+        case .populated, .indexing:
             entry.weeks
+        case .empty:
+            ContributionGraphSampleData.emptyWeeks
         case .placeholder, .disabled, .unavailable:
             ContributionGraphSampleData.placeholderWeeks
         }
 
-        // Drop any trailing week where every day has zero contributions
-        while let last = baseWeeks.last, last.days.allSatisfy({ $0.count == 0 }) {
-            baseWeeks.removeLast()
+        if entry.state != .empty {
+            // Drop any trailing week where every day has zero contributions.
+            while let last = baseWeeks.last, last.days.allSatisfy({ $0.count == 0 }) {
+                baseWeeks.removeLast()
+            }
         }
 
         return Array(baseWeeks.suffix(columnCount))
@@ -182,6 +186,11 @@ private struct ContributionGraphGridView: View {
                         RoundedRectangle(cornerRadius: squareSize * 0.2, style: .continuous)
                             .fill((day?.intensity ?? .empty).color)
                             .frame(width: squareSize, height: squareSize)
+                            .overlay {
+                                let intensity = day?.intensity ?? .empty
+                                RoundedRectangle(cornerRadius: squareSize * 0.2, style: .continuous)
+                                    .stroke(Color.primary.opacity(intensity == .empty ? 0.08 : 0), lineWidth: 0.5)
+                            }
                     }
                 }
             }
@@ -420,6 +429,17 @@ private enum ContributionGraphDateParser {
 }
 
 private enum ContributionGraphSampleData {
+    static let emptyWeeks: [ContributionGraphWeek] = {
+        let startDate = Calendar.contributionCalendar.startOfDay(for: .now)
+        let days = (0..<371).compactMap { offset -> ContributionGraphDay? in
+            guard let date = Calendar.contributionCalendar.date(byAdding: .day, value: -offset, to: startDate) else {
+                return nil
+            }
+            return ContributionGraphDay(date: date, count: 0, score: 0)
+        }
+        return ContributionGraphLayout.weekColumns(from: days)
+    }()
+
     static let placeholderWeeks: [ContributionGraphWeek] = {
         let startDate = Calendar.contributionCalendar.startOfDay(for: .now)
         let days = (0..<150).compactMap { offset -> ContributionGraphDay? in

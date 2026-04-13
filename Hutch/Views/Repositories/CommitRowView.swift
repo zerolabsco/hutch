@@ -1,8 +1,11 @@
 import SwiftUI
-import UIKit
 
 struct CommitRowView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
+
     let commit: CommitSummary
+    let repository: RepositorySummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -28,14 +31,22 @@ struct CommitRowView: View {
         }
         .padding(.vertical, 2)
         .contextMenu {
+            if let url = SRHTWebURL.commit(repository: repository, commitId: commit.id) {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+            }
+
             Button {
-                UIPasteboard.general.string = commit.id
+                appState.copyToPasteboard(commit.id, label: "commit SHA")
             } label: {
                 Label("Copy Full SHA", systemImage: "doc.on.doc")
             }
 
             Button {
-                UIPasteboard.general.string = commit.shortId
+                appState.copyToPasteboard(commit.shortId, label: "short commit SHA")
             } label: {
                 Label("Copy Short SHA", systemImage: "doc.on.doc.fill")
             }

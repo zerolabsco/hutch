@@ -224,6 +224,9 @@ struct TrackerListView: View {
 // MARK: - Tracker Row
 
 private struct TrackerRowView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
+
     let tracker: TrackerSummary
 
     var body: some View {
@@ -255,5 +258,32 @@ private struct TrackerRowView: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
+        .contextMenu {
+            if let url = SRHTWebURL.tracker(tracker) {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+
+                Button {
+                    appState.copyToPasteboard(url.absoluteString, label: "tracker URL")
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            Button {
+                appState.copyToPasteboard(String(tracker.id), label: "tracker ID")
+            } label: {
+                Label("Copy Tracker ID", systemImage: "number")
+            }
+
+            Button {
+                appState.copyToPasteboard(tracker.rid, label: "tracker RID")
+            } label: {
+                Label("Copy RID", systemImage: "number")
+            }
+        }
     }
 }

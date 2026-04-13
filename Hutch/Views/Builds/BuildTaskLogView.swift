@@ -1,7 +1,8 @@
 import SwiftUI
-import UIKit
 
 struct BuildTaskLogView: View {
+    @Environment(AppState.self) private var appState
+
     let taskName: String
     let viewModel: BuildDetailViewModel
 
@@ -32,7 +33,7 @@ struct BuildTaskLogView: View {
                             }
                             ToolbarItem(placement: .topBarTrailing) {
                                 Button {
-                                    UIPasteboard.general.string = logText
+                                    appState.copyToPasteboard(logText, label: "build log")
                                 } label: {
                                     Image(systemName: "doc.on.doc")
                                 }

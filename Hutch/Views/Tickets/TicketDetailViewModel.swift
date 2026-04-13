@@ -97,6 +97,9 @@ private struct LabelsPage: Decodable, Sendable {
 @Observable
 @MainActor
 final class TicketDetailViewModel {
+    private static func cacheKey(ownerUsername: String, trackerRid: String, ticketId: Int) -> String {
+        "ticket.detail.\(ownerUsername).\(trackerRid).\(ticketId)"
+    }
 
     let ownerUsername: String
     let trackerName: String
@@ -110,6 +113,7 @@ final class TicketDetailViewModel {
     private(set) var isSubmitting = false
     private(set) var isPerformingAction = false
     private(set) var trackerLabels: [TicketLabel] = []
+    private(set) var rawTicketResponse: String?
     var commentText = ""
     var error: String?
 
@@ -284,6 +288,7 @@ final class TicketDetailViewModel {
         guard !isLoading else { return }
         isLoading = true
         error = nil
+        rawTicketResponse = nil
 
         do {
             let result = try await client.execute(
@@ -295,6 +300,47 @@ final class TicketDetailViewModel {
                 ],
                 responseType: TicketDetailResponse.self
             )
+            let payload = result.tracker.ticket
+            ticket = TicketDetail(
+                id: payload.id,
+                created: payload.created,
+                updated: payload.updated,
+                title: payload.title,
+                description: payload.description,
+                status: payload.status,
+                resolution: payload.resolution,
+                authenticity: payload.authenticity,
+                submitter: payload.submitter,
+                assignees: payload.assignees,
+                labels: payload.labels
+            )
+            events = payload.events.results.sorted(by: Self.timelineOrder)
+        } catch {
+            self.error = error.userFacingMessage
+        }
+
+        isLoading = false
+    }
+
+    func loadTicketWithDebugCapture() async {
+        guard !isLoading else { return }
+        isLoading = true
+        error = nil
+
+        do {
+            let cacheKey = Self.cacheKey(ownerUsername: ownerUsername, trackerRid: trackerRid, ticketId: ticketId)
+            let result = try await client.executeAndCache(
+                service: .todo,
+                query: Self.detailQuery,
+                variables: [
+                    "rid": trackerRid,
+                    "ticketId": ticketId
+                ],
+                responseType: TicketDetailResponse.self,
+                cacheKey: cacheKey
+            )
+            rawTicketResponse = client.responseCache.get(forKey: cacheKey)
+                .flatMap { String(data: $0, encoding: .utf8) }
             let payload = result.tracker.ticket
             ticket = TicketDetail(
                 id: payload.id,
@@ -378,7 +424,7 @@ final class TicketDetailViewModel {
                 responseType: UpdateStatusResponse.self
             )
             // Re-fetch the ticket to get updated status/resolution
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -412,7 +458,7 @@ final class TicketDetailViewModel {
                 responseType: AssignUserResponse.self
             )
             // Reload to reflect the change
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -457,7 +503,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: AssignUserResponse.self
             )
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             ticket = TicketDetail(
                 id: currentTicket.id,
@@ -505,7 +551,7 @@ final class TicketDetailViewModel {
                 responseType: UnassignUserResponse.self
             )
             // Reload to reflect the change
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -529,7 +575,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: LabelTicketResponse.self
             )
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -553,7 +599,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: UnlabelTicketResponse.self
             )
-            await loadTicket()
+            await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -598,6 +644,14 @@ final class TicketDetailViewModel {
         }
 
         isPerformingAction = false
+    }
+
+    private func reloadTicketPreservingDebugState() async {
+        if rawTicketResponse != nil {
+            await loadTicketWithDebugCapture()
+        } else {
+            await loadTicket()
+        }
     }
 
     static func matchesAssignee(_ entity: Entity, user: User) -> Bool {

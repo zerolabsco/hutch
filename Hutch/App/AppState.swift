@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import WebKit
 
 /// Central application state shared across the view hierarchy.
@@ -63,6 +64,13 @@ final class AppState {
     private(set) var systemStatusRepository: SystemStatusRepository
     private var activeSession: AccountSession?
     private(set) var sessionIdentity = UUID()
+    var isDebugModeEnabled = UserDefaults.standard.bool(forKey: AppStorageKeys.debugModeEnabled) {
+        didSet {
+            UserDefaults.standard.set(isDebugModeEnabled, forKey: AppStorageKeys.debugModeEnabled)
+        }
+    }
+    private(set) var copyConfirmationMessage: String?
+    private var copyConfirmationTask: Task<Void, Never>?
 
     var accountDefaults: UserDefaults {
         activeSession?.defaults ?? .standard
@@ -210,6 +218,7 @@ final class AppState {
         clearAllAccountArtifacts()
         authPhase = .unauthenticated
         selectedTab = .home
+        dismissCopyConfirmation()
     }
 
     func resetAppData() async {
@@ -230,6 +239,19 @@ final class AppState {
 
         authPhase = .unauthenticated
         selectedTab = .home
+        isDebugModeEnabled = false
+        dismissCopyConfirmation()
+    }
+
+    func copyToPasteboard(_ value: String, label: String) {
+        UIPasteboard.general.string = value
+        showCopyConfirmation(message: "Copied \(label)")
+    }
+
+    func dismissCopyConfirmation() {
+        copyConfirmationTask?.cancel()
+        copyConfirmationTask = nil
+        copyConfirmationMessage = nil
     }
 
     // MARK: - Deep link resolution
@@ -523,6 +545,17 @@ final class AppState {
             WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: since) {
                 continuation.resume()
             }
+        }
+    }
+
+    private func showCopyConfirmation(message: String) {
+        copyConfirmationTask?.cancel()
+        copyConfirmationMessage = message
+        copyConfirmationTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            copyConfirmationMessage = nil
+            copyConfirmationTask = nil
         }
     }
 }

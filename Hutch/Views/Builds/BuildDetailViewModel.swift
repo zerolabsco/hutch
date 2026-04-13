@@ -28,6 +28,7 @@ private struct SubmittedJob: Decodable, Sendable {
 @MainActor
 final class BuildDetailViewModel {
     private static let autoRefreshInterval: Duration = .seconds(5)
+    private static func cacheKey(for jobId: Int) -> String { "build.detail.\(jobId)" }
 
     let jobId: Int
     private let client: SRHTClient
@@ -44,6 +45,7 @@ final class BuildDetailViewModel {
     private(set) var isCancelling = false
     private(set) var isRebuilding = false
     private(set) var isSubmittingEditedBuild = false
+    private(set) var rawJobResponse: String?
     var error: String?
     /// Transient error shown for action failures (cancel, rebuild, submit).
     /// Separate from `error` so auto-refresh doesn't immediately clear it.
@@ -123,6 +125,7 @@ final class BuildDetailViewModel {
         guard !isLoading else { return }
         isLoading = true
         error = nil
+        rawJobResponse = nil
 
         do {
             let result = try await client.execute(
@@ -131,6 +134,40 @@ final class BuildDetailViewModel {
                 variables: ["id": jobId],
                 responseType: JobDetailResponse.self
             )
+            var loadedJob = result.job
+            loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
+                task.withOrdinal(index)
+            }
+            if job != loadedJob {
+                job = loadedJob
+            }
+
+            if loadedJob.status.isTerminal {
+                stopAutoRefresh()
+            }
+        } catch {
+            self.error = error.userFacingMessage
+        }
+
+        isLoading = false
+    }
+
+    func loadJobWithDebugCapture() async {
+        guard !isLoading else { return }
+        isLoading = true
+        error = nil
+
+        do {
+            let cacheKey = Self.cacheKey(for: jobId)
+            let result = try await client.executeAndCache(
+                service: .builds,
+                query: Self.detailQuery,
+                variables: ["id": jobId],
+                responseType: JobDetailResponse.self,
+                cacheKey: cacheKey
+            )
+            rawJobResponse = client.responseCache.get(forKey: cacheKey)
+                .flatMap { String(data: $0, encoding: .utf8) }
             var loadedJob = result.job
             loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
                 task.withOrdinal(index)
@@ -250,7 +287,7 @@ final class BuildDetailViewModel {
                 variables: ["id": jobId],
                 responseType: CancelResponse.self
             )
-            await loadJob()
+            await reloadJobPreservingDebugState()
         } catch {
             // Revert optimistic update on failure.
             self.job = originalJob
@@ -372,6 +409,14 @@ final class BuildDetailViewModel {
         self.autoRefreshTask = nil
     }
 
+    private func reloadJobPreservingDebugState() async {
+        if rawJobResponse != nil {
+            await loadJobWithDebugCapture()
+        } else {
+            await loadJob()
+        }
+    }
+
     private var shouldAutoRefresh: Bool {
         guard let job else { return true }
         return !job.status.isTerminal
@@ -385,7 +430,7 @@ final class BuildDetailViewModel {
             return
         }
 
-        await loadJob()
+        await reloadJobPreservingDebugState()
         await loadBuildLog()
     }
 }

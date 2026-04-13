@@ -123,6 +123,13 @@ struct RootView: View {
             get: { appState.selectedTab },
             set: { appState.selectedTab = $0 }
         )))
+        .safeAreaInset(edge: .bottom) {
+            if let message = appState.copyConfirmationMessage {
+                CopyConfirmationBadge(message: message)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .overlay {
             if isResolvingDeepLink {
                 ZStack {

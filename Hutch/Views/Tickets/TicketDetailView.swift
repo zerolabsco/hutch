@@ -10,6 +10,7 @@ struct TicketDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @State private var viewModel: TicketDetailViewModel?
 
     // Sheet state
@@ -47,7 +48,7 @@ struct TicketDetailView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
 
-                if let viewModel, viewModel.ticket != nil, isOwnedByCurrentUser {
+                if let viewModel, viewModel.ticket != nil {
                     actionsMenu(viewModel)
                 }
             }
@@ -63,7 +64,7 @@ struct TicketDetailView: View {
                     client: appState.client
                 )
                 viewModel = vm
-                await vm.loadTicket()
+                await reloadDetail(vm)
             }
         }
     }
@@ -73,6 +74,35 @@ struct TicketDetailView: View {
     @ViewBuilder
     private func actionsMenu(_ viewModel: TicketDetailViewModel) -> some View {
         Menu {
+            if let ticketURL = SRHTWebURL.ticket(ownerUsername: ownerUsername, trackerName: trackerName, ticketId: ticketId) {
+                Button {
+                    openURL(ticketURL)
+                } label: {
+                    SwiftUI.Label("Open in Browser", systemImage: "safari")
+                }
+
+                Button {
+                    appState.copyToPasteboard(ticketURL.absoluteString, label: "ticket URL")
+                } label: {
+                    SwiftUI.Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            Button {
+                appState.copyToPasteboard(String(ticketId), label: "ticket ID")
+            } label: {
+                SwiftUI.Label("Copy Ticket ID", systemImage: "number")
+            }
+
+            Button {
+                appState.copyToPasteboard(trackerRid, label: "tracker RID")
+            } label: {
+                SwiftUI.Label("Copy Tracker RID", systemImage: "number")
+            }
+
+            if isOwnedByCurrentUser {
+                Divider()
+
             if let ticket = viewModel.ticket {
                 if ticket.status == .resolved {
                     Button {
@@ -102,6 +132,7 @@ struct TicketDetailView: View {
                 Task { await viewModel.loadTrackerLabels() }
             } label: {
                 SwiftUI.Label("Manage Labels", systemImage: "tag")
+            }
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -133,7 +164,7 @@ struct TicketDetailView: View {
             SRHTErrorStateView(
                 title: "Couldn't Load Ticket",
                 message: error,
-                retryAction: { await viewModel.loadTicket() }
+                retryAction: { await reloadDetail(viewModel) }
             )
         } else if let ticket = viewModel.ticket {
             ScrollView {
@@ -179,13 +210,19 @@ struct TicketDetailView: View {
                             .padding(.vertical, 12)
                     }
 
-                    // Comment input
+                    if appState.isDebugModeEnabled {
+                        Divider()
+                            .padding(.vertical, 12)
+
+                        debugSection(viewModel: viewModel, ticket: ticket)
+                    }
+
                     commentInput(viewModel)
                 }
             }
             .srhtErrorBanner(error: $vm.error)
             .refreshable {
-                await viewModel.loadTicket()
+                await reloadDetail(viewModel)
             }
         }
     }
@@ -363,6 +400,35 @@ struct TicketDetailView: View {
         .padding()
     }
 
+    @ViewBuilder
+    private func debugSection(viewModel: TicketDetailViewModel, ticket: TicketDetail) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Debug")
+                .font(.headline)
+                .padding(.horizontal)
+
+            VStack(alignment: .leading, spacing: 12) {
+                DebugTextBlock(
+                    title: "Diagnostics",
+                    content: """
+                    ticketId: \(ticket.id)
+                    trackerId: \(trackerId)
+                    trackerRid: \(trackerRid)
+                    status: \(ticket.status.rawValue)
+                    events: \(viewModel.events.count)
+                    url: \(SRHTWebURL.ticket(ownerUsername: ownerUsername, trackerName: trackerName, ticketId: ticket.id)?.absoluteString ?? "unavailable")
+                    """
+                )
+
+                if let rawTicketResponse = viewModel.rawTicketResponse {
+                    DebugTextBlock(title: "Raw Response", content: rawTicketResponse)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 16)
+        }
+    }
+
     private func normalizedUsername(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
@@ -379,6 +445,14 @@ struct TicketDetailView: View {
             } catch {
                 appState.presentTicketDeepLinkError()
             }
+        }
+    }
+
+    private func reloadDetail(_ viewModel: TicketDetailViewModel) async {
+        if appState.isDebugModeEnabled {
+            await viewModel.loadTicketWithDebugCapture()
+        } else {
+            await viewModel.loadTicket()
         }
     }
 }

@@ -136,6 +136,29 @@ struct BuildListView: View {
                 NavigationLink(value: job) {
                     BuildRowView(job: job)
                 }
+                .contextMenu {
+                    Button {
+                        appState.copyToPasteboard(String(job.id), label: "job ID")
+                    } label: {
+                        Label("Copy Job ID", systemImage: "doc.on.doc")
+                    }
+
+                    if let note = job.note, !note.isEmpty {
+                        Button {
+                            appState.copyToPasteboard(note, label: "build note")
+                        } label: {
+                            Label("Copy Note", systemImage: "text.alignleft")
+                        }
+                    }
+
+                    if !job.tags.isEmpty {
+                        Button {
+                            appState.copyToPasteboard(job.tags.joined(separator: ", "), label: "build tags")
+                        } label: {
+                            Label("Copy Tags", systemImage: "tag")
+                        }
+                    }
+                }
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                     if swipeActionsEnabled, job.status.isCancellable {
                         Button {

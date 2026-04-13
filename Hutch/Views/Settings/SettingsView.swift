@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
+    @State private var showAccountSwitcher = false
 
     var body: some View {
         Form {
@@ -17,6 +18,9 @@ struct SettingsView: View {
         }
         .themedList()
         .navigationTitle("Settings")
+        .sheet(isPresented: $showAccountSwitcher) {
+            AccountSwitcherView()
+        }
         .alert(
             pendingDestructiveAction?.title ?? "",
             isPresented: Binding(
@@ -98,8 +102,8 @@ struct SettingsView: View {
             }
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
 
-            NavigationLink {
-                AccountSwitcherView()
+            Button {
+                showAccountSwitcher = true
             } label: {
                 Label("Manage Accounts", systemImage: "person.2")
             }
@@ -176,6 +180,7 @@ private enum SettingsDestructiveAction {
 }
 
 private struct AboutView: View {
+    @Environment(AppState.self) private var appState
     private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
         ?? "Hutch"
@@ -183,6 +188,17 @@ private struct AboutView: View {
         ?? "Unknown"
     private let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
         ?? "Unknown"
+    @State private var developerRevealCount = 0
+
+    private var developerToolsVisible: Bool {
+        appState.isDebugModeEnabled || developerRevealCount >= 5
+    }
+
+    private var developerRevealFooterText: String {
+        developerRevealCount >= 5
+            ? "Debug toggle unlocked. Scroll down to Developer to enable it."
+            : "Tap the build number 5 times to reveal the debug toggle."
+    }
 
     var body: some View {
         Form {
@@ -197,7 +213,15 @@ private struct AboutView: View {
                 .padding(.vertical, 4)
 
                 LabeledContent("Version", value: version)
+                    .onTapGesture {
+                        developerRevealCount = min(developerRevealCount + 1, 5)
+                    }
                 LabeledContent("Build", value: build)
+                    .onTapGesture {
+                        developerRevealCount = min(developerRevealCount + 1, 5)
+                    }
+            } footer: {
+                Text(developerRevealFooterText)
             }
 
             Section("Links") {
@@ -232,6 +256,19 @@ private struct AboutView: View {
                 Text("Built for SourceHut users who want quick access to repositories, builds, and tickets on iOS.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+
+            if developerToolsVisible {
+                Section {
+                    Toggle("Debug Mode", isOn: Binding(
+                        get: { appState.isDebugModeEnabled },
+                        set: { appState.isDebugModeEnabled = $0 }
+                    ))
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Shows raw API payloads and diagnostic details on builds and tickets screens. This stays hidden until explicitly enabled.")
+                }
             }
         }
         .themedList()

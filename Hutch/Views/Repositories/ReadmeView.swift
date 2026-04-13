@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 
 struct ReadmeView: View {
+    @Environment(AppState.self) private var appState
     let viewModel: RepositoryDetailViewModel
 
     @Environment(\.colorScheme) private var colorScheme
@@ -15,6 +16,9 @@ struct ReadmeView: View {
                 repositoryDetailsSection
                 latestChangeSection
                 readmeSection
+                if appState.isDebugModeEnabled {
+                    debugSection
+                }
             }
             .padding()
         }
@@ -149,6 +153,25 @@ struct ReadmeView: View {
         case .plainText(let text):
             .plainText(text)
         }
+    }
+
+    private var debugSection: some View {
+        DebugTextBlock(
+            title: "Debug",
+            content: """
+            repositoryId: \(viewModel.repository.id)
+            rid: \(viewModel.repository.rid)
+            service: \(viewModel.repository.service.rawValue)
+            defaultBranch: \(viewModel.repository.defaultBranchName ?? "none")
+            webURL: \(SRHTWebURL.repository(viewModel.repository)?.absoluteString ?? "unavailable")
+            httpsClone: \(SRHTWebURL.httpsCloneURL(viewModel.repository) ?? "unavailable")
+            sshClone: \(SRHTWebURL.sshCloneURL(viewModel.repository))
+            readmePath: \(viewModel.readmePath ?? "none")
+            commitsLoaded: \(viewModel.commits.count)
+            branchesLoaded: \(viewModel.branches.count)
+            tagsLoaded: \(viewModel.tags.count)
+            """
+        )
     }
 }
 

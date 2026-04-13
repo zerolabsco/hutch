@@ -7,7 +7,7 @@ struct CommitLogView: View {
         List {
             ForEach(viewModel.commits) { commit in
                 NavigationLink(value: commit) {
-                    CommitRowView(commit: commit)
+                    CommitRowView(commit: commit, repository: viewModel.repository)
                 }
                 .task {
                     await viewModel.loadMoreCommitsIfNeeded(currentItem: commit)

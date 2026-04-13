@@ -7,6 +7,7 @@ struct TicketListView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var tracker: TrackerSummary
     @State private var viewModel: TicketListViewModel?
     @State private var trackerManagementViewModel: TrackerManagementViewModel?
@@ -86,9 +87,7 @@ struct TicketListView: View {
                             viewModel?.setSelectionMode(true)
                         }
 
-                        if isOwnedByCurrentUser {
-                            trackerActionsMenu
-                        }
+                        trackerActionsMenu
                     }
                 }
             }
@@ -296,6 +295,27 @@ struct TicketListView: View {
                             } label: {
                                 TicketRowView(ticket: ticket)
                             }
+                            .contextMenu {
+                                if let url = SRHTWebURL.ticket(ownerUsername: ownerUsername(for: tracker), trackerName: tracker.name, ticketId: ticket.id) {
+                                    Button {
+                                        openURL(url)
+                                    } label: {
+                                        Label("Open in Browser", systemImage: "safari")
+                                    }
+
+                                    Button {
+                                        appState.copyToPasteboard(url.absoluteString, label: "ticket URL")
+                                    } label: {
+                                        Label("Copy URL", systemImage: "doc.on.doc")
+                                    }
+                                }
+
+                                Button {
+                                    appState.copyToPasteboard(String(ticket.id), label: "ticket ID")
+                                } label: {
+                                    Label("Copy Ticket ID", systemImage: "number")
+                                }
+                            }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if swipeActionsEnabled {
                                     ticketAssignSwipeAction(ticket, viewModel: viewModel)
@@ -409,6 +429,35 @@ struct TicketListView: View {
 
     private var trackerActionsMenu: some View {
         Menu {
+            if let trackerURL = SRHTWebURL.tracker(tracker) {
+                Button {
+                    openURL(trackerURL)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+
+                Button {
+                    appState.copyToPasteboard(trackerURL.absoluteString, label: "tracker URL")
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            Button {
+                appState.copyToPasteboard(String(tracker.id), label: "tracker ID")
+            } label: {
+                Label("Copy Tracker ID", systemImage: "number")
+            }
+
+            Button {
+                appState.copyToPasteboard(tracker.rid, label: "tracker RID")
+            } label: {
+                Label("Copy RID", systemImage: "number")
+            }
+
+            if isOwnedByCurrentUser {
+                Divider()
+
             Button {
                 showTrackerEditor = true
             } label: {
@@ -432,10 +481,15 @@ struct TicketListView: View {
             } label: {
                 Label("Delete Tracker", systemImage: "trash")
             }
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("Tracker actions")
+    }
+
+    private func ownerUsername(for tracker: TrackerSummary) -> String {
+        tracker.owner.canonicalName.srhtUsername
     }
 
     @ViewBuilder
