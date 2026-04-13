@@ -339,7 +339,7 @@ struct LookupView: View {
         .navigationTitle("Look Up")
         .task {
             if viewModel == nil {
-                viewModel = LookupViewModel(client: appState.client, appState: appState)
+                viewModel = LookupViewModel(client: appState.client, appState: appState, defaults: appState.accountDefaults)
             }
         }
     }
@@ -440,16 +440,16 @@ struct LookupView: View {
                     ThreadDetailView(
                         thread: thread,
                         onViewed: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkRead: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkUnread: {
-                            InboxReadStateStore.markUnread(for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
+                            InboxReadStateStore.markUnread(for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: appState.activeAccountID)
                         }
                     )
                 case .manPageBrowser:

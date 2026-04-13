@@ -72,4 +72,33 @@ struct HutchIntentsTests {
         #expect(loaded?.unreadInboxThreads == 5)
         #expect(loaded?.assignedOpenTickets == 3)
     }
+
+    @Test
+    func needsAttentionSnapshotsAreIsolatedPerAccount() {
+        let defaultsName = "HutchIntentsTests-builds-isolation-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: defaultsName)!
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+
+        let firstSnapshot = NeedsAttentionSnapshot(
+            unreadInboxThreads: 1,
+            assignedOpenTickets: 2,
+            failedBuilds: 3,
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let secondSnapshot = NeedsAttentionSnapshot(
+            unreadInboxThreads: 8,
+            assignedOpenTickets: 5,
+            failedBuilds: 1,
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        NeedsAttentionSnapshotStore.save(firstSnapshot, accountID: "account-a", defaults: defaults)
+        NeedsAttentionSnapshotStore.save(secondSnapshot, accountID: "account-b", defaults: defaults)
+
+        #expect(NeedsAttentionSnapshotStore.load(accountID: "account-a", defaults: defaults)?.unreadInboxThreads == 1)
+        #expect(NeedsAttentionSnapshotStore.load(accountID: "account-b", defaults: defaults)?.unreadInboxThreads == 8)
+
+        ActiveAccountContextStore.save("account-a", defaults: defaults)
+        #expect(NeedsAttentionSnapshotStore.load(defaults: defaults)?.failedBuilds == 3)
+    }
 }

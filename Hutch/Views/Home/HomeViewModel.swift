@@ -321,11 +321,22 @@ final class HomeViewModel {
     }
     """
 
-    init(currentUser: User, client: SRHTClient, systemStatusRepository: SystemStatusRepository) {
+    private let defaults: UserDefaults
+    private let accountID: String
+
+    init(
+        currentUser: User,
+        client: SRHTClient,
+        systemStatusRepository: SystemStatusRepository,
+        defaults: UserDefaults,
+        accountID: String
+    ) {
         self.currentUser = currentUser
         self.client = client
         self.systemStatusRepository = systemStatusRepository
         self.projectService = ProjectService(client: client)
+        self.defaults = defaults
+        self.accountID = accountID
     }
 
     func loadDashboard() async {
@@ -403,7 +414,7 @@ final class HomeViewModel {
     }
 
     var pinnedProjects: [Project] {
-        let pinnedIDs = ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey)
+        let pinnedIDs = ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey, defaults: defaults)
         guard !pinnedIDs.isEmpty else { return [] }
 
         let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
@@ -411,7 +422,7 @@ final class HomeViewModel {
     }
 
     var hasPinnedProjects: Bool {
-        !ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey).isEmpty
+        !ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey, defaults: defaults).isEmpty
     }
 
     var failedBuildCount: Int {
@@ -592,7 +603,7 @@ final class HomeViewModel {
     }
 
     func markInboxThreadRead(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
+        InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: defaults)
         unreadInboxThreads.removeAll { $0.id == thread.id }
         unreadInboxThreadCount = max((unreadInboxThreadCount ?? 1) - 1, 0)
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
@@ -600,7 +611,7 @@ final class HomeViewModel {
     }
 
     func markInboxThreadUnread(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markUnread(for: thread.id)
+        InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
         if unreadInboxThreads.contains(where: { $0.id == thread.id }) == false {
             unreadInboxThreads.append(
                 InboxThreadSummary(
@@ -786,7 +797,8 @@ final class HomeViewModel {
                     containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
                     isUnread: InboxReadStateStore.isUnread(
                         threadID: "\(mailingList.rid)#\(InboxThreadSummary.normalizationKey(for: thread.subject))",
-                        lastActivityAt: thread.updated
+                        lastActivityAt: thread.updated,
+                        defaults: defaults
                     )
                 )
                 return summary.isUnread ? summary : nil
@@ -944,7 +956,8 @@ final class HomeViewModel {
                     }.count
                     : nil,
                 updatedAt: .now
-            )
+            ),
+            accountID: accountID
         )
     }
 
@@ -966,7 +979,7 @@ final class HomeViewModel {
             bannerSummary: snapshot.bannerSummary,
             updatedAt: .now
         )
-        SystemStatusWidgetSnapshotStore.save(widgetSnapshot)
+        SystemStatusWidgetSnapshotStore.save(widgetSnapshot, accountID: accountID)
     }
 
     nonisolated static func buildItems(from jobs: [HomeJobPayload]) -> [HomeBuildItem] {

@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var buildsPath = NavigationPath()
     @State private var ticketsPath = NavigationPath()
     @State private var isResolvingDeepLink = false
+    @State private var hasValidatedLaunch = false
 
     var body: some View {
         @Bindable var appState = appState
@@ -17,8 +18,10 @@ struct RootView: View {
         Group {
             switch appState.authPhase {
             case .launching:
-                ProgressView("Connecting…")
+                ProgressView(appState.authStatusMessage)
                     .task {
+                        guard !hasValidatedLaunch else { return }
+                        hasValidatedLaunch = true
                         await appState.validateOnLaunch()
                     }
 
@@ -113,6 +116,8 @@ struct RootView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
         }
+        .id(appState.sessionIdentity)
+        .defaultAppStorage(appState.accountDefaults)
         .modifier(SidebarAdaptableTabStyle())
         .modifier(TabKeyboardShortcuts(selectedTab: Binding(
             get: { appState.selectedTab },
@@ -315,6 +320,8 @@ enum MoreRoute: Hashable {
 }
 
 private struct MoreNavigationRoot: View {
+    @Environment(AppState.self) private var appState
+
     var body: some View {
         MoreView()
             .navigationDestination(for: MoreRoute.self) { route in
@@ -339,16 +346,16 @@ private struct MoreNavigationRoot: View {
                     ThreadDetailView(
                         thread: thread,
                         onViewed: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkRead: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkUnread: {
-                            InboxReadStateStore.markUnread(for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
+                            InboxReadStateStore.markUnread(for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: appState.activeAccountID)
                         }
                     )
                 case .manPageBrowser:

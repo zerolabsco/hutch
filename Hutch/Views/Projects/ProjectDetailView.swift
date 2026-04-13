@@ -22,7 +22,7 @@ struct ProjectDetailView: View {
     private var isPinnedToHome: Bool {
         _ = pinChangeCount
         guard let currentUserKey else { return false }
-        return ProjectPinStore.isPinned(projectID: displayedProject.id, for: currentUserKey)
+        return ProjectPinStore.isPinned(projectID: displayedProject.id, for: currentUserKey, defaults: appState.accountDefaults)
     }
 
     var body: some View {
@@ -243,7 +243,7 @@ struct ProjectDetailView: View {
 
     private func togglePinnedState() {
         guard let currentUserKey else { return }
-        ProjectPinStore.togglePin(projectID: displayedProject.id, for: currentUserKey)
+        ProjectPinStore.togglePin(projectID: displayedProject.id, for: currentUserKey, defaults: appState.accountDefaults)
         pinChangeCount += 1
     }
 

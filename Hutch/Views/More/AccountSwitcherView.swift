@@ -7,21 +7,35 @@ struct AccountSwitcherView: View {
     @State private var showAddAccount = false
     @State private var isSwitching = false
     @State private var switchError: String?
+    @State private var pendingRemoval: AccountEntry?
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     ForEach(appState.accounts) { account in
+                        let isActive = account.id == appState.activeAccountID
                         Button {
-                            guard account.id != appState.activeAccountID else { return }
+                            guard !isActive else { return }
                             switchTo(account)
                         } label: {
-                            HStack {
-                                Text("~\(account.username)")
-                                    .foregroundStyle(.primary)
+                            HStack(spacing: 12) {
+                                if isActive {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .foregroundStyle(.tint)
+                                } else {
+                                    Image(systemName: "person.crop.circle")
+                                        .foregroundStyle(.secondary)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("~\(account.username)")
+                                        .foregroundStyle(.primary)
+                                    Text(isActive ? "Active Account" : "Tap to switch")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                if account.id == appState.activeAccountID {
+                                if isActive {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(.tint)
                                 }
@@ -31,8 +45,7 @@ struct AccountSwitcherView: View {
                     }
                     .onDelete { indexSet in
                         for index in indexSet {
-                            let account = appState.accounts[index]
-                            Task { await appState.removeAccount(id: account.id) }
+                            pendingRemoval = appState.accounts[index]
                         }
                     }
                 }
@@ -70,6 +83,28 @@ struct AccountSwitcherView: View {
                 Button("OK") { switchError = nil }
             } message: {
                 Text(switchError ?? "")
+            }
+            .alert(
+                "Remove Account?",
+                isPresented: Binding(
+                    get: { pendingRemoval != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            pendingRemoval = nil
+                        }
+                    }
+                )
+            ) {
+                Button("Cancel", role: .cancel) {}
+                Button("Remove", role: .destructive) {
+                    guard let pendingRemoval else { return }
+                    Task { await appState.removeAccount(id: pendingRemoval.id) }
+                    self.pendingRemoval = nil
+                }
+            } message: {
+                if let pendingRemoval {
+                    Text("~\(pendingRemoval.username) and its isolated local cache will be removed from this device.")
+                }
             }
             .sheet(isPresented: $showAddAccount) {
                 AddAccountView()

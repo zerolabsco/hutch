@@ -2,10 +2,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage(AppStorageKeys.appTheme) private var appTheme: AppTheme = .system
-    @AppStorage(AppStorageKeys.displayDensity) private var displayDensity: DisplayDensity = .standard
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
-    @AppStorage(AppStorageKeys.contributionGraphsEnabled) private var contributionGraphsEnabled = true
+    @AppStorage(AppStorageKeys.appTheme, store: .standard) private var appTheme: AppTheme = .system
+    @AppStorage(AppStorageKeys.displayDensity, store: .standard) private var displayDensity: DisplayDensity = .standard
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
 
     var body: some View {
@@ -89,7 +89,25 @@ struct SettingsView: View {
             HStack {
                 Image(systemName: "key.fill")
                     .foregroundStyle(.secondary)
-                Text("Personal access token in use")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appState.currentUser?.canonicalName ?? "No active account")
+                    Text("\(appState.accounts.count) saved account\(appState.accounts.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+
+            NavigationLink {
+                AccountSwitcherView()
+            } label: {
+                Label("Manage Accounts", systemImage: "person.2")
+            }
+
+            HStack {
+                Image(systemName: "lock.shield")
+                    .foregroundStyle(.secondary)
+                Text("Tokens are stored separately per account in the iOS keychain")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -105,7 +123,7 @@ struct SettingsView: View {
         } header: {
             Text("Authentication")
         } footer: {
-            Text("Hutch stores your SourceHut token in the iOS keychain. Reset App Data removes saved token data, local settings, cached responses, cookies, and embedded web data on this device.")
+            Text("Account switching keeps local caches and saved state isolated per account. Sign Out removes all saved accounts from this device. Reset App Data also clears local settings, cached responses, cookies, and embedded web data.")
         }
     }
 

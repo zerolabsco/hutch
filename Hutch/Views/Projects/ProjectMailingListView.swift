@@ -36,6 +36,8 @@ final class MailingListDetailViewModel {
 
     private let mailingList: InboxMailingListReference
     private let client: SRHTClient
+    private let defaults: UserDefaults
+    private let accountID: String
 
     private static let listThreadsQuery = """
     query projectMailingListThreads($rid: ID!) {
@@ -57,9 +59,11 @@ final class MailingListDetailViewModel {
     }
     """
 
-    init(mailingList: InboxMailingListReference, client: SRHTClient) {
+    init(mailingList: InboxMailingListReference, client: SRHTClient, defaults: UserDefaults, accountID: String) {
         self.mailingList = mailingList
         self.client = client
+        self.defaults = defaults
+        self.accountID = accountID
     }
 
     var filteredThreads: [InboxThreadSummary] {
@@ -90,15 +94,15 @@ final class MailingListDetailViewModel {
 
     func markThreadRead(_ thread: InboxThreadSummary) {
         let viewedAt = max(Date(), thread.lastActivityAt)
-        InboxReadStateStore.markViewed(viewedAt, for: thread.id)
+        InboxReadStateStore.markViewed(viewedAt, for: thread.id, defaults: defaults)
         updateThread(thread, isUnread: false)
-        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: accountID)
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markUnread(for: thread.id)
+        InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
         updateThread(thread, isUnread: true)
-        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: accountID)
     }
 
     private func makeSummary(from thread: ProjectMailingListThreadPayload) -> InboxThreadSummary {
@@ -124,7 +128,7 @@ final class MailingListDetailViewModel {
             messageCount: thread.replies + 1,
             repo: nil,
             containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
-            isUnread: InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: thread.updated)
+            isUnread: InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: thread.updated, defaults: defaults)
         )
     }
 
@@ -238,7 +242,12 @@ struct MailingListDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if viewModel == nil {
-                let viewModel = MailingListDetailViewModel(mailingList: mailingList, client: appState.client)
+                let viewModel = MailingListDetailViewModel(
+                    mailingList: mailingList,
+                    client: appState.client,
+                    defaults: appState.accountDefaults,
+                    accountID: appState.activeAccountID
+                )
                 self.viewModel = viewModel
                 await viewModel.loadThreads()
             }
@@ -261,16 +270,16 @@ struct MailingListDetailView: View {
                     ThreadDetailView(
                         thread: thread,
                         onViewed: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkRead: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
                         },
                         onMarkUnread: {
-                            InboxReadStateStore.markUnread(for: thread.id)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
+                            InboxReadStateStore.markUnread(for: thread.id, defaults: appState.accountDefaults)
+                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: appState.activeAccountID)
                         }
                     )
                 } label: {

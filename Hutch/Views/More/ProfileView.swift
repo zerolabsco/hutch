@@ -7,7 +7,7 @@ private let profileBioMarkdownOptions = AttributedString.MarkdownParsingOptions(
 
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage(AppStorageKeys.contributionGraphsEnabled) private var contributionGraphsEnabled = true
+    @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
     @State private var viewModel: SettingsViewModel?
     @State private var contributionViewModel: UserProfileViewModel?
     @State private var pendingDestructiveAction: ProfileDestructiveAction?

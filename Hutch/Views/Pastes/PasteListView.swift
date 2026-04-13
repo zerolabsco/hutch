@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PasteListView: View {
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @State private var viewModel: PasteListViewModel?
     @State private var showCreatePasteSheet = false

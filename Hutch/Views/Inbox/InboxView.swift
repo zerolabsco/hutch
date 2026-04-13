@@ -22,7 +22,11 @@ struct InboxView: View {
             if let viewModel {
                 vm = viewModel
             } else {
-                let newViewModel = InboxViewModel(client: appState.client)
+                let newViewModel = InboxViewModel(
+                    client: appState.client,
+                    defaults: appState.accountDefaults,
+                    accountID: appState.activeAccountID
+                )
                 viewModel = newViewModel
                 vm = newViewModel
             }

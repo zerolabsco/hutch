@@ -4,8 +4,8 @@ import SwiftUI
 struct HutchApp: App {
     @State private var appState = AppState()
     @State private var networkMonitor = NetworkMonitor()
-    @AppStorage(AppStorageKeys.appTheme) private var appTheme: AppTheme = .system
-    @AppStorage(AppStorageKeys.displayDensity) private var displayDensity: DisplayDensity = .standard
+    @AppStorage(AppStorageKeys.appTheme, store: .standard) private var appTheme: AppTheme = .system
+    @AppStorage(AppStorageKeys.displayDensity, store: .standard) private var displayDensity: DisplayDensity = .standard
 
     var body: some Scene {
         WindowGroup {

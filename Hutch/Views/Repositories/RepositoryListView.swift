@@ -59,7 +59,7 @@ struct RepositoryListView: View {
         }
         .task {
             if viewModel == nil {
-                viewModel = RepositoryListViewModel(client: appState.client)
+                viewModel = RepositoryListViewModel(client: appState.client, defaults: appState.accountDefaults)
             }
         }
     }

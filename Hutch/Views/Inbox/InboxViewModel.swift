@@ -72,6 +72,8 @@ final class InboxViewModel {
     var searchText = ""
 
     private let client: SRHTClient
+    private let defaults: UserDefaults
+    private let accountID: String
     private let listThreadFetchLimit = 10
     private let listFetchConcurrencyLimit = 4
 
@@ -121,8 +123,10 @@ final class InboxViewModel {
     }
     """
 
-    init(client: SRHTClient) {
+    init(client: SRHTClient, defaults: UserDefaults, accountID: String) {
         self.client = client
+        self.defaults = defaults
+        self.accountID = accountID
     }
 
     func loadThreads() async {
@@ -143,7 +147,7 @@ final class InboxViewModel {
                 }
                 return lhs.lastActivityAt > rhs.lastActivityAt
             }
-            NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count)
+            NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count, accountID: accountID)
         } catch {
             inboxListLogger.error("Inbox request failed")
             self.error = "Failed to load inbox"
@@ -152,9 +156,9 @@ final class InboxViewModel {
 
     func markThreadRead(_ thread: InboxThreadSummary) {
         let viewedAt = max(Date(), thread.lastActivityAt)
-        InboxReadStateStore.markViewed(viewedAt, for: thread.id)
+        InboxReadStateStore.markViewed(viewedAt, for: thread.id, defaults: defaults)
         threads.removeAll { $0.id == thread.id }
-        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: accountID)
     }
 
     func markAllThreadsRead() {
@@ -162,17 +166,17 @@ final class InboxViewModel {
 
         let viewedAt = Date()
         for thread in threads where thread.isUnread {
-            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id)
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id, defaults: defaults)
         }
 
         threads.removeAll { $0.isUnread }
-        NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count)
+        NeedsAttentionSnapshotStore.update(unreadInboxThreads: threads.count, accountID: accountID)
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markUnread(for: thread.id)
+        InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
         updateThread(thread, isUnread: true)
-        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1)
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: accountID)
     }
 
     func toggleThreadReadState(_ thread: InboxThreadSummary) {
@@ -291,7 +295,7 @@ final class InboxViewModel {
 
         return response.list.threads.results.prefix(listThreadFetchLimit).map { thread in
             let groupingKey = "\(mailingList.rid)#\(thread.subject.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: #"^(?:(?:re|fwd?)\s*:\s*)+"#, with: "", options: [.regularExpression, .caseInsensitive]).lowercased())"
-            let isUnread = InboxReadStateStore.isUnread(threadID: groupingKey, lastActivityAt: thread.updated)
+            let isUnread = InboxReadStateStore.isUnread(threadID: groupingKey, lastActivityAt: thread.updated, defaults: defaults)
             return InboxThreadSummary(
                 rootEmailID: thread.root.id,
                 rootMessageID: thread.root.messageID,

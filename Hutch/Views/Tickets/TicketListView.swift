@@ -4,7 +4,7 @@ struct TicketListView: View {
     let onTrackerUpdated: (TrackerSummary) -> Void
     let onTrackerDeleted: (TrackerSummary) -> Void
 
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var tracker: TrackerSummary
@@ -232,7 +232,8 @@ struct TicketListView: View {
                     trackerName: tracker.name,
                     trackerId: tracker.id,
                     trackerRid: tracker.rid,
-                    client: appState.client
+                    client: appState.client,
+                    defaults: appState.accountDefaults
                 )
                 viewModel = vm
                 trackerManagementViewModel = TrackerManagementViewModel(tracker: tracker, client: appState.client)

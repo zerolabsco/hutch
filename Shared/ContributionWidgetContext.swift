@@ -11,8 +11,11 @@ enum ContributionWidgetContextStore {
     private static let actorKey = "contributionWidget.actor"
     private static let enabledKey = "contributionWidget.enabled"
 
-    static func loadActor(defaults: UserDefaults? = sharedDefaults()) -> String? {
-        defaults?.string(forKey: actorKey)
+    static func loadActor(
+        accountID: String? = ActiveAccountContextStore.load(),
+        defaults: UserDefaults? = sharedDefaults()
+    ) -> String? {
+        defaults?.string(forKey: scopedActorKey(for: accountID))
     }
 
     static func isEnabled(defaults: UserDefaults? = sharedDefaults()) -> Bool {
@@ -24,18 +27,30 @@ enum ContributionWidgetContextStore {
         reloadWidgetTimelines()
     }
 
-    static func saveActor(_ actor: String, defaults: UserDefaults? = sharedDefaults()) {
-        defaults?.set(actor, forKey: actorKey)
+    static func saveActor(
+        _ actor: String,
+        accountID: String? = ActiveAccountContextStore.load(),
+        defaults: UserDefaults? = sharedDefaults()
+    ) {
+        defaults?.set(actor, forKey: scopedActorKey(for: accountID))
         reloadWidgetTimelines()
     }
 
-    static func clear(defaults: UserDefaults? = sharedDefaults()) {
-        defaults?.removeObject(forKey: actorKey)
+    static func clear(
+        accountID: String? = ActiveAccountContextStore.load(),
+        defaults: UserDefaults? = sharedDefaults()
+    ) {
+        defaults?.removeObject(forKey: scopedActorKey(for: accountID))
         reloadWidgetTimelines()
     }
 
     private static func sharedDefaults() -> UserDefaults? {
         UserDefaults(suiteName: HutchAppGroup.identifier)
+    }
+
+    private static func scopedActorKey(for accountID: String?) -> String {
+        guard let accountID, !accountID.isEmpty else { return actorKey }
+        return "\(actorKey).\(accountID)"
     }
 
     private static func reloadWidgetTimelines() {

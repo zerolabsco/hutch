@@ -65,6 +65,37 @@ struct SystemStatusWidgetSnapshotTests {
     }
 
     @Test
+    func snapshotsAreIsolatedPerAccount() {
+        let defaultsName = "SystemStatusWidgetSnapshotTests-isolation-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: defaultsName)!
+        defer { defaults.removePersistentDomain(forName: defaultsName) }
+
+        let firstSnapshot = SystemStatusWidgetSnapshot(
+            services: [.init(id: "git", name: "git.sr.ht", status: "Operational", requiresAttention: false)],
+            hasDisruption: false,
+            overallStatusText: "All monitored services operational",
+            bannerSummary: "",
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let secondSnapshot = SystemStatusWidgetSnapshot(
+            services: [.init(id: "builds", name: "builds.sr.ht", status: "Degraded", requiresAttention: true)],
+            hasDisruption: true,
+            overallStatusText: "Experiencing disruptions",
+            bannerSummary: "builds.sr.ht disrupted",
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        SystemStatusWidgetSnapshotStore.save(firstSnapshot, accountID: "account-a", defaults: defaults)
+        SystemStatusWidgetSnapshotStore.save(secondSnapshot, accountID: "account-b", defaults: defaults)
+
+        #expect(SystemStatusWidgetSnapshotStore.load(accountID: "account-a", defaults: defaults)?.services.first?.name == "git.sr.ht")
+        #expect(SystemStatusWidgetSnapshotStore.load(accountID: "account-b", defaults: defaults)?.services.first?.name == "builds.sr.ht")
+
+        ActiveAccountContextStore.save("account-b", defaults: defaults)
+        #expect(SystemStatusWidgetSnapshotStore.load(defaults: defaults)?.bannerSummary == "builds.sr.ht disrupted")
+    }
+
+    @Test
     func unavailableSnapshotHasEmptyServices() {
         let snapshot = SystemStatusWidgetSnapshot.unavailable
         #expect(snapshot.services.isEmpty)

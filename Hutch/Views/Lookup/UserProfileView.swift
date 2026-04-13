@@ -2,7 +2,7 @@ import SwiftUI
 
 struct UserProfileView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage(AppStorageKeys.contributionGraphsEnabled) private var contributionGraphsEnabled = true
+    @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
 
     let user: User
     @State private var profileViewModel: UserProfileViewModel?

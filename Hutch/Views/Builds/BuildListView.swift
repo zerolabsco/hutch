@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct BuildListView: View {
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.buildsAutoRefreshInterval) private var autoRefreshRawValue = 0
     @AppStorage(AppStorageKeys.buildsRepoFilter) private var savedRepoFilter = ""
     @Environment(AppState.self) private var appState
@@ -104,7 +104,7 @@ struct BuildListView: View {
         }
         .task {
             if viewModel == nil {
-                let vm = BuildListViewModel(client: appState.client)
+                let vm = BuildListViewModel(client: appState.client, defaults: appState.accountDefaults)
                 vm.repoFilter = savedRepoFilter
                 viewModel = vm
                 await vm.loadJobs()

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.homeProjectsExpanded) private var projectsExpanded = true
     @AppStorage(AppStorageKeys.homeAssignedTicketsExpanded) private var assignedTicketsExpanded = true
     @AppStorage(AppStorageKeys.homeBuildsExpanded) private var buildsExpanded = true
@@ -39,7 +39,9 @@ struct HomeView: View {
                 let newViewModel = HomeViewModel(
                     currentUser: currentUser,
                     client: appState.client,
-                    systemStatusRepository: appState.systemStatusRepository
+                    systemStatusRepository: appState.systemStatusRepository,
+                    defaults: appState.accountDefaults,
+                    accountID: appState.activeAccountID
                 )
                 viewModel = newViewModel
                 vm = newViewModel
@@ -834,7 +836,7 @@ private struct HomeAttentionLinkRow<Destination: View>: View {
 
 private struct HomeAssignedTicketsListView: View {
     let viewModel: HomeViewModel
-    @AppStorage(AppStorageKeys.swipeActionsEnabled) private var swipeActionsEnabled = true
+    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
 
     var body: some View {
         List {

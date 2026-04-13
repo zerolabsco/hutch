@@ -35,6 +35,7 @@ final class AppState {
     // MARK: - Authentication
 
     private(set) var authPhase: AuthPhase = .launching
+    private(set) var authStatusMessage = "Connecting…"
 
     /// Convenience for views that need a simple bool.
     var isAuthenticated: Bool {
@@ -57,9 +58,15 @@ final class AppState {
 
     // MARK: - Networking
 
-    let client: SRHTClient
+    private(set) var client: SRHTClient
     let configuration: AppConfiguration
-    let systemStatusRepository: SystemStatusRepository
+    private(set) var systemStatusRepository: SystemStatusRepository
+    private var activeSession: AccountSession?
+    private(set) var sessionIdentity = UUID()
+
+    var accountDefaults: UserDefaults {
+        activeSession?.defaults ?? .standard
+    }
 
     // MARK: - Deep link pending navigation
 
@@ -72,8 +79,7 @@ final class AppState {
 
     init() {
         self.configuration = AppConfiguration()
-        let token = KeychainHelper.loadToken()
-        self.client = SRHTClient(token: token)
+        self.client = SRHTClient()
         self.systemStatusRepository = SystemStatusRepository()
     }
 
@@ -82,18 +88,18 @@ final class AppState {
     /// Called once at app launch. If a token exists in Keychain, validates it
     /// silently. On failure, clears the token and falls through to unauthenticated.
     func validateOnLaunch() async {
+        authStatusMessage = "Connecting…"
         var storedAccounts = KeychainHelper.loadAccounts()
 
         if storedAccounts.isEmpty, let legacyToken = KeychainHelper.loadToken() {
-            client.setToken(legacyToken)
-            if let user = try? await fetchMe() {
+            let legacyClient = SRHTClient(token: legacyToken)
+            if let user = try? await fetchMe(using: legacyClient) {
                 let entry = AccountEntry(id: UUID().uuidString, username: user.username, token: legacyToken)
                 storedAccounts = [entry]
                 try? KeychainHelper.saveAccounts(storedAccounts)
                 try? KeychainHelper.deleteToken()
             } else {
                 try? KeychainHelper.deleteToken()
-                client.setToken(nil)
                 authPhase = .unauthenticated
                 return
             }
@@ -105,24 +111,29 @@ final class AppState {
         }
 
         let savedID = UserDefaults.standard.string(forKey: AppStorageKeys.activeAccountID) ?? ""
-        let target = storedAccounts.first(where: { $0.id == savedID }) ?? storedAccounts[0]
+        let orderedAccounts = prioritizedAccounts(storedAccounts, preferredID: savedID)
+        var invalidIDs = Set<String>()
 
-        client.setToken(target.token)
-        do {
-            let user = try await fetchMe()
-            accounts = storedAccounts
-            activeAccountID = target.id
-            currentUser = user
-            ContributionWidgetContextStore.saveActor(user.canonicalName)
-            authPhase = .authenticated
-            await refreshNeedsAttentionSnapshot()
-        } catch {
-            client.setToken(nil)
-            currentUser = nil
-            ContributionWidgetContextStore.clear()
-            authPhase = .unauthenticated
-            NeedsAttentionSnapshotStore.clear()
+        for account in orderedAccounts {
+            do {
+                let session = try await makeSession(for: account)
+                let filteredAccounts = storedAccounts.filter { !invalidIDs.contains($0.id) }
+                accounts = filteredAccounts
+                try? KeychainHelper.saveAccounts(filteredAccounts)
+                activate(session)
+                authPhase = .authenticated
+                await refreshNeedsAttentionSnapshot()
+                return
+            } catch {
+                invalidIDs.insert(account.id)
+                clearAccountArtifacts(for: account.id)
+            }
         }
+
+        accounts = storedAccounts.filter { !invalidIDs.contains($0.id) }
+        try? KeychainHelper.saveAccounts(accounts)
+        clearActiveSessionState()
+        authPhase = .unauthenticated
     }
 
     // MARK: - Token management
@@ -130,54 +141,40 @@ final class AppState {
     /// Validate a new token by querying meta.sr.ht, then persist it.
     /// Throws on network/GraphQL errors so the caller can display the message.
     func connect(with token: String) async throws {
-        client.setToken(token)
-        do {
-            let user = try await fetchMe()
-            let entry = AccountEntry(id: UUID().uuidString, username: user.username, token: token)
-            accounts.append(entry)
-            activeAccountID = entry.id
-            UserDefaults.standard.set(entry.id, forKey: AppStorageKeys.activeAccountID)
-            try KeychainHelper.saveAccounts(accounts)
-            currentUser = user
-            ContributionWidgetContextStore.saveActor(user.canonicalName)
-            authPhase = .authenticated
-            await refreshNeedsAttentionSnapshot()
-        } catch {
-            client.setToken(nil)
-            throw error
-        }
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await addValidatedAccount(token: normalizedToken, activateNewAccount: true)
     }
 
     /// Validate a new token, add it as an account, and switch to it immediately.
     func addAccount(token: String) async throws {
-        let tempClient = SRHTClient(token: token)
-        let user = try await fetchMe(using: tempClient)
-        let entry = AccountEntry(id: UUID().uuidString, username: user.username, token: token)
-        accounts.append(entry)
-        try KeychainHelper.saveAccounts(accounts)
-        try await switchAccount(to: entry.id)
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await addValidatedAccount(token: normalizedToken, activateNewAccount: true)
     }
 
     /// Switch the active account and fully refresh the app.
     func switchAccount(to id: String) async throws {
         guard let entry = accounts.first(where: { $0.id == id }) else { return }
+        let previousSession = activeSession
 
-        client.responseCache.clear()
-        currentUser = nil
-        pendingDeepLink = nil
-        pendingTabNavigation = nil
-        deepLinkError = nil
-        selectedTab = .home
+        authStatusMessage = "Switching Accounts…"
+        authPhase = .launching
+        sessionIdentity = UUID()
 
-        authPhase = .unauthenticated
+        do {
+            let session = try await makeSession(for: entry)
+            activate(session)
+            resetNavigationState()
+        } catch {
+            if let previousSession {
+                activate(previousSession)
+                authPhase = .authenticated
+            } else {
+                clearActiveSessionState()
+                authPhase = .unauthenticated
+            }
+            throw error
+        }
 
-        client.setToken(entry.token)
-        activeAccountID = entry.id
-        UserDefaults.standard.set(entry.id, forKey: AppStorageKeys.activeAccountID)
-
-        let user = try await fetchMe()
-        currentUser = user
-        ContributionWidgetContextStore.saveActor(user.canonicalName)
         authPhase = .authenticated
         await refreshNeedsAttentionSnapshot()
     }
@@ -185,42 +182,51 @@ final class AppState {
     /// Remove a stored account. Switches to another account if the removed account
     /// was active; signs out fully if it was the last account.
     func removeAccount(id: String) async {
+        let removedWasActive = id == activeAccountID
         accounts.removeAll { $0.id == id }
         try? KeychainHelper.saveAccounts(accounts)
+        clearAccountArtifacts(for: id)
 
-        guard id == activeAccountID else { return }
+        guard removedWasActive else { return }
 
         if let next = accounts.first {
-            try? await switchAccount(to: next.id)
+            do {
+                try await switchAccount(to: next.id)
+            } catch {
+                await removeAccount(id: next.id)
+            }
         } else {
             await signOut()
         }
     }
 
     func signOut() async {
-        clearSessionState()
+        clearActiveSessionState()
+        try? KeychainHelper.deleteAll()
         URLCache.shared.removeAllCachedResponses()
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
-        NeedsAttentionSnapshotStore.clear()
-        SystemStatusWidgetSnapshotStore.clear()
+        clearAllAccountArtifacts()
         authPhase = .unauthenticated
         selectedTab = .home
     }
 
     func resetAppData() async {
-        clearSessionState()
+        clearActiveSessionState()
 
         if let bundleIdentifier = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleIdentifier)
         }
+        for account in accounts {
+            AccountDefaultsStore.clear(accountID: account.id)
+        }
+        try? KeychainHelper.deleteAll()
         URLCache.shared.removeAllCachedResponses()
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
-        NeedsAttentionSnapshotStore.clear()
-        SystemStatusWidgetSnapshotStore.clear()
+        clearAllAccountArtifacts()
 
         authPhase = .unauthenticated
         selectedTab = .home
@@ -395,31 +401,117 @@ final class AppState {
         let tracker: TrackerSummary
     }
 
-    private func clearSessionState() {
-        try? KeychainHelper.deleteAll()
-        client.setToken(nil)
-        client.responseCache.clear()
-        accounts = []
+    private func addValidatedAccount(token: String, activateNewAccount: Bool) async throws {
+        let tempClient = SRHTClient(token: token)
+        let user = try await fetchMe(using: tempClient)
+
+        if let existing = accounts.first(where: {
+            $0.username.caseInsensitiveCompare(user.username) == .orderedSame || $0.token == token
+        }) {
+            _ = existing
+            throw AppStateError.duplicateAccount(username: user.username)
+        }
+
+        let entry = AccountEntry(id: UUID().uuidString, username: user.username, token: token)
+        accounts.append(entry)
+        try KeychainHelper.saveAccounts(accounts)
+
+        guard activateNewAccount else { return }
+        let session = try await makeSession(for: entry, knownUser: user)
+        authStatusMessage = "Switching Accounts…"
+        authPhase = .launching
+        sessionIdentity = UUID()
+        activate(session)
+        resetNavigationState()
+        authPhase = .authenticated
+        await refreshNeedsAttentionSnapshot()
+    }
+
+    private func makeSession(for account: AccountEntry, knownUser: User? = nil) async throws -> AccountSession {
+        let sessionClient = SRHTClient(token: account.token)
+        let user: User
+        if let knownUser {
+            user = knownUser
+        } else {
+            user = try await fetchMe(using: sessionClient)
+        }
+        let defaults = AccountDefaultsStore.userDefaults(for: account.id)
+        let repository = SystemStatusRepository(cacheStore: SystemStatusCacheStore(defaults: defaults))
+        return AccountSession(
+            account: account,
+            user: user,
+            client: sessionClient,
+            defaults: defaults,
+            systemStatusRepository: repository
+        )
+    }
+
+    private func activate(_ session: AccountSession) {
+        activeSession = session
+        client = session.client
+        systemStatusRepository = session.systemStatusRepository
+        currentUser = session.user
+        activeAccountID = session.account.id
+        UserDefaults.standard.set(session.account.id, forKey: AppStorageKeys.activeAccountID)
+        ActiveAccountContextStore.save(session.account.id)
+        ContributionWidgetContextStore.saveActor(session.user.canonicalName, accountID: session.account.id)
+        authStatusMessage = "Connecting…"
+    }
+
+    private func clearActiveSessionState() {
+        client = SRHTClient()
+        systemStatusRepository = SystemStatusRepository()
+        activeSession = nil
         activeAccountID = ""
         UserDefaults.standard.removeObject(forKey: AppStorageKeys.activeAccountID)
+        ActiveAccountContextStore.clear()
         currentUser = nil
-        ContributionWidgetContextStore.clear()
+        sessionIdentity = UUID()
+        resetNavigationState()
+    }
+
+    private func resetNavigationState() {
         pendingDeepLink = nil
         pendingTabNavigation = nil
         deepLinkError = nil
         selectedTab = .home
     }
 
+    private func clearAccountArtifacts(for accountID: String) {
+        AccountDefaultsStore.clear(accountID: accountID)
+        ContributionWidgetContextStore.clear(accountID: accountID)
+        NeedsAttentionSnapshotStore.clear(accountID: accountID)
+        SystemStatusWidgetSnapshotStore.clear(accountID: accountID)
+    }
+
+    private func clearAllAccountArtifacts() {
+        for account in accounts {
+            clearAccountArtifacts(for: account.id)
+        }
+        ContributionWidgetContextStore.clear(accountID: nil)
+        NeedsAttentionSnapshotStore.clear(accountID: nil)
+        SystemStatusWidgetSnapshotStore.clear(accountID: nil)
+        ActiveAccountContextStore.clear()
+        accounts = []
+    }
+
+    private func prioritizedAccounts(_ accounts: [AccountEntry], preferredID: String) -> [AccountEntry] {
+        guard let preferred = accounts.first(where: { $0.id == preferredID }) else { return accounts }
+        return [preferred] + accounts.filter { $0.id != preferredID }
+    }
+
     private func refreshNeedsAttentionSnapshot() async {
         guard let currentUser else {
-            NeedsAttentionSnapshotStore.clear()
+            NeedsAttentionSnapshotStore.clear(accountID: activeAccountID)
             return
         }
 
         let viewModel = HomeViewModel(
             currentUser: currentUser,
             client: client,
-            systemStatusRepository: systemStatusRepository
+            systemStatusRepository: systemStatusRepository,
+            defaults: accountDefaults,
+            accountID: activeAccountID
         )
         await viewModel.loadDashboard()
     }
@@ -431,6 +523,17 @@ final class AppState {
             WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: since) {
                 continuation.resume()
             }
+        }
+    }
+}
+
+enum AppStateError: LocalizedError {
+    case duplicateAccount(username: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .duplicateAccount(let username):
+            "The account ~\(username) is already saved."
         }
     }
 }
