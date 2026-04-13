@@ -9,6 +9,7 @@ struct RepositoryDetailView: View {
     @State private var viewModel: RepositoryDetailViewModel?
     @State private var selectedTab: RepositoryDetailViewModel.Tab = .summary
     @State private var showSettings = false
+    @State private var showACLs = false
     @State private var displayName: String
 
     private var canManageRepository: Bool {
@@ -43,6 +44,12 @@ struct RepositoryDetailView: View {
 
                     if canManageRepository {
                         Button {
+                            showACLs = true
+                        } label: {
+                            Image(systemName: "person.2")
+                        }
+
+                        Button {
                             showSettings = true
                         } label: {
                             Image(systemName: "gear")
@@ -63,6 +70,15 @@ struct RepositoryDetailView: View {
                         onDeleted?()
                     }
                 )
+            }
+            .sheet(isPresented: $showACLs) {
+                NavigationStack {
+                    RepositoryACLView(
+                        repository: repository,
+                        client: appState.client,
+                        showsDoneButton: true
+                    )
+                }
             }
             .task {
                 if viewModel == nil {

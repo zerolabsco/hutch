@@ -11,7 +11,6 @@ struct RepositorySettingsView: View {
     @State private var viewModel: RepositorySettingsViewModel?
     @State private var showDeleteConfirmation = false
     @State private var showRenameConfirmation = false
-    @State private var pendingACLDeletion: ACLEntry?
     @State private var saveResultAlert: SaveResultAlert?
 
     var body: some View {
@@ -39,7 +38,6 @@ struct RepositorySettingsView: View {
                     client: client
                 )
                 viewModel = vm
-                await vm.loadACLs()
             }
         }
     }
@@ -51,7 +49,7 @@ struct RepositorySettingsView: View {
         Form {
             infoSection(viewModel)
             renameSection(viewModel)
-            accessSection(viewModel)
+            accessSection()
             deleteSection(viewModel)
         }
         .srhtErrorBanner(error: $vm.error)
@@ -92,29 +90,6 @@ struct RepositorySettingsView: View {
             }
         } message: {
             Text("This cannot be undone.")
-        }
-        .alert("Remove Access?", isPresented: Binding(
-            get: { pendingACLDeletion != nil },
-            set: { isPresented in
-                if !isPresented {
-                    pendingACLDeletion = nil
-                }
-            }
-        )) {
-            Button("Cancel", role: .cancel) {
-                // Alert dismissal is implicit; no additional action required.
-            }
-            Button("Remove Access", role: .destructive) {
-                guard let entry = pendingACLDeletion else { return }
-                Task {
-                    await viewModel.deleteACL(entry)
-                    pendingACLDeletion = nil
-                }
-            }
-        } message: {
-            if let entry = pendingACLDeletion {
-                Text("\(entry.entity.canonicalName) will lose \(entry.mode) access to this repository.")
-            }
         }
         .alert(item: $saveResultAlert) { alert in
             Alert(
@@ -207,61 +182,15 @@ struct RepositorySettingsView: View {
     // MARK: - Access Section
 
     @ViewBuilder
-    private func accessSection(_ viewModel: RepositorySettingsViewModel) -> some View {
+    private func accessSection() -> some View {
         Section {
-            if viewModel.isLoadingACLs {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-            } else if viewModel.acls.isEmpty {
-                Text("No access entries yet.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(viewModel.acls) { entry in
-                    HStack {
-                        Text(entry.entity.canonicalName)
-                        Spacer()
-                        Text(entry.mode)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            pendingACLDeletion = entry
-                        } label: {
-                            Label("Remove Access", systemImage: "trash")
-                        }
-                    }
-                }
+            NavigationLink {
+                RepositoryACLView(repository: repository, client: client, showsDoneButton: false)
+            } label: {
+                Label("Manage Access", systemImage: "person.2")
             }
 
-            // Add ACL form
-            HStack {
-                TextField("Username or ~username", text: Bindable(viewModel).newACLEntity)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-                Picker("", selection: Bindable(viewModel).newACLMode) {
-                    Text("RO").tag("RO")
-                    Text("RW").tag("RW")
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 100)
-
-                Button {
-                    Task { await viewModel.addACL() }
-                } label: {
-                    if viewModel.isAddingACL {
-                        ProgressView()
-                    } else {
-                        Text("Add")
-                    }
-                }
-                .disabled(viewModel.isAddingACL || viewModel.newACLEntity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            Text("Add a SourceHut user and choose read-only or read/write access.")
+            Text("Review and update repository access without leaving settings.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } header: {

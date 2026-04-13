@@ -35,9 +35,9 @@ struct RepositorySettingsViewModelTests {
     @Test
     @MainActor
     func gitCanonicalEntityAddsMissingTilde() {
-        #expect(RepositorySettingsViewModel.gitCanonicalEntity(from: "alice") == "~alice")
-        #expect(RepositorySettingsViewModel.gitCanonicalEntity(from: "~alice") == "~alice")
-        #expect(RepositorySettingsViewModel.gitCanonicalEntity(from: "  alice  ") == "~alice")
+        #expect(RepositoryACLViewModel.canonicalEntity(from: "alice") == "~alice")
+        #expect(RepositoryACLViewModel.canonicalEntity(from: "~alice") == "~alice")
+        #expect(RepositoryACLViewModel.canonicalEntity(from: "  alice  ") == "~alice")
     }
 
     @Test

@@ -10,7 +10,7 @@ enum Visibility: String, Codable, Sendable {
 }
 
 /// Repository access mode.
-enum AccessMode: String, Codable, Sendable {
+enum AccessMode: String, Codable, Sendable, CaseIterable {
     case ro = "RO"
     case rw = "RW"
 }
