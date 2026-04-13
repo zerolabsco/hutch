@@ -1,15 +1,13 @@
 import SwiftUI
 
 struct HomeView: View {
-    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
-    @AppStorage(AppStorageKeys.homeProjectsExpanded) private var projectsExpanded = true
-    @AppStorage(AppStorageKeys.homeAssignedTicketsExpanded) private var assignedTicketsExpanded = true
-    @AppStorage(AppStorageKeys.homeBuildsExpanded) private var buildsExpanded = true
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HomeViewModel?
-    private let previewLimit = 4
-    private let projectPreviewLimit = 3
+    @State private var recentItems: [RecentActivityEntry] = []
+    @State private var isOpeningRecentItem = false
+    @State private var selectedPinnedProject: Project?
+    @State private var selectedPinnedUser: User?
 
     var body: some View {
         Group {
@@ -20,39 +18,40 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Home")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    InboxView()
-                } label: {
-                    HomeInboxToolbarIcon(hasUnreadThreads: viewModel?.hasUnreadInboxThreads == true)
+        .navigationDestination(isPresented: Binding(
+            get: { selectedPinnedProject != nil },
+            set: { isPresented in
+                if !isPresented {
+                    selectedPinnedProject = nil
                 }
+            }
+        )) {
+            if let selectedPinnedProject {
+                ProjectDetailView(project: selectedPinnedProject)
+            }
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { selectedPinnedUser != nil },
+            set: { isPresented in
+                if !isPresented {
+                    selectedPinnedUser = nil
+                }
+            }
+        )) {
+            if let selectedPinnedUser {
+                UserProfileView(user: selectedPinnedUser)
             }
         }
         .task {
             guard let currentUser = appState.currentUser else { return }
-
-            let vm: HomeViewModel
-            if let viewModel {
-                vm = viewModel
-            } else {
-                let newViewModel = HomeViewModel(
-                    currentUser: currentUser,
-                    client: appState.client,
-                    systemStatusRepository: appState.systemStatusRepository,
-                    defaults: appState.accountDefaults,
-                    accountID: appState.activeAccountID
-                )
-                viewModel = newViewModel
-                vm = newViewModel
-            }
-
-            await vm.loadDashboard()
+            await ensureViewModel(currentUser: currentUser).loadDashboard()
+            loadRecentActivity()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active, let viewModel else { return }
             Task {
                 await viewModel.loadDashboard()
+                loadRecentActivity()
             }
         }
     }
@@ -60,850 +59,497 @@ struct HomeView: View {
     @ViewBuilder
     private func content(_ viewModel: HomeViewModel) -> some View {
         List {
-            attentionSection(viewModel)
-            systemStatusBannerSection(viewModel)
-            inboxSection(viewModel)
-            projectsSection(viewModel)
-            assignedTicketsSection(viewModel)
-            recentBuildsSection(viewModel)
+            systemStatusSection(viewModel)
+            workSection(viewModel)
+            recentSection
+            buildsSection(viewModel)
+            pinnedSection(viewModel)
         }
         .themedList()
         .listStyle(.insetGrouped)
-        .overlay {
-            if viewModel.isLoadingProjects && viewModel.isLoadingAssignedTickets && viewModel.isLoadingRecentBuilds &&
-                viewModel.pinnedProjects.isEmpty && viewModel.assignedTickets.isEmpty && viewModel.recentBuilds.isEmpty &&
-                viewModel.unreadInboxThreads.isEmpty {
-                SRHTLoadingStateView(message: "Loading Home…")
-            }
-        }
+        .listSectionSpacing(.compact)
         .refreshable {
             await viewModel.loadDashboard()
         }
-        .connectivityOverlay(hasContent: viewModel.hasDashboardContent) {
+        .connectivityOverlay(hasContent: hasHomeContent(viewModel)) {
             await viewModel.loadDashboard()
         }
+        .onAppear {
+            loadRecentActivity()
+        }
     }
 
     @ViewBuilder
-    private func attentionSection(_ viewModel: HomeViewModel) -> some View {
-        Section("Needs Attention") {
-            HomeAttentionSummaryRow(
-                title: viewModel.needsAttentionCount == 0 ? "All clear" : "\(viewModel.needsAttentionCount) things need attention",
-                summary: viewModel.attentionSummaryText
-            )
-
-            HomeAttentionLinkRow(
-                title: "Inbox",
-                summary: viewModel.inboxSummaryText,
-                countText: viewModel.unreadInboxThreadCount.map(String.init) ?? "?"
-            ) {
-                InboxView()
-            }
-
-            HomeAttentionLinkRow(
-                title: "Assigned Tickets",
-                summary: viewModel.ticketsSummaryText,
-                countText: String(viewModel.assignedTickets.count)
-            ) {
-                HomeAssignedTicketsListView(viewModel: viewModel)
-            }
-
-            HomeAttentionLinkRow(
-                title: "Builds",
-                summary: viewModel.buildsSummaryText,
-                countText: String(viewModel.failedBuildCount + viewModel.activeBuildCount),
-                action: {
-                    appState.navigateToBuildsList()
+    private func systemStatusSection(_ viewModel: HomeViewModel) -> some View {
+        if viewModel.systemStatusSnapshot?.hasDisruption == true {
+            Section {
+                NavigationLink {
+                    SystemStatusView()
+                } label: {
+                    SystemStatusSummaryRow(
+                        snapshot: viewModel.systemStatusSnapshot,
+                        isLoading: viewModel.isLoadingSystemStatus,
+                        errorMessage: viewModel.systemStatusErrorMessage,
+                        isShowingStaleData: viewModel.isShowingStaleSystemStatus
+                    )
                 }
-            )
+                .buttonStyle(.plain)
+            }
         }
     }
 
-    @ViewBuilder
-    private func systemStatusBannerSection(_ viewModel: HomeViewModel) -> some View {
-        Section {
-            NavigationLink {
-                SystemStatusView()
-            } label: {
-                SystemStatusSummaryRow(
-                    snapshot: viewModel.systemStatusSnapshot,
-                    isLoading: viewModel.isLoadingSystemStatus,
-                    errorMessage: viewModel.systemStatusErrorMessage,
-                    isShowingStaleData: viewModel.isShowingStaleSystemStatus
+    private func workSection(_ viewModel: HomeViewModel) -> some View {
+        Section("Work") {
+            NavigationLink(value: HomeRoute.work) {
+                HomeSummaryRow(
+                    title: workTitle(viewModel),
+                    summary: workSummary(viewModel),
+                    systemImage: "tray.full",
+                    tint: workCount(viewModel) > 0 ? .blue : .secondary,
+                    emphasis: .action
                 )
             }
-            .buttonStyle(.plain)
         }
     }
 
     @ViewBuilder
-    private func inboxSection(_ viewModel: HomeViewModel) -> some View {
-        Section {
-            if let unreadCount = viewModel.unreadInboxThreadCount, unreadCount == 0 {
-                HomeSectionMessageRow(
-                    text: "No unread inbox threads.",
-                    systemImage: "tray"
-                )
-            } else if viewModel.unreadInboxThreads.isEmpty {
-                HomeSectionMessageRow(
-                    text: viewModel.inboxSummaryText,
-                    systemImage: "tray"
-                )
-            } else {
-                ForEach(viewModel.unreadInboxThreads.prefix(previewLimit)) { thread in
-                    NavigationLink {
-                        ThreadDetailView(
-                            thread: thread,
-                            onViewed: { viewModel.markInboxThreadRead(thread) },
-                            onMarkRead: { viewModel.markInboxThreadRead(thread) },
-                            onMarkUnread: { viewModel.markInboxThreadUnread(thread) }
-                        )
+    private var recentSection: some View {
+        if !recentItems.isEmpty {
+            Section("Recent") {
+                ForEach(recentItems) { item in
+                    Button {
+                        openRecentItem(item)
                     } label: {
-                        HomeInboxThreadRow(thread: thread)
+                        HomeRecentRow(item: item)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(isOpeningRecentItem)
+                    .listRowSeparator(.hidden)
                 }
-            }
-        } header: {
-            HomeSectionHeader("Inbox") {
-                InboxView()
             }
         }
     }
 
-    @ViewBuilder
-    private func projectsSection(_ viewModel: HomeViewModel) -> some View {
-        if viewModel.hasPinnedProjects {
-            HomeSectionView("Pinned Projects", isExpanded: $projectsExpanded) {
+    private func buildsSection(_ viewModel: HomeViewModel) -> some View {
+        Section("Builds") {
+            NavigationLink {
+                BuildListView()
+            } label: {
+                HomeSummaryRow(
+                    title: buildsTitle(viewModel),
+                    summary: buildsSummary(viewModel),
+                    systemImage: "hammer",
+                    tint: viewModel.failedBuildCount > 0 ? .orange : .secondary,
+                    emphasis: .monitoring
+                )
+            }
+        }
+    }
+
+    private func pinnedSection(_ viewModel: HomeViewModel) -> some View {
+        let items = pinnedItems(viewModel)
+
+        return Section("Pinned") {
+            if items.isEmpty {
                 NavigationLink {
                     ProjectsListView()
                 } label: {
-                    Text("See All")
-                        .font(.caption.weight(.medium))
+                    HomeCompactMessageRow(text: "Pin projects for quick access", systemImage: "pin")
                 }
-                .buttonStyle(.plain)
-            } content: {
-                if viewModel.isLoadingProjects && viewModel.pinnedProjects.isEmpty {
-                    HomeSectionLoadingRow(label: "Loading pinned projects")
-                } else if let error = viewModel.projectsError, viewModel.pinnedProjects.isEmpty {
-                    HomeSectionMessageRow(
-                        text: "Couldn’t load pinned projects.",
-                        systemImage: "exclamationmark.triangle",
-                        emphasized: true,
-                        accessibilityHint: error
-                    )
-                } else if viewModel.pinnedProjects.isEmpty {
-                    HomeSectionMessageRow(
-                        text: "Pinned projects will appear here when they’re available.",
-                        systemImage: "pin"
-                    )
-                } else {
-                    ForEach(viewModel.pinnedProjects.prefix(projectPreviewLimit)) { project in
-                        NavigationLink {
-                            ProjectDetailView(project: project)
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10),
+                    ],
+                    spacing: 10
+                ) {
+                    ForEach(items) { item in
+                        Button {
+                            openPinnedItem(item, viewModel: viewModel)
                         } label: {
-                            HomeProjectRow(project: project)
+                            HomePinnedCard(item: item)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
 
-    @ViewBuilder
-    private func assignedTicketsSection(_ viewModel: HomeViewModel) -> some View {
-        HomeSectionView("Tickets", isExpanded: $assignedTicketsExpanded) {
-            NavigationLink {
-                HomeAssignedTicketsListView(viewModel: viewModel)
-            } label: {
-                Text("See All")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-        } content: {
-            if viewModel.isLoadingAssignedTickets && viewModel.assignedTickets.isEmpty {
-                HomeSectionLoadingRow(label: "Loading assigned tickets")
-            } else if let error = viewModel.assignedTicketsError, viewModel.assignedTickets.isEmpty {
-                HomeSectionMessageRow(
-                    text: "Couldn’t load assigned tickets.",
-                    systemImage: "exclamationmark.triangle",
-                    emphasized: true,
-                    accessibilityHint: error
-                )
-            } else if viewModel.assignedTickets.isEmpty {
-                HomeSectionMessageRow(
-                    text: "No open tickets assigned to you.",
-                    systemImage: "person.crop.circle.badge.checkmark"
-                )
-            } else {
-                ForEach(viewModel.assignedTickets.prefix(previewLimit)) { ticket in
-                    NavigationLink {
-                        TicketDetailView(
-                            ownerUsername: ticket.ownerUsername,
-                            trackerName: ticket.trackerName,
-                            trackerId: ticket.trackerId,
-                            trackerRid: ticket.trackerRid,
-                            ticketId: ticket.ticket.id
-                        )
-                    } label: {
-                        HomeAssignedTicketRow(ticket: ticket)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if swipeActionsEnabled {
-                            ticketLeadingSwipeAction(ticket, viewModel: viewModel)
-                        }
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        if swipeActionsEnabled {
-                            Button {
-                                Task {
-                                    await viewModel.unassignFromMe(ticket)
-                                }
-                            } label: {
-                                Label("Unassign Me", systemImage: "person.badge.minus")
-                            }
-                            .tint(.orange)
-                        }
-                    }
-                }
+    private func workCount(_ viewModel: HomeViewModel) -> Int {
+        unreadCount(viewModel) + viewModel.assignedTickets.count
+    }
+
+    private func unreadCount(_ viewModel: HomeViewModel) -> Int {
+        viewModel.unreadInboxThreadCount ?? viewModel.unreadInboxThreads.count
+    }
+
+    private func workTitle(_ viewModel: HomeViewModel) -> String {
+        let count = workCount(viewModel)
+        if count == 0 {
+            return "Queue clear"
+        }
+        return "\(count) item\(count == 1 ? "" : "s") need attention"
+    }
+
+    private func workSummary(_ viewModel: HomeViewModel) -> String {
+        let unread = unreadCount(viewModel)
+        let assigned = viewModel.assignedTickets.count
+        return "\(unread) unread • \(assigned) assigned"
+    }
+
+    private func buildsTitle(_ viewModel: HomeViewModel) -> String {
+        let failed = viewModel.failedBuildCount
+        let running = viewModel.activeBuildCount
+
+        if failed == 0 && running == 0 {
+            return "Build monitoring clear"
+        }
+        if failed > 0 {
+            return "\(failed) failed build\(failed == 1 ? "" : "s")"
+        }
+        return "\(running) running build\(running == 1 ? "" : "s")"
+    }
+
+    private func buildsSummary(_ viewModel: HomeViewModel) -> String {
+        let failed = viewModel.failedBuildCount
+        let running = viewModel.activeBuildCount
+        if failed == 0 && running == 0 {
+            return "No failures • \(buildTimeframeLabel(viewModel))"
+        }
+        if failed > 0 && running > 0 {
+            return "\(failed) failed • \(running) running • \(buildTimeframeLabel(viewModel))"
+        }
+        if failed > 0 {
+            return "\(failed) failed • \(buildTimeframeLabel(viewModel))"
+        }
+        return "\(running) running • \(buildTimeframeLabel(viewModel))"
+    }
+
+    private func pinnedItems(_ viewModel: HomeViewModel) -> [HomePinnedItem] {
+        let currentUserKey = appState.currentUser?.canonicalName ?? ""
+        let pins = HomePinStore.loadPins(for: currentUserKey, defaults: appState.accountDefaults)
+        let projectsByID = Dictionary(uniqueKeysWithValues: viewModel.projects.map { ($0.id, $0) })
+
+        return pins.compactMap { pin in
+            switch pin.kind {
+            case .project:
+                guard let project = projectsByID[pin.value] else { return nil }
+                return HomePinnedItem(pin: pin, project: project)
+            case .repository, .tracker, .mailingList, .user:
+                return HomePinnedItem(pin: pin, project: nil)
             }
         }
     }
 
-    @ViewBuilder
-    private func recentBuildsSection(_ viewModel: HomeViewModel) -> some View {
-        HomeSectionView("Builds", isExpanded: $buildsExpanded) {
-            Button("See All") {
-                appState.navigateToBuildsList()
-            }
-            .font(.caption.weight(.medium))
-            .buttonStyle(.plain)
-        } content: {
-            if viewModel.isLoadingRecentBuilds && viewModel.recentBuilds.isEmpty {
-                HomeSectionLoadingRow(label: "Loading recent builds")
-            } else if let error = viewModel.recentBuildsError, viewModel.recentBuilds.isEmpty {
-                HomeSectionMessageRow(
-                    text: "Couldn’t load recent builds.",
-                    systemImage: "exclamationmark.triangle",
-                    emphasized: true,
-                    accessibilityHint: error
-                )
-            } else if viewModel.recentBuilds.isEmpty {
-                HomeSectionMessageRow(
-                    text: "No recent builds.",
-                    systemImage: "clock"
-                )
-            } else {
-                ForEach(buildGroups(for: viewModel.recentBuilds)) { group in
-                    if let repositoryDisplayName = group.repositoryDisplayName {
-                        HomeBuildGroupHeader(
-                            repositoryDisplayName: repositoryDisplayName,
-                            buildCount: group.builds.count,
-                            latestStatus: group.latestStatus
-                        )
-                    }
+    private func buildTimeframeLabel(_ viewModel: HomeViewModel) -> String {
+        let calendar = Calendar.current
+        let buildDates = viewModel.recentBuilds.map(\.job.updated)
 
-                    ForEach(group.builds) { build in
-                        NavigationLink {
-                            BuildDetailView(jobId: build.job.id)
-                        } label: {
-                            HomeBuildRow(
-                                build: build,
-                                showsRepositoryLink: group.repositoryDisplayName == nil
-                            )
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            if swipeActionsEnabled, build.job.status.isCancellable {
-                                Button {
-                                    Task {
-                                        await viewModel.cancelBuild(build)
-                                    }
-                                }
-                                label: {
-                                    Label("Cancel", systemImage: "xmark.circle")
-                                }
-                                .tint(.red)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func buildGroups(for builds: [HomeBuildItem]) -> [HomeBuildGroup] {
-        let previewBuilds = Array(builds.prefix(previewLimit))
-        guard let firstBuild = previewBuilds.first else { return [] }
-
-        var groups: [HomeBuildGroup] = []
-        var currentIdentity = HomeBuildGroup.Identity(build: firstBuild)
-        var currentBuilds: [HomeBuildItem] = []
-
-        for build in previewBuilds {
-            let identity = HomeBuildGroup.Identity(build: build)
-            if identity == currentIdentity {
-                currentBuilds.append(build)
-            } else {
-                groups.append(HomeBuildGroup(identity: currentIdentity, builds: currentBuilds))
-                currentIdentity = identity
-                currentBuilds = [build]
-            }
+        guard !buildDates.isEmpty else {
+            return "today"
         }
 
-        if !currentBuilds.isEmpty {
-            groups.append(HomeBuildGroup(identity: currentIdentity, builds: currentBuilds))
-        }
-
-        return groups
+        return buildDates.allSatisfy(calendar.isDateInToday) ? "today" : "this week"
     }
 
-    @ViewBuilder
-    private func ticketLeadingSwipeAction(
-        _ ticket: HomeAssignedTicket,
-        viewModel: HomeViewModel
-    ) -> some View {
-        if ticket.ticket.status.isOpen {
-            Button {
-                Task {
-                    await viewModel.resolveTicket(ticket)
-                }
-            } label: {
-                Label("Resolve", systemImage: "checkmark.circle")
+    private func hasHomeContent(_ viewModel: HomeViewModel) -> Bool {
+        viewModel.systemStatusSnapshot?.hasDisruption == true ||
+        workCount(viewModel) > 0 ||
+        !recentItems.isEmpty ||
+        !pinnedItems(viewModel).isEmpty
+    }
+
+    private func loadRecentActivity() {
+        recentItems = RecentActivityStore.load(defaults: appState.accountDefaults)
+    }
+
+    private func openRecentItem(_ item: RecentActivityEntry) {
+        guard !isOpeningRecentItem else { return }
+
+        switch item.kind {
+        case .build:
+            guard let jobId = item.buildJobId else { return }
+            appState.navigateToBuild(jobId: jobId)
+        case .ticket:
+            guard
+                let ownerUsername = item.ticketOwnerUsername,
+                let trackerName = item.ticketTrackerName,
+                let ticketId = item.ticketId
+            else {
+                return
             }
-            .tint(.green)
-        } else {
-            Button {
-                Task {
-                    await viewModel.reopenTicket(ticket)
-                }
-            } label: {
-                Label("Reopen", systemImage: "arrow.uturn.backward")
-            }
-            .tint(.blue)
-        }
-    }
-
-}
-
-private struct HomeInboxToolbarIcon: View {
-    let hasUnreadThreads: Bool
-
-    var body: some View {
-        Image(systemName: hasUnreadThreads ? "tray.fill" : "tray")
-            .accessibilityLabel(hasUnreadThreads ? "Inbox, unread messages" : "Inbox")
-    }
-}
-
-private struct HomeProjectRow: View {
-    let project: Project
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(project.displayName)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    if let description = project.displayDescription {
-                        Text(description)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-
-                Spacer(minLength: 8)
-
-                VisibilityBadge(visibility: project.visibility)
+            appState.navigateToTicket(ownerUsername: ownerUsername, trackerName: trackerName, ticketId: ticketId)
+        case .repository:
+            guard
+                let owner = item.repositoryOwner,
+                let name = item.repositoryName
+            else {
+                return
             }
 
-            Text(project.metadataLine)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .contentShape(Rectangle())
-        .padding(.vertical, 4)
-    }
-}
-
-private struct HomeBuildRow: View {
-    @Environment(AppState.self) private var appState
-    let build: HomeBuildItem
-    var showsRepositoryLink = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                JobStatusIcon(status: build.job.status)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(build.job.displayLabel)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-
-                    HStack(spacing: 8) {
-                        Text("Job #\(build.job.id)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Text("•")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-
-                        Text(build.job.status.displayTitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Text("•")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-
-                        Text(build.job.created.relativeDescription)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-
-                        Spacer()
-                    }
-                }
-            }
-
-            if showsRepositoryLink, let repositoryDisplayName = build.repositoryDisplayName {
-                Button {
-                    openRepository()
-                } label: {
-                    Label(repositoryDisplayName, systemImage: "book.closed")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func openRepository() {
-        guard let repositoryName = build.repositoryName,
-              let repositoryOwner = build.repositoryOwner else { return }
-        Task {
-            do {
-                let repository = try await appState.resolveRepository(
-                    owner: repositoryOwner.hasPrefix("~") ? String(repositoryOwner.dropFirst()) : repositoryOwner,
-                    name: repositoryName
-                )
-                appState.navigateToRepository(repository)
-            } catch {
-                appState.presentRepositoryDeepLinkError()
-            }
-        }
-    }
-}
-
-private struct HomeBuildGroup: Identifiable {
-    enum Identity: Hashable {
-        case repository(owner: String?, name: String)
-        case standalone(Int)
-
-        init(build: HomeBuildItem) {
-            if let repositoryName = build.repositoryName {
-                self = .repository(owner: build.repositoryOwner, name: repositoryName)
-            } else {
-                self = .standalone(build.id)
-            }
-        }
-    }
-
-    let identity: Identity
-    let builds: [HomeBuildItem]
-
-    var id: String {
-        switch identity {
-        case .repository(let owner, let name):
-            return "\(owner ?? "_")/\(name)#\(builds.first?.id ?? 0)"
-        case .standalone(let jobId):
-            return "job-\(jobId)"
-        }
-    }
-
-    var repositoryDisplayName: String? {
-        builds.first?.repositoryDisplayName
-    }
-
-    var latestStatus: JobStatus {
-        builds.first?.job.status ?? .pending
-    }
-}
-
-private struct HomeBuildGroupHeader: View {
-    let repositoryDisplayName: String
-    let buildCount: Int
-    let latestStatus: JobStatus
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Label(repositoryDisplayName, systemImage: "book.closed")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            Text("\(buildCount) \(buildCount == 1 ? "build" : "builds")")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.tertiary)
-
-            JobStatusBadge(status: latestStatus)
-        }
-        .padding(.top, 4)
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 0, trailing: 20))
-        .listRowSeparator(.hidden)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-private struct HomeAssignedTicketRow: View {
-    @Environment(AppState.self) private var appState
-    let ticket: HomeAssignedTicket
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 12) {
-                TicketStatusIcon(status: ticket.ticket.status)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(ticket.ticket.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(2)
-
-                    Text("\(ticket.ownerCanonicalName)/\(ticket.trackerName) • #\(ticket.ticket.id) • \(ticket.ticket.created.relativeDescription)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                Spacer(minLength: 8)
-
-                Text(ticket.ticket.status.displayName)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-
-            Button {
-                openTracker()
-            } label: {
-                Label("\(ticket.ownerCanonicalName)/\(ticket.trackerName)", systemImage: "checklist")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func openTracker() {
-        Task {
-            do {
-                let tracker = try await appState.resolveTracker(owner: ticket.ownerUsername, name: ticket.trackerName)
-                appState.navigateToTracker(tracker)
-            } catch {
-                appState.presentTicketDeepLinkError()
-            }
-        }
-    }
-}
-
-private struct HomeInboxThreadRow: View {
-    @Environment(AppState.self) private var appState
-    let thread: InboxThreadSummary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 10) {
-                Circle()
-                    .fill(.blue)
-                    .frame(width: 8, height: 8)
-                    .padding(.top, 6)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(thread.displaySubject)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(2)
-
-                    Text(thread.metadataLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    appState.navigateToMailingList(
-                        InboxMailingListReference(
-                            id: thread.listID,
-                            rid: thread.listRID,
-                            name: thread.listName,
-                            owner: thread.listOwner
-                        )
+            isOpeningRecentItem = true
+            Task {
+                defer { isOpeningRecentItem = false }
+                do {
+                    let repository = try await appState.resolveRepository(
+                        owner: owner,
+                        name: name,
+                        service: item.repositoryService ?? .git
                     )
-                } label: {
-                    Label(thread.listName, systemImage: "list.bullet")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-
-                if let repo = thread.repo {
-                    Button {
-                        openRepository(named: repo)
-                    } label: {
-                        Label(repo, systemImage: "book.closed")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+                    appState.navigateToRepository(repository)
+                } catch {
+                    appState.presentRepositoryDeepLinkError()
                 }
             }
         }
-        .padding(.vertical, 2)
     }
 
-    private func openRepository(named repositoryName: String) {
-        Task {
-            do {
-                let ownerUsername = thread.listOwner.canonicalName.hasPrefix("~")
-                    ? String(thread.listOwner.canonicalName.dropFirst())
-                    : thread.listOwner.canonicalName
-                let repository = try await appState.resolveRepository(owner: ownerUsername, name: repositoryName)
-                appState.navigateToRepository(repository)
-            } catch {
-                appState.presentRepositoryDeepLinkError()
+    private func openPinnedItem(_ item: HomePinnedItem, viewModel: HomeViewModel) {
+        switch item.pin.kind {
+        case .project:
+            guard let project = item.project else { return }
+            selectedPinnedProject = project
+        case .repository:
+            guard
+                let owner = item.pin.ownerUsername,
+                let service = item.pin.service
+            else {
+                return
+            }
+            isOpeningRecentItem = true
+            Task {
+                defer { isOpeningRecentItem = false }
+                do {
+                    let repository = try await appState.resolveRepository(owner: owner, name: item.pin.value, service: service)
+                    appState.navigateToRepository(repository)
+                } catch {
+                    appState.presentRepositoryDeepLinkError()
+                }
+            }
+        case .tracker:
+            guard let owner = item.pin.ownerUsername else { return }
+            isOpeningRecentItem = true
+            Task {
+                defer { isOpeningRecentItem = false }
+                do {
+                    let tracker = try await appState.resolveTracker(owner: owner, name: item.pin.value)
+                    appState.navigateToTracker(tracker)
+                } catch {
+                    appState.presentTicketDeepLinkError()
+                }
+            }
+        case .mailingList:
+            guard let ownerUsername = item.pin.ownerUsername else { return }
+            appState.openMailingList(
+                InboxMailingListReference(
+                    id: 0,
+                    rid: item.pin.value,
+                    name: item.pin.title,
+                    owner: Entity(canonicalName: "~\(ownerUsername)")
+                )
+            )
+        case .user:
+            guard let ownerUsername = item.pin.ownerUsername else { return }
+            isOpeningRecentItem = true
+            Task {
+                defer { isOpeningRecentItem = false }
+                if let user = try? await resolvePinnedUser(username: ownerUsername) {
+                    selectedPinnedUser = user
+                }
             }
         }
+    }
+
+    private func resolvePinnedUser(username: String) async throws -> User {
+        struct Response: Decodable, Sendable {
+            let user: User
+        }
+
+        let query = """
+        query userLookup($username: String!) {
+            user: userByName(username: $username) {
+                id
+                created
+                updated
+                canonicalName
+                username
+                email
+                url
+                location
+                bio
+                avatar
+                pronouns
+                userType
+            }
+        }
+        """
+
+        let result = try await appState.client.execute(
+            service: .meta,
+            query: query,
+            variables: ["username": username],
+            responseType: Response.self
+        )
+        return result.user
+    }
+
+    @MainActor
+    private func ensureViewModel(currentUser: User) -> HomeViewModel {
+        if let viewModel {
+            return viewModel
+        }
+
+        let newViewModel = HomeViewModel(
+            currentUser: currentUser,
+            client: appState.client,
+            systemStatusRepository: appState.systemStatusRepository,
+            defaults: appState.accountDefaults,
+            accountID: appState.activeAccountID
+        )
+        viewModel = newViewModel
+        return newViewModel
     }
 }
 
-private struct HomeSectionLoadingRow: View {
-    let label: String
+enum HomeRoute: Hashable {
+    case work
+}
+
+private enum HomeSummaryEmphasis {
+    case action
+    case monitoring
+}
+
+private struct HomePinnedItem: Identifiable {
+    let pin: HomePinRecord
+    let project: Project?
+
+    var id: String { pin.id }
+    var title: String { project?.displayName ?? pin.title }
+    var detail: String { pin.subtitle }
+}
+
+private struct HomeSummaryRow: View {
+    let title: String
+    let summary: String
+    let systemImage: String
+    let tint: Color
+    let emphasis: HomeSummaryEmphasis
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-            Text(label)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct HomeSectionHeader<Destination: View>: View {
-    let title: String
-    let destination: Destination
-
-    init(_ title: String, @ViewBuilder destination: () -> Destination) {
-        self.title = title
-        self.destination = destination()
-    }
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            NavigationLink {
-                destination
-            } label: {
-                Text("See All")
-                    .font(.caption.weight(.medium))
-            }
-            .buttonStyle(.plain)
-        }
-        .textCase(nil)
-    }
-}
-
-private struct HomeAttentionSummaryRow: View {
-    let title: String
-    let summary: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+            Image(systemName: systemImage)
                 .font(.subheadline.weight(.semibold))
-            Text(summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .padding(.vertical, 2)
-    }
-}
+                .foregroundStyle(iconColor)
+                .frame(width: 18)
 
-private struct HomeAttentionLinkRow<Destination: View>: View {
-    let title: String
-    let summary: String
-    let countText: String
-    let destination: Destination?
-    let action: (() -> Void)?
-
-    init(
-        title: String,
-        summary: String,
-        countText: String,
-        @ViewBuilder destination: () -> Destination
-    ) {
-        self.title = title
-        self.summary = summary
-        self.countText = countText
-        self.destination = destination()
-        self.action = nil
-    }
-
-    init(
-        title: String,
-        summary: String,
-        countText: String,
-        action: @escaping () -> Void
-    ) where Destination == EmptyView {
-        self.title = title
-        self.summary = summary
-        self.countText = countText
-        self.destination = nil
-        self.action = action
-    }
-
-    var body: some View {
-        Group {
-            if let destination {
-                NavigationLink {
-                    destination
-                } label: {
-                    content
-                }
-            } else if let action {
-                Button(action: action) {
-                    content
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var content: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                 Text(summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer()
-            Text(countText)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.secondarySystemFill), in: Capsule())
 
-            if action != nil {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
+            Spacer(minLength: 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .padding(.vertical, 2)
+        .padding(.vertical, verticalPadding)
+    }
+
+    private var iconColor: Color {
+        switch emphasis {
+        case .action:
+            return tint
+        case .monitoring:
+            return tint.opacity(0.9)
+        }
+    }
+
+    private var verticalPadding: CGFloat {
+        switch emphasis {
+        case .action:
+            return 3
+        case .monitoring:
+            return 2
+        }
     }
 }
 
-private struct HomeAssignedTicketsListView: View {
-    let viewModel: HomeViewModel
-    @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
+private struct HomeRecentRow: View {
+    let item: RecentActivityEntry
 
     var body: some View {
-        List {
-            ForEach(viewModel.assignedTickets) { ticket in
-                NavigationLink {
-                    TicketDetailView(
-                        ownerUsername: ticket.ownerUsername,
-                        trackerName: ticket.trackerName,
-                        trackerId: ticket.trackerId,
-                        trackerRid: ticket.trackerRid,
-                        ticketId: ticket.ticket.id
-                    )
-                } label: {
-                    HomeAssignedTicketRow(ticket: ticket)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    if swipeActionsEnabled {
-                        if ticket.ticket.status.isOpen {
-                            Button {
-                                Task { await viewModel.resolveTicket(ticket) }
-                            } label: {
-                                Label("Resolve", systemImage: "checkmark.circle")
-                            }
-                            .tint(.green)
-                        } else {
-                            Button {
-                                Task { await viewModel.reopenTicket(ticket) }
-                            } label: {
-                                Label("Reopen", systemImage: "arrow.uturn.backward")
-                            }
-                            .tint(.blue)
-                        }
-                    }
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if swipeActionsEnabled {
-                        Button {
-                            Task { await viewModel.unassignFromMe(ticket) }
-                        } label: {
-                            Label("Unassign Me", systemImage: "person.badge.minus")
-                        }
-                        .tint(.orange)
-                    }
-                }
+        HStack(spacing: 10) {
+            Image(systemName: iconName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Text(item.detailText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            if !viewModel.isLoadingAssignedTickets && viewModel.assignedTickets.isEmpty {
-                HomeSectionMessageRow(
-                    text: "No open tickets assigned to you.",
-                    systemImage: "person.crop.circle.badge.checkmark"
-                )
-            }
+            Spacer(minLength: 8)
         }
-        .navigationTitle("Assigned Tickets")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await viewModel.loadDashboard()
-        }
-        .overlay {
-            if viewModel.isLoadingAssignedTickets && viewModel.assignedTickets.isEmpty {
-                SRHTLoadingStateView(message: "Loading assigned tickets…")
-            }
+        .padding(.vertical, 1)
+    }
+
+    private var iconName: String {
+        switch item.kind {
+        case .repository:
+            return "book.closed"
+        case .ticket:
+            return "number"
+        case .build:
+            return "hammer"
         }
     }
 }
 
-private struct HomeSectionMessageRow: View {
+private struct HomePinnedCard: View {
+    let item: HomePinnedItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(item.detail)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(item.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .padding(10)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct HomeCompactMessageRow: View {
     let text: String
     let systemImage: String
-    var emphasized = false
-    var accessibilityHint: String? = nil
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.subheadline)
-            .foregroundStyle(emphasized ? .secondary : .tertiary)
-            .accessibilityHint(accessibilityHint ?? "")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 2)
     }
 }

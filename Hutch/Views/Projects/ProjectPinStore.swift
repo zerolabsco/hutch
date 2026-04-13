@@ -5,6 +5,11 @@ enum ProjectPinStore {
         for userKey: String,
         defaults: UserDefaults = .standard
     ) -> [String] {
+        let generalizedPins = HomePinStore.pinnedProjectIDs(for: userKey, defaults: defaults)
+        if !generalizedPins.isEmpty {
+            return generalizedPins
+        }
+
         let pinnedProjects = loadAll(defaults: defaults)
         return normalizedProjectIDs(pinnedProjects[userKey] ?? [])
     }
@@ -22,6 +27,22 @@ enum ProjectPinStore {
         for userKey: String,
         defaults: UserDefaults = .standard
     ) {
+        let trimmed = projectID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        HomePinStore.togglePin(
+            HomePinRecord(
+                kind: .project,
+                value: trimmed,
+                title: "Pinned Project",
+                subtitle: "Project",
+                ownerUsername: nil,
+                service: nil
+            ),
+            for: userKey,
+            defaults: defaults
+        )
+
         var pinnedProjects = loadAll(defaults: defaults)
         var projectIDs = normalizedProjectIDs(pinnedProjects[userKey] ?? [])
 
@@ -35,6 +56,14 @@ enum ProjectPinStore {
 
         pinnedProjects[userKey] = projectIDs
         save(pinnedProjects, defaults: defaults)
+    }
+
+    static func loadLegacyPinnedProjectIDs(
+        for userKey: String,
+        defaults: UserDefaults = .standard
+    ) -> [String] {
+        let pinnedProjects = loadAll(defaults: defaults)
+        return normalizedProjectIDs(pinnedProjects[userKey] ?? [])
     }
 
     private static func loadAll(defaults: UserDefaults) -> [String: [String]] {

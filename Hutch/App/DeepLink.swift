@@ -3,6 +3,7 @@ import Foundation
 /// Represents a parsed `hutch://` deep link.
 enum DeepLink: Equatable {
     case home
+    case work
     /// hutch://git/<owner>/<repo>
     case repository(owner: String, repo: String)
     /// hutch://todo/<owner>/<tracker>/<ticketId>
@@ -32,6 +33,9 @@ enum DeepLink: Equatable {
         switch components.first {
         case "home", nil:
             self = .home
+
+        case "work", "inbox":
+            self = .work
 
         case "git" where components.count >= 3:
             let owner = components[1]

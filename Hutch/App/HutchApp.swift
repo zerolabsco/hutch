@@ -26,7 +26,7 @@ struct HutchApp: App {
                     let link: DeepLink
                     switch destination {
                     case .home: link = .home
-                    case .inbox: link = .home
+                    case .work: link = .work
                     case .builds: link = .buildsTab
                     case .repositories: link = .repositoriesTab
                     case .trackers: link = .trackersTab

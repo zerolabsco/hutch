@@ -69,6 +69,12 @@ struct RootView: View {
         return TabView(selection: $appState.selectedTab) {
             NavigationStack(path: $homePath) {
                 HomeView()
+                    .navigationDestination(for: HomeRoute.self) { route in
+                        switch route {
+                        case .work:
+                            WorkView()
+                        }
+                    }
             }
             .tag(AppState.Tab.home)
             .tabItem {
@@ -195,6 +201,14 @@ struct RootView: View {
 
         case .ticket(let owner, let tracker, let ticketId):
             resolveTicketLink(owner: owner, tracker: tracker, ticketId: ticketId)
+
+        case .work:
+            homePath = NavigationPath()
+            appState.selectedTab = .home
+            Task {
+                await settleNavigationTransition()
+                homePath.append(HomeRoute.work)
+            }
 
         case .buildsTab:
             buildsPath = NavigationPath()

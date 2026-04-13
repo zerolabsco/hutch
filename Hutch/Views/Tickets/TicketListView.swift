@@ -23,10 +23,27 @@ struct TicketListView: View {
     @State private var showBulkCloseSheet = false
     @State private var showBulkAssignSheet = false
     @State private var bulkActionResult: TicketBulkActionResult?
+    @State private var pinChangeCount = 0
 
     private var isOwnedByCurrentUser: Bool {
         guard let currentUser = appState.currentUser else { return false }
         return normalizedUsername(currentUser.username) == normalizedUsername(tracker.owner.canonicalName)
+    }
+
+    private var currentUserKey: String? {
+        appState.currentUser?.canonicalName
+    }
+
+    private var isPinnedToHome: Bool {
+        _ = pinChangeCount
+        guard let currentUserKey else { return false }
+        return HomePinStore.isPinned(.tracker(tracker), for: currentUserKey, defaults: appState.accountDefaults)
+    }
+
+    private var navigationTitle: String {
+        guard let viewModel, viewModel.isSelectionMode else { return tracker.name }
+        let count = viewModel.selectedTicketCount
+        return count == 0 ? "Select Tickets" : "\(count) Selected"
     }
 
     init(
@@ -47,7 +64,7 @@ struct TicketListView: View {
                 SRHTLoadingStateView(message: "Loading tickets…")
             }
         }
-        .navigationTitle(tracker.name)
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -66,26 +83,12 @@ struct TicketListView: View {
                         }
                         .disabled(viewModel.filteredTickets.isEmpty || viewModel.isPerformingAction)
                     } else {
-                        SRHTShareButton(
-                            url: SRHTWebURL.tracker(
-                                ownerUsername: String(tracker.owner.canonicalName.dropFirst()),
-                                trackerName: tracker.name
-                            ),
-                            target: .tracker
-                        ) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-
                         Button {
                             showCreateTicketSheet = true
                         } label: {
                             Image(systemName: "plus")
                         }
                         .accessibilityLabel("Create ticket")
-
-                        Button("Select") {
-                            viewModel?.setSelectionMode(true)
-                        }
 
                         trackerActionsMenu
                     }
@@ -240,6 +243,12 @@ struct TicketListView: View {
                 await vm.loadTrackerLabels()
             }
         }
+    }
+
+    private func togglePinnedState() {
+        guard let currentUserKey else { return }
+        HomePinStore.togglePin(.tracker(tracker), for: currentUserKey, defaults: appState.accountDefaults)
+        pinChangeCount += 1
     }
 
     @ViewBuilder
@@ -429,6 +438,31 @@ struct TicketListView: View {
 
     private var trackerActionsMenu: some View {
         Menu {
+            Button {
+                viewModel?.setSelectionMode(true)
+            } label: {
+                Label("Select", systemImage: "checkmark.circle")
+            }
+
+            if currentUserKey != nil {
+                Button {
+                    togglePinnedState()
+                } label: {
+                    Label(
+                        isPinnedToHome ? "Unpin from Home" : "Pin to Home",
+                        systemImage: isPinnedToHome ? "pin.slash" : "pin"
+                    )
+                }
+            }
+
+            if let shareURL = SRHTWebURL.tracker(tracker) {
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+
+            Divider()
+
             if let trackerURL = SRHTWebURL.tracker(tracker) {
                 Button {
                     openURL(trackerURL)

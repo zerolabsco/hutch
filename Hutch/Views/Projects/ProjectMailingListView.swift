@@ -229,6 +229,17 @@ struct MailingListDetailView: View {
 
     @Environment(AppState.self) private var appState
     @State private var viewModel: MailingListDetailViewModel?
+    @State private var pinChangeCount = 0
+
+    private var currentUserKey: String? {
+        appState.currentUser?.canonicalName
+    }
+
+    private var isPinnedToHome: Bool {
+        _ = pinChangeCount
+        guard let currentUserKey else { return false }
+        return HomePinStore.isPinned(.mailingList(mailingList), for: currentUserKey, defaults: appState.accountDefaults)
+    }
 
     var body: some View {
         Group {
@@ -240,6 +251,18 @@ struct MailingListDetailView: View {
         }
         .navigationTitle(mailingList.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if currentUserKey != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        togglePinnedState()
+                    } label: {
+                        Image(systemName: isPinnedToHome ? "pin.fill" : "pin")
+                    }
+                    .accessibilityLabel(isPinnedToHome ? "Unpin from Home" : "Pin to Home")
+                }
+            }
+        }
         .task {
             if viewModel == nil {
                 let viewModel = MailingListDetailViewModel(
@@ -258,6 +281,12 @@ struct MailingListDetailView: View {
                 await viewModel.loadThreads()
             }
         }
+    }
+
+    private func togglePinnedState() {
+        guard let currentUserKey else { return }
+        HomePinStore.togglePin(.mailingList(mailingList), for: currentUserKey, defaults: appState.accountDefaults)
+        pinChangeCount += 1
     }
 
     @ViewBuilder

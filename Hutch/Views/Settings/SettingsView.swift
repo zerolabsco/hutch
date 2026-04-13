@@ -264,10 +264,22 @@ private struct AboutView: View {
                         get: { appState.isDebugModeEnabled },
                         set: { appState.isDebugModeEnabled = $0 }
                     ))
+
+                    NavigationLink {
+                        HomePrototypeView()
+                    } label: {
+                        SwiftUI.Label("Home Prototype", systemImage: "house")
+                    }
+
+                    NavigationLink {
+                        WorkPrototypeView()
+                    } label: {
+                        SwiftUI.Label("Work Prototype", systemImage: "tray.full")
+                    }
                 } header: {
                     Text("Developer")
                 } footer: {
-                    Text("Shows raw API payloads and diagnostic details on builds and tickets screens. This stays hidden until explicitly enabled.")
+                    Text("Shows raw API payloads and diagnostic details on builds and tickets screens. Home Prototype explores the dashboard structure, while Work Prototype evaluates the personal queue surface. This stays hidden until explicitly enabled.")
                 }
             }
         }

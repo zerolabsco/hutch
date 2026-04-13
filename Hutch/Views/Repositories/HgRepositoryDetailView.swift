@@ -19,10 +19,21 @@ struct HgRepositoryDetailView: View {
     @State private var showShareUnavailableAlert = false
     @State private var didCopyFileContents = false
     @State private var copyResetTask: Task<Void, Never>?
+    @State private var pinChangeCount = 0
 
     private var canManageRepository: Bool {
         guard let currentUser = appState.currentUser else { return false }
         return normalizedUsername(currentUser.username) == normalizedUsername(repository.owner.canonicalName)
+    }
+
+    private var currentUserKey: String? {
+        appState.currentUser?.canonicalName
+    }
+
+    private var isPinnedToHome: Bool {
+        _ = pinChangeCount
+        guard let currentUserKey else { return false }
+        return HomePinStore.isPinned(.repository(repository), for: currentUserKey, defaults: appState.accountDefaults)
     }
 
     private var shareURL: URL? {
@@ -58,17 +69,7 @@ struct HgRepositoryDetailView: View {
                     }
                 }
 
-                SRHTShareButton(url: SRHTWebURL.repository(repository), target: .repository) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-
-                if canManageRepository {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                }
+                repositoryActionsMenu
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -104,6 +105,46 @@ struct HgRepositoryDetailView: View {
     private func normalizedUsername(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    private func togglePinnedState() {
+        guard let currentUserKey else { return }
+        HomePinStore.togglePin(.repository(repository), for: currentUserKey, defaults: appState.accountDefaults)
+        pinChangeCount += 1
+    }
+
+    private var repositoryActionsMenu: some View {
+        Menu {
+            if currentUserKey != nil {
+                Button {
+                    togglePinnedState()
+                } label: {
+                    Label(
+                        isPinnedToHome ? "Unpin from Home" : "Pin to Home",
+                        systemImage: isPinnedToHome ? "pin.slash" : "pin"
+                    )
+                }
+            }
+
+            if let shareURL = SRHTWebURL.repository(repository) {
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+
+            if canManageRepository {
+                Divider()
+
+                Button {
+                    showSettings = true
+                } label: {
+                    Label("Repository Settings", systemImage: "gear")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("Repository actions")
     }
 
     @ViewBuilder

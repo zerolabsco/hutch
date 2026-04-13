@@ -220,6 +220,15 @@ struct TicketDetailView: View {
                     commentInput(viewModel)
                 }
             }
+            .task(id: ticket.id) {
+                RecentActivityStore.recordTicket(
+                    ownerUsername: ownerUsername,
+                    trackerName: trackerName,
+                    ticketId: ticket.id,
+                    title: ticket.title,
+                    defaults: appState.accountDefaults
+                )
+            }
             .srhtErrorBanner(error: $vm.error)
             .refreshable {
                 await reloadDetail(viewModel)

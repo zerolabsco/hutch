@@ -393,7 +393,7 @@ final class HomeViewModel {
 
         let inboxUnreadSnapshot = await inboxUnreadTask
         unreadInboxThreadCount = inboxUnreadSnapshot?.unreadCount
-        unreadInboxThreads = Array(inboxUnreadSnapshot?.threads.prefix(4) ?? [])
+        unreadInboxThreads = inboxUnreadSnapshot?.threads ?? []
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
         let systemStatusResult = await systemStatusTask
         switch systemStatusResult {
@@ -414,7 +414,7 @@ final class HomeViewModel {
     }
 
     var pinnedProjects: [Project] {
-        let pinnedIDs = ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey, defaults: defaults)
+        let pinnedIDs = HomePinStore.pinnedProjectIDs(for: currentUserKey, defaults: defaults)
         guard !pinnedIDs.isEmpty else { return [] }
 
         let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
@@ -422,7 +422,7 @@ final class HomeViewModel {
     }
 
     var hasPinnedProjects: Bool {
-        !ProjectPinStore.loadPinnedProjectIDs(for: currentUserKey, defaults: defaults).isEmpty
+        !HomePinStore.loadPins(for: currentUserKey, defaults: defaults).isEmpty
     }
 
     var failedBuildCount: Int {

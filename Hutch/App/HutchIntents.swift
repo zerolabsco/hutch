@@ -5,7 +5,7 @@ import Foundation
 
 enum HutchDestination: String, AppEnum {
     case home
-    case inbox
+    case work
     case builds
     case repositories
     case trackers
@@ -16,7 +16,7 @@ enum HutchDestination: String, AppEnum {
 
     static var caseDisplayRepresentations: [HutchDestination: DisplayRepresentation] = [
         .home: "Home",
-        .inbox: "Inbox",
+        .work: "Work",
         .builds: "Builds",
         .repositories: "Repositories",
         .trackers: "Trackers",

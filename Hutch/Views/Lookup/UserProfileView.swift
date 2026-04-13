@@ -6,6 +6,7 @@ struct UserProfileView: View {
 
     let user: User
     @State private var profileViewModel: UserProfileViewModel?
+    @State private var pinChangeCount = 0
 
     private static let iso8601Formatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -13,6 +14,16 @@ struct UserProfileView: View {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
     }()
+
+    private var currentUserKey: String? {
+        appState.currentUser?.canonicalName
+    }
+
+    private var isPinnedToHome: Bool {
+        _ = pinChangeCount
+        guard let currentUserKey else { return false }
+        return HomePinStore.isPinned(.user(user), for: currentUserKey, defaults: appState.accountDefaults)
+    }
 
     var body: some View {
         List {
@@ -164,6 +175,18 @@ struct UserProfileView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(user.canonicalName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if currentUserKey != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        togglePinnedState()
+                    } label: {
+                        Image(systemName: isPinnedToHome ? "pin.fill" : "pin")
+                    }
+                    .accessibilityLabel(isPinnedToHome ? "Unpin from Home" : "Pin to Home")
+                }
+            }
+        }
         .task(id: user.canonicalName) {
             let owner = user.canonicalName.hasPrefix("~")
                 ? String(user.canonicalName.dropFirst())
@@ -198,6 +221,12 @@ struct UserProfileView: View {
                 _ = await (repos, trackers)
             }
         }
+    }
+
+    private func togglePinnedState() {
+        guard let currentUserKey else { return }
+        HomePinStore.togglePin(.user(user), for: currentUserKey, defaults: appState.accountDefaults)
+        pinChangeCount += 1
     }
 
     private func formattedTimestamp(_ value: String) -> String {

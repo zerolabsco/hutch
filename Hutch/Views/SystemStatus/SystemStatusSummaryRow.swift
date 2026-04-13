@@ -63,7 +63,8 @@ struct SystemStatusSummaryRow: View {
 
     private var primaryMessage: String {
         if let snapshot {
-            return snapshot.hasDisruption ? snapshot.bannerSummary : snapshot.overallStatusText
+            let summary = snapshot.hasDisruption ? snapshot.bannerSummary : snapshot.overallStatusText
+            return "\(summary) • Updated \(snapshot.lastUpdated.relativeDescription)"
         }
         if let errorMessage, !errorMessage.isEmpty {
             return errorMessage
@@ -75,11 +76,8 @@ struct SystemStatusSummaryRow: View {
     }
 
     private var metadataMessage: String? {
-        if let snapshot {
-            if isShowingStaleData {
-                return "Updated \(snapshot.lastUpdated.relativeDescription) • Showing saved data"
-            }
-            return "Updated \(snapshot.lastUpdated.relativeDescription)"
+        if snapshot != nil, isShowingStaleData {
+            return "Showing saved data"
         }
         if errorMessage != nil {
             return "Open System Status to retry."

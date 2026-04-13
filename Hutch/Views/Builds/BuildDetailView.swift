@@ -331,6 +331,13 @@ struct BuildDetailView: View {
                     }
                 }
             }
+            .task(id: job.id) {
+                RecentActivityStore.recordBuild(
+                    jobId: job.id,
+                    title: recentActivityTitle(for: job),
+                    defaults: appState.accountDefaults
+                )
+            }
             .refreshable {
                 await reloadDetail(viewModel)
             }
@@ -366,6 +373,16 @@ struct BuildDetailView: View {
         } else {
             await viewModel.loadJob()
         }
+    }
+
+    private func recentActivityTitle(for job: JobDetail) -> String {
+        if let note = job.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return note
+        }
+        if !job.tags.isEmpty {
+            return job.tags.joined(separator: ", ")
+        }
+        return "Job #\(job.id)"
     }
 }
 
