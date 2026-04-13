@@ -4,6 +4,7 @@ enum AppStorageKeys {
     static let contributionGraphsEnabled = "contributionGraphsEnabled"
     static let activeAccountID = "activeAccountID"
     static let wrapRepositoryFileLines = "wrapRepositoryFileLines"
+    static let wrapPasteFileLines = "wrapPasteFileLines"
     static let lookupHistory = "lookupHistory"
     static let recentActivity = "recentActivity"
     static let scopedSearchHistory = "scopedSearchHistory"

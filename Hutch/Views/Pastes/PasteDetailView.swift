@@ -10,6 +10,12 @@ struct PasteDetailView: View {
     @State private var viewModel: PasteDetailViewModel?
     @State private var showVisibilitySheet = false
     @State private var showDeleteConfirmation = false
+    @State private var showInfoSheet = false
+    @State private var showFileShareSheet = false
+    @State private var showShareUnavailableAlert = false
+    @State private var didCopyContents = false
+    @State private var copyResetTask: Task<Void, Never>?
+    @AppStorage(AppStorageKeys.wrapPasteFileLines) private var wrapLines = false
 
     var body: some View {
         Group {
@@ -23,15 +29,14 @@ struct PasteDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                SRHTShareButton(
-                    url: currentPaste.flatMap { SRHTWebURL.paste(ownerCanonicalName: $0.user.canonicalName, pasteId: $0.id) },
-                    target: .paste
-                ) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-
                 if viewModel != nil {
                     Menu {
+                        if let url = currentPaste.flatMap({ SRHTWebURL.paste(ownerCanonicalName: $0.user.canonicalName, pasteId: $0.id) }) {
+                            ShareLink(item: url) {
+                                Label("Share Link", systemImage: "link")
+                            }
+                        }
+
                         Button {
                             showVisibilitySheet = true
                         } label: {
@@ -114,86 +119,251 @@ struct PasteDetailView: View {
                 retryAction: { await viewModel.loadPaste() }
             )
         } else if let paste = viewModel.paste {
+            VStack(spacing: 0) {
+                fileHeaderBar(paste: paste, viewModel: viewModel)
+                Divider()
+                fileContentArea(viewModel: viewModel)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                actionToolbar(viewModel: viewModel)
+            }
+            .srhtErrorBanner(error: $vm.error)
+            .sheet(isPresented: $showInfoSheet) {
+                PasteInfoSheet(paste: paste, selectedFile: viewModel.selectedFile)
+            }
+            .sheet(isPresented: $showFileShareSheet) {
+                if let contents = viewModel.selectedFileContents {
+                    FileContentShareSheet(activityItems: [contents])
+                }
+            }
+            .alert("Share Unavailable", isPresented: $showShareUnavailableAlert) {
+                Button("OK", role: .cancel) {
+                    // Alert dismissal is implicit; no additional action required.
+                }
+            } message: {
+                Text(SRHTShareTarget.file.fallbackMessage)
+            }
+        }
+    }
+
+    // MARK: - File Header Bar
+
+    private func fileHeaderBar(paste: Paste, viewModel: PasteDetailViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                let filename = viewModel.selectedFile.flatMap { $0.filename.flatMap { $0.isEmpty ? nil : $0 } }
+                Text(filename ?? "Untitled")
+                    .font(.subheadline.monospaced())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                VisibilityBadge(visibility: paste.visibility)
+            }
+
+            HStack(spacing: 4) {
+                Text(paste.user.canonicalName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("·")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Text(paste.created.relativeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let hash = viewModel.selectedFile?.hash {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    Text(hash.prefix(8))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            if paste.files.count > 1 {
+                Picker(
+                    "File",
+                    selection: Binding(
+                        get: { viewModel.selectedFileHash ?? paste.files.first?.hash ?? "" },
+                        set: { viewModel.selectFile(hash: $0) }
+                    )
+                ) {
+                    ForEach(paste.files) { file in
+                        Text(file.filename ?? String(file.hash.prefix(8)))
+                            .tag(file.hash)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    // MARK: - File Content Area
+
+    @ViewBuilder
+    private func fileContentArea(viewModel: PasteDetailViewModel) -> some View {
+        if let file = viewModel.selectedFile {
+            if viewModel.loadingFileHashes.contains(file.hash) && viewModel.selectedFileContents == nil {
+                SRHTLoadingStateView(message: "Loading contents…")
+            } else if let contents = viewModel.selectedFileContents {
+                CodeFileTextView(
+                    text: contents,
+                    fileName: file.filename ?? "",
+                    wrapLines: wrapLines
+                )
+            } else {
+                ContentUnavailableView(
+                    "Contents Unavailable",
+                    systemImage: "doc.questionmark",
+                    description: Text("This file's contents could not be loaded.")
+                )
+            }
+        } else {
+            ContentUnavailableView(
+                "No File Selected",
+                systemImage: "doc",
+                description: Text("Select a file to view its contents.")
+            )
+        }
+    }
+
+    // MARK: - Action Toolbar
+
+    private func actionToolbar(viewModel: PasteDetailViewModel) -> some View {
+        HStack(spacing: 0) {
+            toolbarButton(
+                title: didCopyContents ? "Copied" : "Copy All",
+                systemImage: didCopyContents ? "checkmark" : "doc.on.doc"
+            ) {
+                if let contents = viewModel.selectedFileContents {
+                    UIPasteboard.general.string = contents
+                    didCopyContents = true
+                    copyResetTask?.cancel()
+                    copyResetTask = Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { didCopyContents = false }
+                    }
+                }
+            }
+            .disabled(viewModel.selectedFileContents == nil)
+
+            toolbarButton(
+                title: "Share",
+                systemImage: "square.and.arrow.up"
+            ) {
+                if let contents = viewModel.selectedFileContents, !contents.isEmpty {
+                    showFileShareSheet = true
+                } else {
+                    showShareUnavailableAlert = true
+                }
+            }
+            .disabled(viewModel.selectedFileContents == nil)
+
+            toolbarButton(
+                title: wrapLines ? "Wrap On" : "Wrap Off",
+                systemImage: "text.word.spacing"
+            ) {
+                wrapLines.toggle()
+            }
+
+            toolbarButton(
+                title: "Details",
+                systemImage: "info.circle"
+            ) {
+                showInfoSheet = true
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    private func toolbarButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(title)
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+    }
+}
+
+// MARK: - Paste Info Sheet
+
+private struct PasteInfoSheet: View {
+    let paste: Paste
+    let selectedFile: PasteFile?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
             List {
-                Section("Details") {
+                Section("Paste") {
                     LabeledContent("ID", value: paste.id)
                     LabeledContent("Owner", value: paste.user.canonicalName)
                     LabeledContent("Created", value: paste.created.relativeDescription)
-                    LabeledContent("Visibility", value: visibilityLabel(paste.visibility))
-                    LabeledContent("Files", value: "\(paste.files.count)")
-                }
-
-                if paste.files.count > 1 {
-                    Section("Files") {
-                        Picker("Selected File", selection: Binding(
-                            get: { viewModel.selectedFileHash ?? paste.files.first?.hash ?? "" },
-                            set: { viewModel.selectFile(hash: $0) }
-                        )) {
-                            ForEach(paste.files) { file in
-                                Text(file.filename ?? String(file.hash.prefix(8)))
-                                    .tag(file.hash)
-                            }
-                        }
+                    LabeledContent("Visibility") {
+                        VisibilityBadge(visibility: paste.visibility)
+                    }
+                    if paste.files.count > 1 {
+                        LabeledContent("Files", value: "\(paste.files.count)")
                     }
                 }
 
-                if let file = viewModel.selectedFile {
-                    Section("Current File") {
+                if let file = selectedFile {
+                    Section("File") {
                         if let filename = file.filename, !filename.isEmpty {
                             LabeledContent("Filename", value: filename)
                         }
-                        LabeledContent("Hash", value: file.hash)
-                    }
-
-                    Section {
-                        if viewModel.loadingFileHashes.contains(file.hash) && viewModel.selectedFileContents == nil {
-                            SRHTLoadingStateView(message: "Loading paste contents…")
-                                .frame(minHeight: 180)
-                        } else if let contents = viewModel.selectedFileContents {
-                            PasteCodeBlock(text: contents)
-                        } else {
-                            Text("This file’s contents are unavailable.")
+                        LabeledContent("Hash") {
+                            Text(file.hash)
+                                .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
                         }
-                    } header: {
-                        Text("Contents")
                     }
                 }
             }
             .listStyle(.insetGrouped)
-            .srhtErrorBanner(error: $vm.error)
-            .refreshable {
-                await viewModel.loadPaste()
+            .themedList()
+            .navigationTitle("Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
         }
     }
-
-    private func visibilityLabel(_ visibility: Visibility) -> String {
-        switch visibility {
-        case .public:
-            return "Public"
-        case .unlisted:
-            return "Unlisted"
-        case .private:
-            return "Private"
-        }
-    }
 }
 
-private struct PasteCodeBlock: View {
-    let text: String
-
-    var body: some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            Text(text.isEmpty ? " " : text)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
-        }
-        .frame(minHeight: 220)
-    }
-}
+// MARK: - Visibility Sheet
 
 private struct PasteVisibilitySheet: View {
     let currentVisibility: Visibility
