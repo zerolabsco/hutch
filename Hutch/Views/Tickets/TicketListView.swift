@@ -205,12 +205,13 @@ struct TicketListView: View {
                 }
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                     if swipeActionsEnabled {
-                        ticketLeadingSwipeAction(ticket, viewModel: viewModel)
+                        ticketAssignSwipeAction(ticket, viewModel: viewModel)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if swipeActionsEnabled {
-                        ticketTrailingSwipeActions(ticket, viewModel: viewModel)
+                        ticketStatusSwipeAction(ticket, viewModel: viewModel)
+                        ticketLabelSwipeAction(ticket, viewModel: viewModel)
                     }
                 }
                 .task {
@@ -294,52 +295,10 @@ struct TicketListView: View {
     }
 
     @ViewBuilder
-    private func ticketLeadingSwipeAction(
+    private func ticketAssignSwipeAction(
         _ ticket: TicketSummary,
         viewModel: TicketListViewModel
     ) -> some View {
-        if ticket.status.isOpen {
-            Button {
-                Task {
-                    await resolveTicket(ticket, viewModel: viewModel)
-                }
-            } label: {
-                Label("Resolve", systemImage: "checkmark.circle")
-            }
-            .tint(.green)
-        } else {
-            Button {
-                Task {
-                    await reopenTicket(ticket, viewModel: viewModel)
-                }
-            } label: {
-                Label("Reopen", systemImage: "arrow.uturn.backward")
-            }
-            .tint(.blue)
-        }
-    }
-
-    private func resolveTicket(_ ticket: TicketSummary, viewModel: TicketListViewModel) async {
-        await viewModel.resolveTicket(ticket)
-    }
-
-    private func reopenTicket(_ ticket: TicketSummary, viewModel: TicketListViewModel) async {
-        await viewModel.reopenTicket(ticket)
-    }
-
-    @ViewBuilder
-    private func ticketTrailingSwipeActions(
-        _ ticket: TicketSummary,
-        viewModel: TicketListViewModel
-    ) -> some View {
-        Button {
-            labelEditorTicket = LabelEditorTicket(id: ticket.id)
-            Task { await viewModel.loadTrackerLabels() }
-        } label: {
-            Label("Edit Labels", systemImage: "tag")
-        }
-        .tint(.purple)
-
         if let currentUser = appState.currentUser {
             let isAssigned = ticket.assignees.contains { assignee in
                 matchesAssignee(assignee, user: currentUser)
@@ -365,6 +324,42 @@ struct TicketListView: View {
                 .tint(.cyan)
             }
         }
+    }
+
+    @ViewBuilder
+    private func ticketStatusSwipeAction(
+        _ ticket: TicketSummary,
+        viewModel: TicketListViewModel
+    ) -> some View {
+        if ticket.status.isOpen {
+            Button {
+                Task { await viewModel.resolveTicket(ticket) }
+            } label: {
+                Label("Close", systemImage: "xmark.circle")
+            }
+            .tint(.red)
+        } else {
+            Button {
+                Task { await viewModel.reopenTicket(ticket) }
+            } label: {
+                Label("Reopen", systemImage: "arrow.uturn.backward")
+            }
+            .tint(.blue)
+        }
+    }
+
+    @ViewBuilder
+    private func ticketLabelSwipeAction(
+        _ ticket: TicketSummary,
+        viewModel: TicketListViewModel
+    ) -> some View {
+        Button {
+            labelEditorTicket = LabelEditorTicket(id: ticket.id)
+            Task { await viewModel.loadTrackerLabels() }
+        } label: {
+            Label("Labels", systemImage: "tag")
+        }
+        .tint(.purple)
     }
 
     private func matchesAssignee(_ entity: Entity, user: User) -> Bool {
@@ -546,6 +541,8 @@ private struct TicketRowView: View {
                 }
 
                 Spacer()
+
+                TicketStatusBadge(status: ticket.status)
             }
 
             HStack(spacing: 8) {
@@ -581,6 +578,32 @@ private struct TicketRowView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Ticket Status Badge
+
+private struct TicketStatusBadge: View {
+    let status: TicketStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .foregroundStyle(color)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private var color: Color {
+        switch status {
+        case .reported:   .gray
+        case .confirmed:  .blue
+        case .inProgress: .yellow
+        case .pending:    .orange
+        case .resolved:   .green
+        }
     }
 }
 
@@ -622,9 +645,9 @@ struct LabelPill: View {
 
     var body: some View {
         Text(label.name)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .background(backgroundColor)
             .foregroundStyle(foregroundColor)
             .clipShape(Capsule())
