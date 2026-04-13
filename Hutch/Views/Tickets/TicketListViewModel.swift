@@ -99,13 +99,13 @@ final class TicketListViewModel {
     var filter: TicketFilter = .open {
         didSet {
             persistFilterState()
-            updateFilteredTickets()
+            resetPaginationAndUpdateFilters()
         }
     }
     var selectedLabelIDs: Set<Int> = [] {
         didSet {
             persistFilterState()
-            updateFilteredTickets()
+            resetPaginationAndUpdateFilters()
         }
     }
     var searchText = "" {
@@ -283,6 +283,13 @@ final class TicketListViewModel {
         }
     }
 
+    private func resetPaginationAndUpdateFilters() {
+        // Reset pagination when filters change since the cursor is tied to the unfiltered dataset
+        cursor = nil
+        hasMore = true
+        updateFilteredTickets()
+    }
+
     // MARK: - Public API
 
     func loadTickets() async {
@@ -305,19 +312,32 @@ final class TicketListViewModel {
     }
 
     func loadMoreIfNeeded(currentItem: TicketSummary) async {
-        guard let last = tickets.last,
-              last.id == currentItem.id,
-              hasMore,
-              !isLoadingMore else {
+        // Check if currentItem is in the filtered list and close to the end
+        guard hasMore, !isLoadingMore else { return }
+
+        guard let index = filteredTickets.firstIndex(where: { $0.id == currentItem.id }) else {
             return
         }
+
+        let itemsFromEnd = filteredTickets.count - index - 1
+        guard itemsFromEnd < 5 else { return }
 
         isLoadingMore = true
 
         do {
             let page = try await fetchPage(cursor: cursor)
-            tickets.append(contentsOf: page.results)
+
+            // Deduplicate: only add tickets that don't already exist
+            let existingIDs = Set(tickets.map(\.id))
+            let newTickets = page.results.filter { !existingIDs.contains($0.id) }
+
+            // If we got back the same tickets, the API cursor pagination isn't working
+            if newTickets.isEmpty && !page.results.isEmpty {
+                hasMore = false
+            }
+
             cursor = page.cursor
+            tickets.append(contentsOf: newTickets)
             hasMore = page.cursor != nil
             reconcileSelectionWithLoadedTickets()
         } catch {

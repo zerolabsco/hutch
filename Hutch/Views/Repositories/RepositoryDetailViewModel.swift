@@ -226,7 +226,7 @@ final class RepositoryDetailViewModel {
                 responseType: LogResponse.self
             )
         } catch {
-            if isMissingGitReferenceError(error) {
+            if isEmptyRepositoryError(error) {
                 return LogPage(results: [], cursor: nil)
             }
             throw error
@@ -273,7 +273,12 @@ final class RepositoryDetailViewModel {
             branches = allRefs.filter { $0.name.hasPrefix("refs/heads/") }.map { $0.toDetail() }
             tags = allRefs.filter { $0.name.hasPrefix("refs/tags/") }.map { $0.toDetail() }
         } catch {
-            self.error = error.userFacingMessage
+            if isEmptyRepositoryError(error) {
+                branches = []
+                tags = []
+            } else {
+                self.error = error.userFacingMessage
+            }
         }
 
         isLoadingRefs = false
@@ -340,7 +345,7 @@ final class RepositoryDetailViewModel {
                         responseType: PathResponse.self
                     )
                 } catch {
-                    if isMissingGitReferenceError(error) {
+                    if isEmptyRepositoryError(error) {
                         readmeContent = nil
                         readmePath = nil
                         readmeLoaded = true
@@ -371,8 +376,13 @@ final class RepositoryDetailViewModel {
         }
     }
 
-    private func isMissingGitReferenceError(_ error: Error) -> Bool {
+    private func isEmptyRepositoryError(_ error: Error) -> Bool {
         error.matchesGraphQLErrorClassification(.missingReference)
+            || error.matchesGraphQLErrorClassification(.unknownRevision)
+            || error.matchesGraphQLErrorClassification(.noRows)
+            || error.matchesGraphQLErrorClassification(.notFound)
+            || error.containsGraphQLErrorMessage("missing")
+            || error.containsGraphQLErrorMessage("internal system error")
     }
 
     // MARK: - Artifacts
@@ -417,7 +427,11 @@ final class RepositoryDetailViewModel {
                 .filter { !$0.artifacts.results.isEmpty }
                 .map { ReferenceWithArtifacts(name: $0.name, artifacts: $0.artifacts.results) }
         } catch {
-            self.error = error.userFacingMessage
+            if isEmptyRepositoryError(error) {
+                referenceArtifacts = []
+            } else {
+                self.error = error.userFacingMessage
+            }
         }
 
         isLoadingArtifacts = false
