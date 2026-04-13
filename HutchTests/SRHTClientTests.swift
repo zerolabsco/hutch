@@ -24,4 +24,33 @@ struct SRHTClientTests {
             Issue.record("Expected SRHTError.invalidAuthenticatedURL, got \(error).")
         }
     }
+
+    @Test
+    func graphQLErrorUserFacingMessagePreservesValidationDetails() {
+        let error = SRHTError.graphQLErrors([
+            GraphQLError(message: "A tracker named bugs already exists", locations: nil)
+        ])
+
+        #expect(error.userFacingMessage == "A tracker named bugs already exists")
+    }
+
+    @Test
+    func graphQLErrorUserFacingMessageClassifiesNotFoundResponses() {
+        let error = SRHTError.graphQLErrors([
+            GraphQLError(message: "reference not found", locations: nil)
+        ])
+
+        #expect(error.userFacingMessage == "That content is no longer available.")
+        #expect(error.matchesGraphQLErrorClassification(.missingReference))
+    }
+
+    @Test
+    func graphQLErrorUserFacingMessageClassifiesServiceProvisioningFailures() {
+        let error = SRHTError.graphQLErrors([
+            GraphQLError(message: "No such repository or user found", locations: nil)
+        ])
+
+        #expect(error.userFacingMessage == "That account needs to activate this SourceHut service before this action can succeed.")
+        #expect(error.matchesGraphQLErrorClassification(.serviceNotProvisioned))
+    }
 }

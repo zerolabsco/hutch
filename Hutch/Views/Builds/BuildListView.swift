@@ -130,66 +130,71 @@ struct BuildListView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
                 .listRowInsets(EdgeInsets())
-            }
-
-            ForEach(viewModel.filteredJobs) { job in
-                NavigationLink(value: job) {
-                    BuildRowView(job: job)
-                        .equatable()
-                }
-                .contextMenu {
-                    Button {
-                        appState.copyToPasteboard(String(job.id), label: "job ID")
-                    } label: {
-                        Label("Copy Job ID", systemImage: "doc.on.doc")
-                    }
-
-                    if let note = job.note, !note.isEmpty {
-                        Button {
-                            appState.copyToPasteboard(note, label: "build note")
-                        } label: {
-                            Label("Copy Note", systemImage: "text.alignleft")
-                        }
-                    }
-
-                    if !job.tags.isEmpty {
-                        Button {
-                            appState.copyToPasteboard(job.tags.joined(separator: ", "), label: "build tags")
-                        } label: {
-                            Label("Copy Tags", systemImage: "tag")
-                        }
-                    }
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    if swipeActionsEnabled, job.status.isCancellable {
-                        Button {
-                            Task {
-                                await viewModel.cancelJob(job)
-                            }
-                        } label: {
-                            Label("Cancel", systemImage: "xmark.circle")
-                        }
-                        .tint(.red)
-                    }
-                }
-                .task {
-                    await viewModel.loadMoreIfNeeded(currentItem: job)
-                }
-            }
-
-            if viewModel.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
+                .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+
+                ForEach(viewModel.filteredJobs) { job in
+                    NavigationLink(value: job) {
+                        BuildRowView(job: job)
+                            .equatable()
+                    }
+                    .contextMenu {
+                        Button {
+                            appState.copyToPasteboard(String(job.id), label: "job ID")
+                        } label: {
+                            Label("Copy Job ID", systemImage: "doc.on.doc")
+                        }
+
+                        if let note = job.note, !note.isEmpty {
+                            Button {
+                                appState.copyToPasteboard(note, label: "build note")
+                            } label: {
+                                Label("Copy Note", systemImage: "text.alignleft")
+                            }
+                        }
+
+                        if !job.tags.isEmpty {
+                            Button {
+                                appState.copyToPasteboard(job.tags.joined(separator: ", "), label: "build tags")
+                            } label: {
+                                Label("Copy Tags", systemImage: "tag")
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if swipeActionsEnabled, job.status.isCancellable {
+                            Button {
+                                Task {
+                                    await viewModel.cancelJob(job)
+                                }
+                            } label: {
+                                Label("Cancel", systemImage: "xmark.circle")
+                            }
+                            .tint(.red)
+                        }
+                    }
+                    .task {
+                        await viewModel.loadMoreIfNeeded(currentItem: job)
+                    }
+                }
+
+                if viewModel.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
+                }
             }
         }
         .themedList()
         .listStyle(.plain)
+        .listSectionSpacing(.compact)
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),

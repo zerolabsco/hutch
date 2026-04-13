@@ -130,56 +130,7 @@ actor SystemStatusRepository {
     }
 
     private func refreshErrorMessage(from error: any Error) -> String {
-        if let error = error as? SRHTError {
-            switch error {
-            case .graphQLErrors(let errors):
-                let firstMessage = errors.first?.message.lowercased() ?? ""
-                if firstMessage.contains("unauthorized") || firstMessage.contains("forbidden") {
-                    return "You do not have permission to do that."
-                }
-                if firstMessage.contains("not found") || firstMessage.contains("no rows in result set") {
-                    return "That content is no longer available."
-                }
-                return "Something went wrong. Please try again."
-            case .httpError(let code):
-                if code == 401 {
-                    return "Please sign in again."
-                }
-                if code == 403 {
-                    return "You do not have permission to do that."
-                }
-                if code == 404 {
-                    return "That content is no longer available."
-                }
-                if (500...599).contains(code) {
-                    return "The server is unavailable right now. Please try again."
-                }
-                return "Something went wrong. Please try again."
-            case .invalidAuthenticatedURL:
-                return "That request could not be completed."
-            case .decodingError:
-                return "The response could not be loaded right now."
-            case .networkError(let underlyingError):
-                return refreshErrorMessage(from: underlyingError)
-            case .unauthorized:
-                return "Please sign in again."
-            }
-        }
-
-        let nsError = error as NSError
-        switch nsError.code {
-        case NSURLErrorNotConnectedToInternet,
-             NSURLErrorNetworkConnectionLost,
-             NSURLErrorTimedOut,
-             NSURLErrorCannotFindHost,
-             NSURLErrorCannotConnectToHost,
-             NSURLErrorDNSLookupFailed,
-             NSURLErrorInternationalRoamingOff,
-             NSURLErrorDataNotAllowed:
-            return "Check your connection and try again."
-        default:
-            return "Something went wrong. Please try again."
-        }
+        error.userFacingMessage
     }
 }
 

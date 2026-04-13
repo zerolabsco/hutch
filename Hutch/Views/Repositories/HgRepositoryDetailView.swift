@@ -7,6 +7,7 @@ struct HgRepositoryDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage(AppStorageKeys.wrapRepositoryFileLines) private var wrapRepositoryFileLines = false
@@ -99,6 +100,7 @@ struct HgRepositoryDetailView: View {
                 async let log: () = vm.loadLog()
                 _ = await (summary, browse, log)
             }
+            RecentActivityStore.recordRepository(repository, defaults: appState.accountDefaults)
         }
     }
 
@@ -130,6 +132,42 @@ struct HgRepositoryDetailView: View {
                 ShareLink(item: shareURL) {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
+            }
+
+            Divider()
+
+            if let repositoryURL = SRHTWebURL.repository(repository) {
+                Button {
+                    openURL(repositoryURL)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+
+                Button {
+                    appState.copyToPasteboard(repositoryURL.absoluteString, label: "repository URL")
+                } label: {
+                    Label("Copy URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            if let httpsURL = SRHTWebURL.httpsCloneURL(repository) {
+                Button {
+                    appState.copyToPasteboard(httpsURL, label: "HTTPS clone URL")
+                } label: {
+                    Label("Copy HTTPS URL", systemImage: "doc.on.doc")
+                }
+            }
+
+            Button {
+                appState.copyToPasteboard(SRHTWebURL.sshCloneURL(repository), label: "SSH clone URL")
+            } label: {
+                Label("Copy SSH URL", systemImage: "terminal")
+            }
+
+            Button {
+                appState.copyToPasteboard(repository.rid, label: "repository RID")
+            } label: {
+                Label("Copy RID", systemImage: "number")
             }
 
             if canManageRepository {
@@ -227,10 +265,12 @@ struct HgRepositoryDetailView: View {
     @ViewBuilder
     private func metadataSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SummaryMetadataRow(
-                icon: "arrow.triangle.branch",
-                title: viewModel.tip?.branch ?? repository.head?.name ?? repositoryVisibilityLabel(repository.visibility)
-            )
+            if let branchLabel = repositoryPrimaryBranchLabel(for: repository, hgTipBranch: viewModel.tip?.branch) {
+                SummaryMetadataRow(
+                    icon: "arrow.triangle.branch",
+                    title: branchLabel
+                )
+            }
 
             if let readmePath = viewModel.readmePath {
                 SummaryMetadataRow(
@@ -244,6 +284,7 @@ struct HgRepositoryDetailView: View {
     private func repositoryDetailsSection(_ viewModel: HgRepositoryDetailViewModel) -> some View {
         DisclosureGroup(isExpanded: $isShowingRepositoryDetails) {
             VStack(alignment: .leading, spacing: 12) {
+                SummaryDetailRow(label: "Forge", value: repositoryForgeLabel(repository.service))
                 SummaryDetailRow(label: "Visibility", value: repositoryVisibilityLabel(repository.visibility))
                 SummaryDetailRow(label: "Publishing", value: viewModel.nonPublishing ? "Non-publishing" : "Publishing")
                 SummaryDetailRow(label: "Read-only", value: repositoryCloneURLs(for: repository).readOnly, monospace: true)

@@ -15,14 +15,7 @@ struct RepositoryRowView: View {
 
                 Spacer()
 
-                if repository.service == .hg {
-                    Text("HG")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.cyan.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.cyan)
-                }
+                RepositoryForgeBadge(service: repository.service)
 
                 if buildStatus != .none {
                     RepositoryBuildStatusIndicator(status: buildStatus)

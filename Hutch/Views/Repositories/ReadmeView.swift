@@ -54,10 +54,12 @@ struct ReadmeView: View {
     @ViewBuilder
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SummaryMetadataRow(
-                icon: "arrow.triangle.branch",
-                title: viewModel.repository.head?.name ?? repositoryVisibilityLabel(viewModel.repository.visibility)
-            )
+            if let branchLabel = repositoryPrimaryBranchLabel(for: viewModel.repository) {
+                SummaryMetadataRow(
+                    icon: "arrow.triangle.branch",
+                    title: branchLabel
+                )
+            }
 
             if let readmePath = viewModel.readmePath {
                 SummaryMetadataRow(
@@ -71,6 +73,7 @@ struct ReadmeView: View {
     private var repositoryDetailsSection: some View {
         DisclosureGroup(isExpanded: $isShowingRepositoryDetails) {
             VStack(alignment: .leading, spacing: 12) {
+                SummaryDetailRow(label: "Forge", value: repositoryForgeLabel(viewModel.repository.service))
                 SummaryDetailRow(label: "Visibility", value: repositoryVisibilityLabel(viewModel.repository.visibility))
                 SummaryDetailRow(label: "Read-only", value: repositoryCloneURLs(for: viewModel.repository).readOnly, monospace: true)
                 SummaryDetailRow(label: "Read/write", value: repositoryCloneURLs(for: viewModel.repository).readWrite, monospace: true)

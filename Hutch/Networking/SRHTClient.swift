@@ -89,19 +89,12 @@ final class SRHTClient: Sendable {
                 throw SRHTError.unauthorized
             }
             if !(200...299).contains(http.statusCode) {
-                // Try to extract GraphQL errors from the response body even on non-2xx
-                if let gqlResponse = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
-                   let errors = gqlResponse.errors, !errors.isEmpty {
-                    throw SRHTError.graphQLErrors(errors)
-                }
+                try throwGraphQLErrorsIfPresent(in: data)
                 throw SRHTError.httpError(http.statusCode)
             }
         }
 
-        if let errorEnvelope = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
-           let errors = errorEnvelope.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
+        try throwGraphQLErrorsIfPresent(in: data)
 
         // Decode GraphQL response envelope
         let graphQLResponse: GraphQLResponse<T>
@@ -249,14 +242,12 @@ final class SRHTClient: Sendable {
                 throw SRHTError.unauthorized
             }
             if !(200...299).contains(http.statusCode) {
+                try throwGraphQLErrorsIfPresent(in: data)
                 throw SRHTError.httpError(http.statusCode)
             }
         }
 
-        if let errorEnvelope = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
-           let errors = errorEnvelope.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
+        try throwGraphQLErrorsIfPresent(in: data)
 
         let graphQLResponse: GraphQLResponse<T>
         do {
@@ -381,13 +372,12 @@ final class SRHTClient: Sendable {
                 throw SRHTError.unauthorized
             }
             if !(200...299).contains(http.statusCode) {
-                if let gqlResponse = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
-                   let errors = gqlResponse.errors, !errors.isEmpty {
-                    throw SRHTError.graphQLErrors(errors)
-                }
+                try throwGraphQLErrorsIfPresent(in: data)
                 throw SRHTError.httpError(http.statusCode)
             }
         }
+
+        try throwGraphQLErrorsIfPresent(in: data)
 
         let graphQLResponse: GraphQLResponse<T>
         do {
@@ -474,6 +464,7 @@ final class SRHTClient: Sendable {
                 throw SRHTError.unauthorized
             }
             if !(200...299).contains(http.statusCode) {
+                try throwGraphQLErrorsIfPresent(in: data)
                 throw SRHTError.httpError(http.statusCode)
             }
         }
@@ -627,6 +618,14 @@ final class SRHTClient: Sendable {
 // MARK: - Data Helper
 
 private extension SRHTClient {
+    func throwGraphQLErrorsIfPresent(in data: Data) throws {
+        if let envelope = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
+           let errors = envelope.errors,
+           !errors.isEmpty {
+            throw SRHTError.graphQLErrors(errors)
+        }
+    }
+
     static func isTrustedAuthenticatedTextURL(_ url: URL) -> Bool {
         guard url.scheme?.localizedCaseInsensitiveCompare("https") == .orderedSame,
               let host = url.host?.lowercased() else {

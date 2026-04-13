@@ -372,9 +372,7 @@ final class RepositoryDetailViewModel {
     }
 
     private func isMissingGitReferenceError(_ error: Error) -> Bool {
-        guard let srhtError = error as? SRHTError else { return false }
-        guard case .graphQLErrors(let errors) = srhtError else { return false }
-        return errors.contains { $0.message.localizedCaseInsensitiveContains("reference not found") }
+        error.matchesGraphQLErrorClassification(.missingReference)
     }
 
     // MARK: - Artifacts

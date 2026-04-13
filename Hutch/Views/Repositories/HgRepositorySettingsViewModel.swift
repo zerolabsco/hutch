@@ -64,11 +64,14 @@ final class HgRepositorySettingsViewModel {
     let repositoryRid: String
     let repositoryName: String
     private let client: SRHTClient
+    private var initialDescription: String
+    private var initialVisibility: Visibility
 
     var editedDescription: String
     var editedVisibility: Visibility
     var editedNonPublishing: Bool
     var isSavingInfo = false
+    private(set) var loadedNonPublishing = false
 
     private(set) var acls: [HgACLEntry] = []
     private(set) var isLoadingACLs = false
@@ -82,12 +85,25 @@ final class HgRepositorySettingsViewModel {
     var didDelete = false
     var error: String?
 
+    var normalizedEditedDescription: String {
+        editedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isInfoDirty: Bool {
+        normalizedEditedDescription != initialDescription ||
+        editedVisibility != initialVisibility ||
+        editedNonPublishing != loadedNonPublishing
+    }
+
     init(repository: RepositorySummary, client: SRHTClient) {
         self.repositoryId = repository.id
         self.repositoryRid = repository.rid
         self.repositoryName = repository.name
         self.client = client
-        self.editedDescription = repository.description ?? ""
+        let description = repository.description ?? ""
+        self.initialDescription = description
+        self.initialVisibility = repository.visibility
+        self.editedDescription = description
         self.editedVisibility = repository.visibility
         self.editedNonPublishing = false
     }
@@ -159,9 +175,14 @@ final class HgRepositorySettingsViewModel {
             )
 
             if let repository = result.repository {
-                editedDescription = repository.description ?? ""
+                let description = repository.description ?? ""
+                initialDescription = description
+                initialVisibility = repository.visibility
+                editedDescription = description
                 editedVisibility = repository.visibility
-                editedNonPublishing = repository.nonPublishing ?? false
+                let nonPublishing = repository.nonPublishing ?? false
+                editedNonPublishing = nonPublishing
+                loadedNonPublishing = nonPublishing
             }
         } catch {
             self.error = error.userFacingMessage
@@ -175,7 +196,7 @@ final class HgRepositorySettingsViewModel {
 
         do {
             let input: [String: any Sendable] = [
-                "description": editedDescription,
+                "description": normalizedEditedDescription,
                 "visibility": editedVisibility.rawValue,
                 "nonPublishing": editedNonPublishing
             ]
@@ -185,6 +206,9 @@ final class HgRepositorySettingsViewModel {
                 variables: ["id": repositoryId, "input": input],
                 responseType: HgUpdateRepositoryResponse.self
             )
+            initialDescription = normalizedEditedDescription
+            initialVisibility = editedVisibility
+            loadedNonPublishing = editedNonPublishing
             return true
         } catch {
             self.error = error.userFacingMessage
@@ -237,9 +261,8 @@ final class HgRepositorySettingsViewModel {
             }
             newACLEntity = ""
         } catch {
-            let message = error.localizedDescription
-            if message.localizedCaseInsensitiveContains("No such repository or user found") {
-                self.error = "That user is not available on hg.sr.ht yet. They need to create or activate an hg.sr.ht repository first."
+            if error.matchesGraphQLErrorClassification(.serviceNotProvisioned) {
+                self.error = error.userFacingMessage
             } else {
                 self.error = error.userFacingMessage
             }

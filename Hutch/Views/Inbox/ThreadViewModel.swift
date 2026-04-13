@@ -693,9 +693,6 @@ final class ThreadViewModel {
     }
 
     private static func isRecoverableNoRows(_ error: Error) -> Bool {
-        guard case let SRHTError.graphQLErrors(errors) = error else {
-            return false
-        }
-        return errors.allSatisfy { $0.message.localizedCaseInsensitiveContains("no rows in result set") }
+        error.matchesGraphQLErrorClassification(.noRows)
     }
 }

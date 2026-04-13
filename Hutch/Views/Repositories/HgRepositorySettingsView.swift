@@ -9,7 +9,6 @@ struct HgRepositorySettingsView: View {
     @State private var viewModel: HgRepositorySettingsViewModel?
     @State private var showDeleteConfirmation = false
     @State private var pendingACLDeletion: HgACLEntry?
-    @State private var saveResultAlert: SaveResultAlert?
 
     var body: some View {
         NavigationStack {
@@ -93,23 +92,26 @@ struct HgRepositorySettingsView: View {
                 Text("\(entry.entity.canonicalName) will lose \(entry.mode) access to this repository.")
             }
         }
-        .alert(item: $saveResultAlert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
 
     @ViewBuilder
     private func infoSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
-        Section("Info") {
-            LabeledContent("Name") {
-                Text(repository.name)
+        Section("Current Configuration") {
+            LabeledContent("Repository") {
+                Text("\(repository.owner.canonicalName)/\(repository.name)")
                     .font(.body.monospaced())
             }
 
+            LabeledContent("Forge") {
+                Text(repositoryForgeLabel(repository.service))
+            }
+
+            LabeledContent("Visibility") {
+                Text(repositoryVisibilityLabel(viewModel.editedVisibility))
+            }
+        }
+
+        Section("Repository Details") {
             TextField("Description", text: Bindable(viewModel).editedDescription, axis: .vertical)
                 .lineLimit(3...6)
 
@@ -121,11 +123,7 @@ struct HgRepositorySettingsView: View {
 
             Button {
                 Task {
-                    let didSave = await viewModel.saveInfo()
-                    saveResultAlert = SaveResultAlert(
-                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
-                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
-                    )
+                    _ = await viewModel.saveInfo()
                 }
             } label: {
                 if viewModel.isSavingInfo {
@@ -136,7 +134,7 @@ struct HgRepositorySettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .disabled(viewModel.isSavingInfo)
+            .disabled(viewModel.isSavingInfo || !viewModel.isInfoDirty)
         }
     }
 
@@ -202,16 +200,15 @@ struct HgRepositorySettingsView: View {
 
     @ViewBuilder
     private func featuresSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
-        Section("Features") {
+        Section("Sensitive Settings") {
             Toggle("Hide this repository from public listings", isOn: Bindable(viewModel).editedNonPublishing)
+            Text("Changes stay pending until you save this section.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Button {
                 Task {
-                    let didSave = await viewModel.saveInfo()
-                    saveResultAlert = SaveResultAlert(
-                        title: didSave ? "Settings Updated" : "Couldn't Update Settings",
-                        message: didSave ? "Repository settings were saved." : (viewModel.error ?? "Please try again.")
-                    )
+                    _ = await viewModel.saveInfo()
                 }
             } label: {
                 if viewModel.isSavingInfo {
@@ -222,7 +219,7 @@ struct HgRepositorySettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .disabled(viewModel.isSavingInfo)
+            .disabled(viewModel.isSavingInfo || !viewModel.isInfoDirty)
         }
     }
 
@@ -261,13 +258,8 @@ struct HgRepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isDeleting)
+        } header: {
+            Text("Danger Zone")
         }
-    }
-
-    private struct SaveResultAlert: Identifiable {
-        let title: String
-        let message: String
-
-        var id: String { "\(title)-\(message)" }
     }
 }

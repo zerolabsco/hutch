@@ -526,20 +526,9 @@ final class HgRepositoryDetailViewModel {
     }
 
     private func isEmptyRepositoryError(_ error: Error) -> Bool {
-        if let srhtError = error as? SRHTError,
-           case .graphQLErrors(let errors) = srhtError {
-            return errors.contains {
-                let message = $0.message.localizedLowercase
-                return message.contains("missing")
-                    || message.contains("not found")
-                    || message.contains("unknown revision")
-                    || message.contains("unknown revision or path not in the working tree")
-            }
-        }
-
-        let message = error.localizedDescription.localizedLowercase
-        return message.contains("missing")
-            || message.contains("not found")
-            || message.contains("unknown revision")
+        error.matchesGraphQLErrorClassification(.notFound)
+            || error.matchesGraphQLErrorClassification(.unknownRevision)
+            || error.matchesGraphQLErrorClassification(.noRows)
+            || error.containsGraphQLErrorMessage("missing")
     }
 }

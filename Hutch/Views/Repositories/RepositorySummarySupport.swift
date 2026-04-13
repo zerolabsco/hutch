@@ -46,6 +46,28 @@ func repositoryVisibilityLabel(_ visibility: Visibility) -> String {
     }
 }
 
+func repositoryForgeLabel(_ service: SRHTService) -> String {
+    switch service {
+    case .git:
+        return "GIT"
+    case .hg:
+        return "HG"
+    default:
+        return service.rawValue.uppercased()
+    }
+}
+
+func repositoryPrimaryBranchLabel(for repository: RepositorySummary, hgTipBranch: String? = nil) -> String? {
+    switch repository.service {
+    case .git:
+        return repository.defaultBranchName
+    case .hg:
+        return hgTipBranch ?? repository.defaultBranchName ?? "tip"
+    default:
+        return repository.defaultBranchName
+    }
+}
+
 struct SummaryMetadataRow: View {
     let icon: String
     let title: String
@@ -82,6 +104,30 @@ struct SummaryDetailRow: View {
             Text(value)
                 .font(monospace ? .system(.body, design: .monospaced) : .body)
                 .textSelection(.enabled)
+        }
+    }
+}
+
+struct RepositoryForgeBadge: View {
+    let service: SRHTService
+
+    var body: some View {
+        Text(repositoryForgeLabel(service))
+            .font(.caption2.weight(.medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(color)
+    }
+
+    private var color: Color {
+        switch service {
+        case .git:
+            .indigo
+        case .hg:
+            .cyan
+        default:
+            .secondary
         }
     }
 }
