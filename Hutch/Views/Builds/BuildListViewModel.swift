@@ -182,12 +182,13 @@ final class BuildListViewModel {
     /// Fetch the first page of jobs. Shows cached data instantly if available,
     /// then refreshes from the network in the background.
     func loadJobs() async {
-        // Show cached data immediately on first load
+        // Show cached data immediately on first load (may populate `jobs` from cache).
         if jobs.isEmpty {
             loadFromCache()
         }
 
-        if jobs.isEmpty {
+        let treatAsInitialLoad = jobs.isEmpty
+        if treatAsInitialLoad {
             isLoading = true
         } else {
             isRefreshing = true

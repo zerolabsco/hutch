@@ -23,13 +23,13 @@ final class SRHTClient: Sendable {
 
     /// The personal access token used for `Authorization: Bearer` headers.
     /// Loaded from Keychain on init; can be refreshed via ``reloadToken()``.
-    private let _token: OSAllocatedUnfairLock<String?>
+    private let tokenLock: OSAllocatedUnfairLock<String?>
 
     /// In-memory response cache for stale-while-revalidate pattern.
     let responseCache = ResponseCache()
 
     var hasToken: Bool {
-        _token.withLock { $0 != nil }
+        tokenLock.withLock { $0 != nil }
     }
 
     init(session: URLSession = .shared, token: String? = nil) {
@@ -37,12 +37,12 @@ final class SRHTClient: Sendable {
         self.decoder = JSONDecoder()
         self.decoder.dateDecodingStrategy = .srhtFlexible
         self.encoder = JSONEncoder()
-        self._token = OSAllocatedUnfairLock(initialState: token)
+        self.tokenLock = OSAllocatedUnfairLock(initialState: token)
     }
 
     /// Update the stored token (e.g. after the user saves a new one in Keychain).
     func setToken(_ token: String?) {
-        _token.withLock { $0 = token }
+        tokenLock.withLock { $0 = token }
     }
 
     /// Execute a GraphQL query or mutation against a SourceHut service.
@@ -59,7 +59,7 @@ final class SRHTClient: Sendable {
         variables: [String: any Sendable]? = nil,
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
 
@@ -173,7 +173,7 @@ final class SRHTClient: Sendable {
         file: MultipartUploadFile,
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
 
@@ -307,7 +307,7 @@ final class SRHTClient: Sendable {
         files: [MultipartUploadFile],
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
 
@@ -417,7 +417,7 @@ final class SRHTClient: Sendable {
             service: service,
             query: query,
             variables: variables,
-            responseType: responseType,
+            responseType: T.self,
             cacheKey: cacheKey
         )
     }
@@ -430,7 +430,7 @@ final class SRHTClient: Sendable {
         responseType _: T.Type,
         cacheKey: String
     ) async throws -> T {
-        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
 
@@ -527,7 +527,7 @@ final class SRHTClient: Sendable {
     /// Fetch the contents of a URL as plain text, using the same authorization header.
     /// Used for build logs and other non-GraphQL resources.
     func fetchText(url: URL) async throws -> String {
-        guard let token = _token.withLock({ $0 }), !token.isEmpty else {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
         guard Self.isTrustedAuthenticatedTextURL(url) else {
@@ -593,12 +593,13 @@ final class SRHTClient: Sendable {
         resultKeyPath: String
     ) async throws -> [T] {
         var all: [T] = []
-        for try await element in paginated(
+        let pages: SRHTPaginatedSequence<T> = paginated(
             service: service,
             query: query,
             variables: variables,
             resultKeyPath: resultKeyPath
-        ) {
+        )
+        for try await element in pages {
             all.append(element)
         }
         return all

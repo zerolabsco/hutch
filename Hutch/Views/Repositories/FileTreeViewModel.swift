@@ -7,7 +7,11 @@ private struct RevparseResponse: Decodable, Sendable {
 }
 
 private struct RevparseRepository: Decodable, Sendable {
-    let revparse_single: RevparseCommit?
+    let revparseSingle: RevparseCommit?
+
+    enum CodingKeys: String, CodingKey {
+        case revparseSingle = "revparse_single"
+    }
 }
 
 private struct RevparseCommit: Decodable, Sendable {
@@ -277,7 +281,7 @@ final class FileTreeViewModel {
                 }
                 throw error
             }
-            if let tree = result.repository?.revparse_single?.tree,
+            if let tree = result.repository?.revparseSingle?.tree,
                let rootId = tree.id {
                 navStack = [FileNavEntry(name: "root", treeId: rootId)]
                 var allEntries = tree.entries?.results ?? []

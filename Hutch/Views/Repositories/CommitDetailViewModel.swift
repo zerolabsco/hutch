@@ -7,8 +7,11 @@ private struct CommitResponse: Decodable, Sendable {
 }
 
 private struct CommitRepository: Decodable, Sendable {
-    // swiftlint:disable:next identifier_name
-    let revparse_single: CommitDetail
+    let revparseSingle: CommitDetail
+
+    enum CodingKeys: String, CodingKey {
+        case revparseSingle = "revparse_single"
+    }
 }
 
 // MARK: - View Model
@@ -66,7 +69,7 @@ final class CommitDetailViewModel {
 
         do {
             let result = try await executeWithRetry()
-            commit = result.repository?.revparse_single
+            commit = result.repository?.revparseSingle
         } catch {
             self.error = error.userFacingMessage
         }

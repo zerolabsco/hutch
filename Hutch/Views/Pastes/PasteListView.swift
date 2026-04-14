@@ -276,14 +276,14 @@ private struct CreatePasteSheet: View {
         NavigationStack {
             Form {
                 Section("Files") {
-                    ForEach($files) { $file in
+                    ForEach($files) { fileBinding in
                         VStack(alignment: .leading, spacing: 8) {
-                            TextField("Filename (optional)", text: $file.filename)
+                            TextField("Filename (optional)", text: fileBinding.filename)
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
 
                             ZStack(alignment: .topLeading) {
-                                if file.contents.isEmpty {
+                                if fileBinding.wrappedValue.contents.isEmpty {
                                     Text("Paste contents")
                                         .foregroundStyle(.tertiary)
                                         .padding(.top, 8)
@@ -291,7 +291,7 @@ private struct CreatePasteSheet: View {
                                         .allowsHitTesting(false)
                                 }
 
-                                TextEditor(text: $file.contents)
+                                TextEditor(text: fileBinding.contents)
                                     .font(.system(.body, design: .monospaced))
                                     .frame(minHeight: 180)
                             }
