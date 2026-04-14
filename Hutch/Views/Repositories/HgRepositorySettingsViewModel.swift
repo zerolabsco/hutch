@@ -261,11 +261,7 @@ final class HgRepositorySettingsViewModel {
             }
             newACLEntity = ""
         } catch {
-            if error.matchesGraphQLErrorClassification(.serviceNotProvisioned) {
-                self.error = error.userFacingMessage
-            } else {
-                self.error = error.userFacingMessage
-            }
+            self.error = error.userFacingMessage
         }
     }
 

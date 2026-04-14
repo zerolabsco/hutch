@@ -372,17 +372,21 @@ struct ProjectService: Sendable {
 
             if mailingListsCursor == nil, sourcesCursor == nil, trackersCursor == nil {
                 return Project(
-                    id: project.rid,
-                    name: project.name,
-                    description: project.description,
-                    website: project.website,
-                    visibility: project.visibility,
-                    tags: project.tags,
-                    updated: project.updated,
-                    mailingLists: deduplicate(mailingLists),
-                    sources: deduplicate(sources),
-                    trackers: deduplicate(trackers),
-                    isFullyLoaded: true
+                    metadata: .init(
+                        id: project.rid,
+                        name: project.name,
+                        description: project.description,
+                        website: project.website,
+                        visibility: project.visibility,
+                        tags: project.tags,
+                        updated: project.updated
+                    ),
+                    resources: .init(
+                        mailingLists: deduplicate(mailingLists),
+                        sources: deduplicate(sources),
+                        trackers: deduplicate(trackers),
+                        isFullyLoaded: true
+                    )
                 )
             }
         }
@@ -390,17 +394,16 @@ struct ProjectService: Sendable {
 
     private static func makeSummaryProject(from summary: ProjectSummaryPayload) -> Project {
         Project(
-            id: summary.rid,
-            name: summary.name,
-            description: summary.description,
-            website: summary.website,
-            visibility: summary.visibility,
-            tags: summary.tags,
-            updated: summary.updated,
-            mailingLists: [],
-            sources: [],
-            trackers: [],
-            isFullyLoaded: false
+            metadata: .init(
+                id: summary.rid,
+                name: summary.name,
+                description: summary.description,
+                website: summary.website,
+                visibility: summary.visibility,
+                tags: summary.tags,
+                updated: summary.updated
+            ),
+            resources: .init(mailingLists: [], sources: [], trackers: [], isFullyLoaded: false)
         )
     }
 

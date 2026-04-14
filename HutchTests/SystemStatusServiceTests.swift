@@ -3,6 +3,9 @@ import Testing
 @testable import Hutch
 
 struct SystemStatusServiceTests {
+    private enum Fixture {
+        static let ddosIssueURL = "https://status.sr.ht/issues/2026-04-06-ddos-attack/"
+    }
 
     @Test
     func parsesCurrentStatusHTMLIntoServicesAndActiveIncidents() throws {
@@ -16,7 +19,7 @@ struct SystemStatusServiceTests {
         #expect(snapshot.activeIncidents.count == 1)
         #expect(snapshot.activeIncidents[0].title == "SourceHut disrupted due to DDoS attack")
         #expect(snapshot.activeIncidents[0].summary == "SourceHut was disrupted by a DDoS attack.")
-        #expect(snapshot.activeIncidents[0].url?.absoluteString == "https://status.sr.ht/issues/2026-04-06-ddos-attack/")
+        #expect(snapshot.activeIncidents[0].url?.absoluteString == Fixture.ddosIssueURL)
     }
 
     @Test

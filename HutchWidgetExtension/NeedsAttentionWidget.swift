@@ -71,7 +71,7 @@ private struct NeedsAttentionWidgetView: View {
                 fallbackState
             }
         }
-        .widgetURL(family == .systemSmall ? URL(string: "hutch://home") : nil)
+        .widgetURL(family == .systemSmall ? HutchDeepLinkURL.home : nil)
         .containerBackground(for: .widget) {
             Color(.systemBackground)
         }
@@ -101,7 +101,7 @@ private struct NeedsAttentionWidgetView: View {
     private func mediumView(snapshot: NeedsAttentionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                Link(destination: URL(string: "hutch://home")!) {
+                Link(destination: HutchDeepLinkURL.home) {
                     metricColumn(
                         count: snapshot.unreadInboxThreads,
                         label: "Unread",
@@ -109,14 +109,14 @@ private struct NeedsAttentionWidgetView: View {
                         tint: unreadTint(for: snapshot.unreadInboxThreads)
                     )
                 }
-                Link(destination: URL(string: "hutch://trackers")!) {
+                Link(destination: HutchDeepLinkURL.trackers) {
                     metricColumn(
                         count: snapshot.assignedOpenTickets,
                         label: "Assigned",
                         systemImage: "ticket"
                     )
                 }
-                Link(destination: URL(string: "hutch://builds")!) {
+                Link(destination: HutchDeepLinkURL.builds) {
                     metricColumn(
                         count: snapshot.failedBuilds,
                         label: "Failed",
@@ -134,7 +134,7 @@ private struct NeedsAttentionWidgetView: View {
 
     private func largeView(snapshot: NeedsAttentionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Link(destination: URL(string: "hutch://home")!) {
+            Link(destination: HutchDeepLinkURL.home) {
                 metricRow(
                     count: snapshot.unreadInboxThreads,
                     label: "Unread threads",
@@ -142,14 +142,14 @@ private struct NeedsAttentionWidgetView: View {
                     tint: unreadTint(for: snapshot.unreadInboxThreads)
                 )
             }
-            Link(destination: URL(string: "hutch://trackers")!) {
+            Link(destination: HutchDeepLinkURL.trackers) {
                 metricRow(
                     count: snapshot.assignedOpenTickets,
                     label: "Assigned tickets",
                     systemImage: "ticket"
                 )
             }
-            Link(destination: URL(string: "hutch://builds")!) {
+            Link(destination: HutchDeepLinkURL.builds) {
                 metricRow(
                     count: snapshot.failedBuilds,
                     label: "Failed builds",

@@ -61,8 +61,6 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func profileContent(_ viewModel: SettingsViewModel) -> some View {
-        @Bindable var vm = viewModel
-
         Form {
             if let profile = viewModel.profile {
                 profileSection(profile, viewModel: viewModel)
@@ -100,7 +98,10 @@ struct ProfileView: View {
                 )
             }
         }
-        .sheet(isPresented: $vm.isEditingProfile) {
+        .sheet(isPresented: Binding(
+            get: { viewModel.isEditingProfile },
+            set: { viewModel.isEditingProfile = $0 }
+        )) {
             if let profile = viewModel.profile {
                 EditProfileSheet(profile: profile, viewModel: viewModel)
             }
@@ -130,7 +131,9 @@ struct ProfileView: View {
                 }
             )
         ) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                /* Dismiss only; destructive action is separate. */
+            }
             Button(pendingDestructiveAction?.confirmationLabel ?? "Confirm", role: .destructive) {
                 guard let action = pendingDestructiveAction else { return }
                 pendingDestructiveAction = nil
@@ -158,12 +161,11 @@ struct ProfileView: View {
         Section("Profile") {
             HStack(spacing: 12) {
                 AsyncImage(url: profile.avatar.flatMap { URL(string: $0) }) { phase in
-                    switch phase {
-                    case .success(let image):
+                    if case .success(let image) = phase {
                         image
                             .resizable()
                             .scaledToFill()
-                    default:
+                    } else {
                         Image(systemName: "person.crop.circle.fill")
                             .resizable()
                             .foregroundStyle(.secondary)
@@ -238,8 +240,6 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func sshKeysSection(_ viewModel: SettingsViewModel) -> some View {
-        @Bindable var vm = viewModel
-
         Section {
             ForEach(viewModel.sshKeys) { key in
                 VStack(alignment: .leading, spacing: 2) {
@@ -275,7 +275,14 @@ struct ProfileView: View {
             .themedRow()
 
             if viewModel.isAddingSSHKey {
-                TextField("Paste SSH public key", text: $vm.newSSHKey, axis: .vertical)
+                TextField(
+                    "Paste SSH public key",
+                    text: Binding(
+                        get: { viewModel.newSSHKey },
+                        set: { viewModel.newSSHKey = $0 }
+                    ),
+                    axis: .vertical
+                )
                     .font(.caption.monospaced())
                     .lineLimit(3...6)
                     .themedRow()
@@ -310,8 +317,6 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func pgpKeysSection(_ viewModel: SettingsViewModel) -> some View {
-        @Bindable var vm = viewModel
-
         Section {
             ForEach(viewModel.pgpKeys) { key in
                 VStack(alignment: .leading, spacing: 2) {
@@ -333,7 +338,14 @@ struct ProfileView: View {
             .themedRow()
 
             if viewModel.isAddingPGPKey {
-                TextField("Paste PGP public key", text: $vm.newPGPKey, axis: .vertical)
+                TextField(
+                    "Paste PGP public key",
+                    text: Binding(
+                        get: { viewModel.newPGPKey },
+                        set: { viewModel.newPGPKey = $0 }
+                    ),
+                    axis: .vertical
+                )
                     .font(.caption.monospaced())
                     .lineLimit(3...6)
                     .themedRow()
@@ -482,12 +494,11 @@ private struct EditProfileSheet: View {
                                             .scaledToFill()
                                     } else {
                                         AsyncImage(url: profile.avatar.flatMap { URL(string: $0) }) { phase in
-                                            switch phase {
-                                            case .success(let image):
+                                            if case .success(let image) = phase {
                                                 image
                                                     .resizable()
                                                     .scaledToFill()
-                                            default:
+                                            } else {
                                                 Image(systemName: "person.crop.circle.fill")
                                                     .resizable()
                                                     .foregroundStyle(.secondary)
@@ -592,7 +603,9 @@ private struct EditProfileSheet: View {
                 }
             }
             .alert("Remove Avatar?", isPresented: $isShowingRemoveAvatarConfirmation) {
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) {
+                    /* Dismiss only; removal uses the destructive button. */
+                }
                 Button("Remove Avatar", role: .destructive) {
                     Task {
                         await viewModel.removeAvatar()

@@ -32,7 +32,9 @@ struct SettingsView: View {
                 }
             )
         ) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                /* Dismiss only; destructive action is separate. */
+            }
             Button(pendingDestructiveAction?.confirmationLabel ?? "Confirm", role: .destructive) {
                 guard let action = pendingDestructiveAction else { return }
                 pendingDestructiveAction = nil

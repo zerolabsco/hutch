@@ -112,7 +112,7 @@ private struct ContributionGraphWidgetView: View {
                 graphView
             }
         }
-        .widgetURL(URL(string: "hutch://home"))
+        .widgetURL(HutchDeepLinkURL.home)
         .containerBackground(for: .widget) {
             Color(.systemBackground)
         }
@@ -235,7 +235,7 @@ private enum ContributionGraphSizing {
 }
 
 private struct ContributionGraphWidgetService {
-    private let baseURL = URL(string: "https://hutch-stats.zerolabs.sh")!
+    private let baseURL = HutchStatsAPI.defaultBaseURL
 
     func fetchCalendar(actor: String) async throws -> ContributionGraphResponse {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {

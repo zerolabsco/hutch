@@ -117,45 +117,67 @@ struct ContributionStatsResponse: Decodable, Sendable, Hashable {
         case currentStreak = "current_streak"
     }
 
-    init(
-        actor: String,
-        from: Date,
-        to: Date,
-        isIndexed: Bool,
-        lastPolledAt: Date?,
-        indexingState: ContributionIndexingState,
-        totalEvents: Int,
-        totalScore: Double,
-        activeDays: Int,
-        longestStreak: Int,
-        currentStreak: Int
-    ) {
-        self.actor = actor
-        self.from = from
-        self.to = to
-        self.isIndexed = isIndexed
-        self.lastPolledAt = lastPolledAt
-        self.indexingState = indexingState
-        self.totalEvents = totalEvents
-        self.totalScore = totalScore
-        self.activeDays = activeDays
-        self.longestStreak = longestStreak
-        self.currentStreak = currentStreak
+    struct StatsWindow: Sendable, Hashable {
+        let actor: String
+        let from: Date
+        let to: Date
+        let isIndexed: Bool
+        let lastPolledAt: Date?
+        let indexingState: ContributionIndexingState
+    }
+
+    struct StatsTotals: Sendable, Hashable {
+        let totalEvents: Int
+        let totalScore: Double
+        let activeDays: Int
+        let longestStreak: Int
+        let currentStreak: Int
+    }
+
+    init(window: StatsWindow, totals: StatsTotals) {
+        actor = window.actor
+        from = window.from
+        to = window.to
+        isIndexed = window.isIndexed
+        lastPolledAt = window.lastPolledAt
+        indexingState = window.indexingState
+        totalEvents = totals.totalEvents
+        totalScore = totals.totalScore
+        activeDays = totals.activeDays
+        longestStreak = totals.longestStreak
+        currentStreak = totals.currentStreak
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        actor = try container.decode(String.self, forKey: .actor)
-        from = try ContributionDateParser.decodeDateString(from: container, forKey: .from)
-        to = try ContributionDateParser.decodeDateString(from: container, forKey: .to)
-        isIndexed = try container.decodeIfPresent(Bool.self, forKey: .isIndexed) ?? false
-        lastPolledAt = try ContributionDateParser.decodeOptionalTimestamp(from: container, forKey: .lastPolledAt)
-        indexingState = try container.decodeIfPresent(ContributionIndexingState.self, forKey: .indexingState) ?? .indexed
-        totalEvents = try container.decode(Int.self, forKey: .totalEvents)
-        totalScore = try container.decode(Double.self, forKey: .totalScore)
-        activeDays = try container.decode(Int.self, forKey: .activeDays)
-        longestStreak = try container.decode(Int.self, forKey: .longestStreak)
-        currentStreak = try container.decode(Int.self, forKey: .currentStreak)
+        let actor = try container.decode(String.self, forKey: .actor)
+        let from = try ContributionDateParser.decodeDateString(from: container, forKey: .from)
+        let to = try ContributionDateParser.decodeDateString(from: container, forKey: .to)
+        let isIndexed = try container.decodeIfPresent(Bool.self, forKey: .isIndexed) ?? false
+        let lastPolledAt = try ContributionDateParser.decodeOptionalTimestamp(from: container, forKey: .lastPolledAt)
+        let indexingState = try container.decodeIfPresent(ContributionIndexingState.self, forKey: .indexingState) ?? .indexed
+        let totalEvents = try container.decode(Int.self, forKey: .totalEvents)
+        let totalScore = try container.decode(Double.self, forKey: .totalScore)
+        let activeDays = try container.decode(Int.self, forKey: .activeDays)
+        let longestStreak = try container.decode(Int.self, forKey: .longestStreak)
+        let currentStreak = try container.decode(Int.self, forKey: .currentStreak)
+        self.init(
+            window: .init(
+                actor: actor,
+                from: from,
+                to: to,
+                isIndexed: isIndexed,
+                lastPolledAt: lastPolledAt,
+                indexingState: indexingState
+            ),
+            totals: .init(
+                totalEvents: totalEvents,
+                totalScore: totalScore,
+                activeDays: activeDays,
+                longestStreak: longestStreak,
+                currentStreak: currentStreak
+            )
+        )
     }
 }
 

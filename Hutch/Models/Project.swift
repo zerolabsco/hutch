@@ -71,30 +71,36 @@ struct Project: Identifiable, Hashable, Sendable {
     let trackers: [Tracker]
     let isFullyLoaded: Bool
 
-    init(
-        id: String,
-        name: String,
-        description: String?,
-        website: String?,
-        visibility: Visibility,
-        tags: [String],
-        updated: Date,
-        mailingLists: [MailingList],
-        sources: [SourceRepo],
-        trackers: [Tracker],
-        isFullyLoaded: Bool = true
-    ) {
-        self.id = id
-        self.name = name
-        self.description = description
-        self.website = website
-        self.visibility = visibility
-        self.tags = tags
-        self.updated = updated
-        self.mailingLists = mailingLists
-        self.sources = sources
-        self.trackers = trackers
-        self.isFullyLoaded = isFullyLoaded
+    /// Identity and display fields for a project.
+    struct Metadata: Sendable, Hashable {
+        let id: String
+        let name: String
+        let description: String?
+        let website: String?
+        let visibility: Visibility
+        let tags: [String]
+        let updated: Date
+    }
+
+    struct Resources: Sendable, Hashable {
+        let mailingLists: [MailingList]
+        let sources: [SourceRepo]
+        let trackers: [Tracker]
+        let isFullyLoaded: Bool
+    }
+
+    init(metadata: Metadata, resources: Resources) {
+        id = metadata.id
+        name = metadata.name
+        description = metadata.description
+        website = metadata.website
+        visibility = metadata.visibility
+        tags = metadata.tags
+        updated = metadata.updated
+        mailingLists = resources.mailingLists
+        sources = resources.sources
+        trackers = resources.trackers
+        isFullyLoaded = resources.isFullyLoaded
     }
 
     var resourceSummary: String? {

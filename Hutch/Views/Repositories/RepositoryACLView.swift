@@ -51,8 +51,6 @@ struct RepositoryACLView: View {
 
     @ViewBuilder
     private func content(_ viewModel: RepositoryACLViewModel) -> some View {
-        @Bindable var vm = viewModel
-
         Group {
             if viewModel.isLoading && !viewModel.hasEntries && viewModel.loadError == nil {
                 SRHTLoadingStateView(message: "Loading access…")
@@ -98,7 +96,12 @@ struct RepositoryACLView: View {
                 }
             }
         }
-        .srhtErrorBanner(error: $vm.error)
+        .srhtErrorBanner(
+            error: Binding(
+                get: { viewModel.error },
+                set: { viewModel.error = $0 }
+            )
+        )
         .alert("Remove Access?", isPresented: Binding(
             get: { pendingDeletion != nil },
             set: { isPresented in
@@ -107,7 +110,9 @@ struct RepositoryACLView: View {
                 }
             }
         )) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                /* Dismiss only; removal is confirmed separately. */
+            }
             Button("Remove Access", role: .destructive) {
                 guard let entry = pendingDeletion else { return }
                 Task {

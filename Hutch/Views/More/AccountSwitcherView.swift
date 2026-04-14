@@ -98,7 +98,9 @@ struct AccountSwitcherView: View {
                     }
                 )
             ) {
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) {
+                    /* Dismiss only; removal uses the destructive button. */
+                }
                 Button("Remove", role: .destructive) {
                     guard let pendingRemoval else { return }
                     Task { await appState.removeAccount(id: pendingRemoval.id) }

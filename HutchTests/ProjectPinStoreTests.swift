@@ -27,11 +27,11 @@ struct ProjectPinStoreTests {
     }
 
     @Test
-    func loadPinnedProjectsNormalizesWhitespaceAndDuplicates() {
+    func loadPinnedProjectsNormalizesWhitespaceAndDuplicates() throws {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
 
-        let encoded = try! JSONEncoder().encode([
+        let encoded = try JSONEncoder().encode([
             "~alice": [" project-1 ", "", "project-1", "project-2"]
         ])
         defaults.set(encoded, forKey: AppStorageKeys.pinnedHomeProjects)

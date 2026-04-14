@@ -61,10 +61,9 @@ struct HutchStatsService: ContributionCalendarServing {
             throw SRHTError.networkError(error)
         }
 
-        if let httpResponse = response as? HTTPURLResponse {
-            if !(200...299).contains(httpResponse.statusCode) {
-                throw SRHTError.httpError(httpResponse.statusCode)
-            }
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            throw SRHTError.httpError(httpResponse.statusCode)
         }
 
         do {

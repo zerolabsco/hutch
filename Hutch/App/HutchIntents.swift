@@ -150,5 +150,7 @@ final class HutchIntentNavigator {
     static let shared = HutchIntentNavigator()
     var pendingDestination: HutchDestination?
 
-    private init() {}
+    private init() {
+        /* Singleton; external code uses `shared`. */
+    }
 }

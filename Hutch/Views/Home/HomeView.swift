@@ -171,7 +171,7 @@ struct HomeView: View {
                 ) {
                     ForEach(items) { item in
                         Button {
-                            openPinnedItem(item, viewModel: viewModel)
+                            openPinnedItem(item)
                         } label: {
                             HomePinnedCard(item: item)
                         }
@@ -313,7 +313,7 @@ struct HomeView: View {
         }
     }
 
-    private func openPinnedItem(_ item: HomePinnedItem, viewModel: HomeViewModel) {
+    private func openPinnedItem(_ item: HomePinnedItem) {
         switch item.pin.kind {
         case .project:
             guard let project = item.project else { return }

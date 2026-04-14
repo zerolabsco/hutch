@@ -1,7 +1,7 @@
 import Foundation
 
 struct AppConfiguration: Sendable {
-    static let defaultHutchStatsBaseURL = URL(string: "https://hutch-stats.zerolabs.sh")!
+    static let defaultHutchStatsBaseURL = HutchStatsAPI.defaultBaseURL
     static let hutchStatsBaseURLEnvironmentKey = "HUTCH_STATS_BASE_URL"
 
     let hutchStatsBaseURL: URL

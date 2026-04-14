@@ -136,8 +136,7 @@ struct BuildArtifact: Codable, Sendable, Identifiable, Equatable {
     let url: URL?
 
     var filename: String {
-        let pathComponents = path.split(separator: "/")
-        return pathComponents.last.map(String.init) ?? path
+        (path as NSString).lastPathComponent
     }
 
     var isDownloadable: Bool {

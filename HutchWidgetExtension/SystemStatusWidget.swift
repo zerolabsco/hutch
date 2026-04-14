@@ -63,17 +63,16 @@ private struct SystemStatusWidgetView: View {
     var body: some View {
         Group {
             if let snapshot = entry.snapshot, !snapshot.services.isEmpty {
-                switch family {
-                case .systemMedium:
+                if family == .systemMedium {
                     mediumView(snapshot: snapshot)
-                default:
+                } else {
                     smallView(snapshot: snapshot)
                 }
             } else {
                 fallbackView
             }
         }
-        .widgetURL(URL(string: "hutch://status"))
+        .widgetURL(HutchDeepLinkURL.status)
         .containerBackground(for: .widget) {
             Color(.systemBackground)
         }

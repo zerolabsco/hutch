@@ -67,8 +67,6 @@ struct ProjectsListView: View {
 
     @ViewBuilder
     private func content(_ viewModel: ProjectsListViewModel) -> some View {
-        @Bindable var vm = viewModel
-
         List {
             ForEach(viewModel.filteredProjects) { project in
                 NavigationLink {
@@ -84,7 +82,10 @@ struct ProjectsListView: View {
         .themedList()
         .listStyle(.plain)
         .searchable(
-            text: $vm.searchText,
+            text: Binding(
+                get: { viewModel.searchText },
+                set: { viewModel.searchText = $0 }
+            ),
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search projects"
         )
@@ -107,7 +108,12 @@ struct ProjectsListView: View {
                 )
             }
         }
-        .srhtErrorBanner(error: $vm.error)
+        .srhtErrorBanner(
+            error: Binding(
+                get: { viewModel.error },
+                set: { viewModel.error = $0 }
+            )
+        )
         .refreshable {
             await viewModel.loadProjects()
         }

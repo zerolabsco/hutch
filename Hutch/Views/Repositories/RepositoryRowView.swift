@@ -17,9 +17,6 @@ struct RepositoryRowView: View {
 
                 RepositoryForgeBadge(service: repository.service)
 
-                if buildStatus != .none {
-                    RepositoryBuildStatusIndicator(status: buildStatus)
-                }
                 VisibilityBadge(visibility: repository.visibility)
             }
 
@@ -44,9 +41,19 @@ struct RepositoryRowView: View {
 
                 Spacer()
 
-                Text(repository.updated.relativeDescription)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    ZStack {
+                        if buildStatus != .none {
+                            RepositoryBuildStatusIndicator(status: buildStatus)
+                        }
+                    }
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(buildStatus == .none)
+
+                    Text(repository.updated.relativeDescription)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(.vertical, 2)

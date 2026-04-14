@@ -259,12 +259,12 @@ private final class MockContributionCalendarService: ContributionCalendarServing
         self.statsResponses = statsResponses
     }
 
-    func fetchContributionCalendar(actor: String, endingOn endDate: Date) async throws -> ContributionCalendarResponse {
+    func fetchContributionCalendar(actor _: String, endingOn _: Date) async throws -> ContributionCalendarResponse {
         fetchCalendarCallCount += 1
         return calendarResponses[min(fetchCalendarCallCount - 1, calendarResponses.count - 1)]
     }
 
-    func fetchContributionStats(actor: String, endingOn endDate: Date) async throws -> ContributionStatsResponse {
+    func fetchContributionStats(actor _: String, endingOn _: Date) async throws -> ContributionStatsResponse {
         fetchStatsCallCount += 1
         return statsResponses[min(fetchStatsCallCount - 1, statsResponses.count - 1)]
     }
@@ -348,65 +348,81 @@ private extension ContributionCalendarResponse {
 private extension ContributionStatsResponse {
     static func empty(actor: String, year: Int) -> Self {
         ContributionStatsResponse(
-            actor: actor,
-            from: ContributionDateParser.parse("\(year)-01-01")!,
-            to: ContributionDateParser.parse("\(year)-01-07")!,
-            isIndexed: true,
-            lastPolledAt: ContributionDateParser.parseTimestamp("\(year)-01-07T12:00:00Z"),
-            indexingState: .indexed,
-            totalEvents: 0,
-            totalScore: 0,
-            activeDays: 0,
-            longestStreak: 0,
-            currentStreak: 0
+            window: .init(
+                actor: actor,
+                from: ContributionDateParser.parse("\(year)-01-01")!,
+                to: ContributionDateParser.parse("\(year)-01-07")!,
+                isIndexed: true,
+                lastPolledAt: ContributionDateParser.parseTimestamp("\(year)-01-07T12:00:00Z"),
+                indexingState: .indexed
+            ),
+            totals: .init(
+                totalEvents: 0,
+                totalScore: 0,
+                activeDays: 0,
+                longestStreak: 0,
+                currentStreak: 0
+            )
         )
     }
 
     static func active(actor: String, year: Int, totalEvents: Int, activeDays: Int, longestStreak: Int) -> Self {
         ContributionStatsResponse(
-            actor: actor,
-            from: ContributionDateParser.parse("\(year)-01-01")!,
-            to: ContributionDateParser.parse("\(year)-01-07")!,
-            isIndexed: true,
-            lastPolledAt: ContributionDateParser.parseTimestamp("\(year)-01-07T12:00:00Z"),
-            indexingState: .indexed,
-            totalEvents: totalEvents,
-            totalScore: Double(totalEvents),
-            activeDays: activeDays,
-            longestStreak: longestStreak,
-            currentStreak: 0
+            window: .init(
+                actor: actor,
+                from: ContributionDateParser.parse("\(year)-01-01")!,
+                to: ContributionDateParser.parse("\(year)-01-07")!,
+                isIndexed: true,
+                lastPolledAt: ContributionDateParser.parseTimestamp("\(year)-01-07T12:00:00Z"),
+                indexingState: .indexed
+            ),
+            totals: .init(
+                totalEvents: totalEvents,
+                totalScore: Double(totalEvents),
+                activeDays: activeDays,
+                longestStreak: longestStreak,
+                currentStreak: 0
+            )
         )
     }
 
     static func pending(actor: String, year: Int) -> Self {
         ContributionStatsResponse(
-            actor: actor,
-            from: ContributionDateParser.parse("\(year)-01-01")!,
-            to: ContributionDateParser.parse("\(year)-01-07")!,
-            isIndexed: false,
-            lastPolledAt: nil,
-            indexingState: .pending,
-            totalEvents: 0,
-            totalScore: 0,
-            activeDays: 0,
-            longestStreak: 0,
-            currentStreak: 0
+            window: .init(
+                actor: actor,
+                from: ContributionDateParser.parse("\(year)-01-01")!,
+                to: ContributionDateParser.parse("\(year)-01-07")!,
+                isIndexed: false,
+                lastPolledAt: nil,
+                indexingState: .pending
+            ),
+            totals: .init(
+                totalEvents: 0,
+                totalScore: 0,
+                activeDays: 0,
+                longestStreak: 0,
+                currentStreak: 0
+            )
         )
     }
 
     static func error(actor: String, year: Int) -> Self {
         ContributionStatsResponse(
-            actor: actor,
-            from: ContributionDateParser.parse("\(year)-01-01")!,
-            to: ContributionDateParser.parse("\(year)-01-07")!,
-            isIndexed: false,
-            lastPolledAt: nil,
-            indexingState: .error,
-            totalEvents: 0,
-            totalScore: 0,
-            activeDays: 0,
-            longestStreak: 0,
-            currentStreak: 0
+            window: .init(
+                actor: actor,
+                from: ContributionDateParser.parse("\(year)-01-01")!,
+                to: ContributionDateParser.parse("\(year)-01-07")!,
+                isIndexed: false,
+                lastPolledAt: nil,
+                indexingState: .error
+            ),
+            totals: .init(
+                totalEvents: 0,
+                totalScore: 0,
+                activeDays: 0,
+                longestStreak: 0,
+                currentStreak: 0
+            )
         )
     }
 }

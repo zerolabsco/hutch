@@ -3,6 +3,8 @@ import Foundation
 enum SRHTWebURL {
     static let chat = URL(string: "https://chat.sr.ht")!
     static let status = URL(string: "https://status.sr.ht")!
+    /// RSS/Atom feed for status incidents (HTML snapshot uses `status`).
+    static let statusIncidentFeed = URL(string: "https://status.sr.ht/index.xml")!
 
     static func repository(_ repository: RepositorySummary) -> URL? {
         userScopedURL(

@@ -1,8 +1,8 @@
 import Foundation
 
 struct SystemStatusService: Sendable {
-    nonisolated static let statusURL = URL(string: "https://status.sr.ht/")!
-    nonisolated static let feedURL = URL(string: "https://status.sr.ht/index.xml")!
+    nonisolated static let statusURL = SRHTWebURL.status
+    nonisolated static let feedURL = SRHTWebURL.statusIncidentFeed
 
     private let session: URLSession
     private let now: @Sendable () -> Date
@@ -340,24 +340,24 @@ private final class SystemStatusFeedParser: NSObject, XMLParserDelegate, @unchec
         return incidents.sorted { $0.publishedAt > $1.publishedAt }
     }
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+    func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes _: [String: String] = [:]) {
         textBuffer = ""
         if elementName == "item" {
             currentItem = FeedItem()
         }
     }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
+    func parser(_: XMLParser, foundCharacters string: String) {
         textBuffer += string
     }
 
-    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
-        if let string = String(data: CDATABlock, encoding: .utf8) {
+    func parser(_: XMLParser, foundCDATA cdata: Data) {
+        if let string = String(data: cdata, encoding: .utf8) {
             textBuffer += string
         }
     }
 
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+    func parser(_: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
         guard var currentItem else {
             textBuffer = ""
             return
