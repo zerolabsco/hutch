@@ -49,6 +49,7 @@ struct HgRepositorySettingsView: View {
             histeditSection(viewModel)
             deleteSection(viewModel)
         }
+        .themedList()
         .srhtErrorBanner(error: $vm.error)
         .alert(
             "Permanently delete \(repository.owner.canonicalName)/\(repository.name)?",
@@ -101,25 +102,30 @@ struct HgRepositorySettingsView: View {
                 Text("\(repository.owner.canonicalName)/\(repository.name)")
                     .font(.body.monospaced())
             }
+            .themedRow()
 
             LabeledContent("Forge") {
                 Text(repositoryForgeLabel(repository.service))
             }
+            .themedRow()
 
             LabeledContent("Visibility") {
                 Text(repositoryVisibilityLabel(viewModel.editedVisibility))
             }
+            .themedRow()
         }
 
         Section("Repository Details") {
             TextField("Description", text: Bindable(viewModel).editedDescription, axis: .vertical)
                 .lineLimit(3...6)
+                .themedRow()
 
             Picker("Visibility", selection: Bindable(viewModel).editedVisibility) {
                 Text("Public").tag(Visibility.public)
                 Text("Unlisted").tag(Visibility.unlisted)
                 Text("Private").tag(Visibility.private)
             }
+            .themedRow()
 
             Button {
                 Task {
@@ -135,6 +141,7 @@ struct HgRepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isSavingInfo || !viewModel.isInfoDirty)
+            .themedRow()
         }
     }
 
@@ -147,9 +154,11 @@ struct HgRepositorySettingsView: View {
                     ProgressView()
                     Spacer()
                 }
+                .themedRow()
             } else if viewModel.acls.isEmpty {
                 Text("No access entries yet.")
                     .foregroundStyle(.secondary)
+                    .themedRow()
             } else {
                 ForEach(viewModel.acls) { entry in
                     HStack {
@@ -167,6 +176,7 @@ struct HgRepositorySettingsView: View {
                         }
                     }
                 }
+                .themedRow()
             }
 
             HStack {
@@ -192,9 +202,11 @@ struct HgRepositorySettingsView: View {
                 }
                 .disabled(viewModel.isAddingACL || viewModel.newACLEntity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .themedRow()
             Text("Add a SourceHut user and choose read-only or read/write access.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .themedRow()
         }
     }
 
@@ -202,9 +214,11 @@ struct HgRepositorySettingsView: View {
     private func featuresSection(_ viewModel: HgRepositorySettingsViewModel) -> some View {
         Section("Sensitive Settings") {
             Toggle("Hide this repository from public listings", isOn: Bindable(viewModel).editedNonPublishing)
+                .themedRow()
             Text("Changes stay pending until you save this section.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .themedRow()
 
             Button {
                 Task {
@@ -220,6 +234,7 @@ struct HgRepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isSavingInfo || !viewModel.isInfoDirty)
+            .themedRow()
         }
     }
 
@@ -230,16 +245,19 @@ struct HgRepositorySettingsView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .disabled(true)
+                .themedRow()
 
             Text("Removing revisions is not available through the public hg.sr.ht API, so Hutch can’t do this yet.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .themedRow()
 
             Button("Remove Revision", role: .destructive) {
                 // Not implemented: the hg.sr.ht API does not expose a histedit endpoint.
                 // This button is disabled until the API supports revision removal.
             }
                 .disabled(true)
+                .themedRow()
         }
     }
 
@@ -258,6 +276,7 @@ struct HgRepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isDeleting)
+            .themedRow()
         } header: {
             Text("Danger Zone")
         }

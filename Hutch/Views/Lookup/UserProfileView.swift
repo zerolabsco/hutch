@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UserProfileView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
 
     let user: User
@@ -55,33 +56,41 @@ struct UserProfileView: View {
                         }
                         Spacer()
                     }
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(isAMOLED ? Color.black : Color.clear)
                 }
             }
 
             Section {
                 LabeledContent("Username", value: user.username)
+                    .themedRow()
                 LabeledContent("Canonical Name", value: user.canonicalName)
+                    .themedRow()
                 if let userType = user.userType {
                     LabeledContent("User Type", value: userType)
+                        .themedRow()
                 }
                 if let pronouns = user.pronouns {
                     LabeledContent("Pronouns", value: pronouns)
+                        .themedRow()
                 }
                 if let suspensionNotice = user.suspensionNotice {
                     LabeledContent("Suspension Notice", value: suspensionNotice)
+                        .themedRow()
                 }
             }
 
             Section {
                 LabeledContent("Email", value: user.email)
+                    .themedRow()
                 if let urlString = user.url, let url = URL(string: urlString) {
                     LabeledContent("URL") {
                         Link(urlString, destination: url)
                     }
+                    .themedRow()
                 }
                 if let location = user.location {
                     LabeledContent("Location", value: location)
+                        .themedRow()
                 }
             }
 
@@ -91,6 +100,7 @@ struct UserProfileView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .tint(.accentColor)
                         .textSelection(.enabled)
+                        .themedRow()
                 }
             }
 
@@ -98,9 +108,11 @@ struct UserProfileView: View {
                 Section {
                     if let created = user.created {
                         LabeledContent("Joined", value: formattedTimestamp(created))
+                            .themedRow()
                     }
                     if let updated = user.updated {
                         LabeledContent("Updated", value: formattedTimestamp(updated))
+                            .themedRow()
                     }
                 }
             }
@@ -118,15 +130,18 @@ struct UserProfileView: View {
                             error: viewModel.contributionsError ?? viewModel.contributionStatusText,
                             isIndexedButEmpty: viewModel.isContributionActivityIndexedButEmpty
                         )
+                        .themedRow()
                     }
                 }
 
                 Section {
                     if viewModel.isLoadingRepositories && viewModel.repositories.isEmpty {
                         ProgressView()
+                            .themedRow()
                     } else if viewModel.repositories.isEmpty {
                         Text("No public repositories.")
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     } else {
                         ForEach(viewModel.repositories.prefix(4)) { repo in
                             NavigationLink {
@@ -137,10 +152,12 @@ struct UserProfileView: View {
                                 RepositoryRowView(repository: repo, buildStatus: .none)
                             }
                         }
+                        .themedRow()
                         if viewModel.repositories.count > 4 {
                             NavigationLink("See All") {
                                 UserRepositoriesView(viewModel: viewModel)
                             }
+                            .themedRow()
                         }
                     }
                 } header: {
@@ -150,9 +167,11 @@ struct UserProfileView: View {
                 Section {
                     if viewModel.isLoadingTrackers && viewModel.trackers.isEmpty {
                         ProgressView()
+                            .themedRow()
                     } else if viewModel.trackers.isEmpty {
                         Text("No public trackers.")
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     } else {
                         ForEach(viewModel.trackers.prefix(4)) { tracker in
                             NavigationLink {
@@ -161,10 +180,12 @@ struct UserProfileView: View {
                                 UserProfileTrackerRowView(tracker: tracker)
                             }
                         }
+                        .themedRow()
                         if viewModel.trackers.count > 4 {
                             NavigationLink("See All") {
                                 UserTrackersView(viewModel: viewModel)
                             }
+                            .themedRow()
                         }
                     }
                 } header: {
@@ -172,6 +193,7 @@ struct UserProfileView: View {
                 }
             }
         }
+        .themedList()
         .listStyle(.insetGrouped)
         .navigationTitle(user.canonicalName)
         .navigationBarTitleDisplayMode(.inline)

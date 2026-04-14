@@ -15,6 +15,7 @@ struct TokenEntryView: View {
             Form {
                 Section {
                     Text("Enter your SourceHut personal access token to connect.")
+                        .themedRow()
                 } header: {
                     Text("Welcome to Hutch")
                 } footer: {
@@ -27,6 +28,7 @@ struct TokenEntryView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .disabled(isConnecting)
+                        .themedRow()
                 } header: {
                     Text("Token")
                 }
@@ -40,6 +42,7 @@ struct TokenEntryView: View {
                                 .foregroundStyle(.red)
                         }
                         .foregroundStyle(.red)
+                        .themedRow()
                     }
                 }
 
@@ -56,22 +59,26 @@ struct TokenEntryView: View {
                         }
                     }
                     .disabled(tokenTrimmed.isEmpty || isConnecting)
+                    .themedRow()
                 }
 
                 Section {
                     Link(destination: createAccountURL) {
                         Label("Create SourceHut account", systemImage: "person.badge.plus")
                     }
+                    .themedRow()
 
                     Link(destination: personalAccessTokensURL) {
                         Label("Create Personal Access Token", systemImage: "key")
                     }
+                    .themedRow()
                 } header: {
                     Text("Need an account?")
                 } footer: {
                     Text("These links open SourceHut in your browser. After signing up, create a Personal Access Token there and paste it here.")
                 }
             }
+            .themedList()
             .navigationTitle("Hutch")
         }
     }

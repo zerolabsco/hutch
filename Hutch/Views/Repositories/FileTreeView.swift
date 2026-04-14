@@ -233,7 +233,9 @@ private struct FileTreeContentView: View {
                         await viewModel.navigateInto(entry: entry)
                     }
                 }
+                .themedRow()
         }
+        .themedList()
         .listStyle(.plain)
         .refreshable {
             await viewModel.loadRootTree()
@@ -848,6 +850,7 @@ private struct RefPickerSheet: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .themedRow()
                 }
 
                 if !viewModel.branches.isEmpty {
@@ -868,6 +871,7 @@ private struct RefPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .themedRow()
                     }
                 }
 
@@ -889,9 +893,11 @@ private struct RefPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .themedRow()
                     }
                 }
             }
+            .themedList()
             .listStyle(.insetGrouped)
             .navigationTitle("Select Ref")
             .navigationBarTitleDisplayMode(.inline)

@@ -162,6 +162,7 @@ struct TrackerListView: View {
                     await viewModel.loadMoreIfNeeded(currentItem: tracker)
                 }
             }
+            .themedRow()
 
             if viewModel.isLoadingMore {
                 HStack {
@@ -170,8 +171,10 @@ struct TrackerListView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
         }
+        .themedList()
         .listStyle(.plain)
         .searchable(
             text: $vm.searchText,

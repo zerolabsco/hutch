@@ -48,6 +48,7 @@ struct AccountSwitcherView: View {
                             pendingRemoval = appState.accounts[index]
                         }
                     }
+                    .themedRow()
                 }
 
                 Section {
@@ -57,8 +58,10 @@ struct AccountSwitcherView: View {
                         Label("Add Account", systemImage: "plus.circle")
                     }
                     .disabled(isSwitching)
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Accounts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -101,6 +101,7 @@ struct PasteListView: View {
                     await viewModel.loadMoreIfNeeded(currentItem: paste)
                 }
             }
+            .themedRow()
 
             if viewModel.isLoadingMore {
                 HStack {
@@ -109,6 +110,7 @@ struct PasteListView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
         }
         .themedList()
@@ -302,12 +304,14 @@ private struct CreatePasteSheet: View {
                             files = [PasteUploadDraft()]
                         }
                     }
+                    .themedRow()
 
                     Button {
                         files.append(PasteUploadDraft())
                     } label: {
                         Label("Add File", systemImage: "plus")
                     }
+                    .themedRow()
                 }
 
                 Section("Visibility") {
@@ -316,21 +320,25 @@ private struct CreatePasteSheet: View {
                         Text("Unlisted").tag(Visibility.unlisted)
                         Text("Private").tag(Visibility.private)
                     }
+                    .themedRow()
                 }
 
                 Section {
                     Text("Paste contents are uploaded as UTF-8 text files. Hutch can change visibility later, but the API does not support editing file contents after creation.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 if let error = viewModel.error {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle("New Paste")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

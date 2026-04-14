@@ -176,26 +176,34 @@ struct BuildDetailView: View {
                                 .font(.subheadline.weight(.medium))
                         }
                     }
+                    .themedRow()
 
                     if let note = job.note, !note.isEmpty {
                         LabeledContent("Note", value: note)
+                            .themedRow()
                     }
 
                     if let image = job.image {
                         LabeledContent("Image", value: image)
+                            .themedRow()
                     }
 
                     if !job.tags.isEmpty {
                         LabeledContent("Tags", value: job.tags.joined(separator: ", "))
+                            .themedRow()
                     }
 
                     if let visibility = job.visibility {
                         LabeledContent("Visibility", value: visibility.rawValue.capitalized)
+                            .themedRow()
                     }
 
                     LabeledContent("Owner", value: job.owner.canonicalName)
+                        .themedRow()
                     LabeledContent("Created", value: job.created.relativeDescription)
+                        .themedRow()
                     LabeledContent("Updated", value: job.updated.relativeDescription)
+                        .themedRow()
                 }
 
                 if appState.isDebugModeEnabled {
@@ -211,9 +219,11 @@ struct BuildDetailView: View {
                             url: \(SRHTWebURL.build(jobId: job.id, ownerCanonicalName: job.owner.canonicalName)?.absoluteString ?? "unavailable")
                             """
                         )
+                        .themedRow()
 
                         if let rawJobResponse = viewModel.rawJobResponse {
                             DebugTextBlock(title: "Raw Response", content: rawJobResponse)
+                                .themedRow()
                         }
                     }
                 }
@@ -237,6 +247,7 @@ struct BuildDetailView: View {
                             }
                         }
                         .disabled(isOpeningRepository)
+                        .themedRow()
                     }
                 }
 
@@ -248,6 +259,7 @@ struct BuildDetailView: View {
                                 openURL(url)
                             }
                         }
+                        .themedRow()
                     } header: {
                         Text("Artifacts")
                     } footer: {
@@ -275,6 +287,7 @@ struct BuildDetailView: View {
                                 }
                             }
                             .foregroundStyle(.primary)
+                            .themedRow()
                         } header: {
                             HStack(spacing: 6) {
                                 TaskStatusIcon(status: task.status)
@@ -299,6 +312,7 @@ struct BuildDetailView: View {
                             }
                         }
                         .disabled(viewModel.isCancelling)
+                        .themedRow()
                     }
                 }
 
@@ -319,6 +333,7 @@ struct BuildDetailView: View {
                             }
                         }
                         .disabled(viewModel.isRebuilding)
+                        .themedRow()
 
                         Button {
                             showEditResubmitSheet = true
@@ -326,11 +341,13 @@ struct BuildDetailView: View {
                             Text("Edit & Resubmit")
                         }
                         .disabled(viewModel.isSubmittingEditedBuild)
+                        .themedRow()
                     } footer: {
                         Text("Creates a new build using this job’s saved manifest, tags, note, and visibility.")
                     }
                 }
             }
+            .themedList()
             .task(id: job.id) {
                 RecentActivityStore.recordBuild(
                     jobId: job.id,
@@ -463,26 +480,33 @@ private struct EditResubmitBuildSheet: View {
                         .lineLimit(12...24)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                 }
 
                 Section("Build Options") {
                     TextField("Note (optional)", text: $note)
+                        .themedRow()
                     TextField("Tags (comma-separated, optional)", text: $tagsText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                     Picker("Visibility", selection: $visibility) {
                         Text("Public").tag(Visibility.public)
                         Text("Unlisted").tag(Visibility.unlisted)
                         Text("Private").tag(Visibility.private)
                     }
+                    .themedRow()
                     Toggle("Start build now", isOn: $execute)
+                        .themedRow()
                     Toggle("Allow build secrets", isOn: $secrets)
+                        .themedRow()
                 }
 
                 Section {
                     Text("This submits a new build. “Start build now” and “Allow build secrets” use local defaults because the current job does not include those original values.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 if let actionError = viewModel.actionError {
@@ -494,6 +518,7 @@ private struct EditResubmitBuildSheet: View {
                                 .foregroundStyle(.red)
                         }
                         .foregroundStyle(.red)
+                        .themedRow()
                     }
                 }
             }

@@ -13,6 +13,7 @@ struct CommitLogView: View {
                     await viewModel.loadMoreCommitsIfNeeded(currentItem: commit)
                 }
             }
+            .themedRow()
 
             if viewModel.isLoadingMoreCommits {
                 HStack {
@@ -21,8 +22,10 @@ struct CommitLogView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
         }
+        .themedList()
         .listStyle(.plain)
         .overlay {
             if viewModel.isLoadingCommits, viewModel.commits.isEmpty {

@@ -16,24 +16,29 @@ struct MoreView: View {
                 NavigationLink(value: MoreRoute.lookup) {
                     Label("Look Up", systemImage: "magnifyingglass")
                 }
+                .themedRow()
             }
 
             Section("Other Services") {
                 NavigationLink(value: MoreRoute.projects) {
                     Label("Projects", systemImage: "square.stack.3d.up")
                 }
+                .themedRow()
 
                 NavigationLink(value: MoreRoute.lists) {
                     Label("Mailing Lists", systemImage: "list.bullet.rectangle")
                 }
+                .themedRow()
 
                 NavigationLink(value: MoreRoute.manPageBrowser) {
                     Label("Man Pages", systemImage: "book")
                 }
+                .themedRow()
 
                 NavigationLink(value: MoreRoute.pastes) {
                     Label("Pastes", systemImage: "doc.on.clipboard")
                 }
+                .themedRow()
 
                 NavigationLink(value: MoreRoute.systemStatus) {
                     SystemStatusSummaryRow(
@@ -43,16 +48,19 @@ struct MoreView: View {
                         isShowingStaleData: viewModel?.isShowingStaleSystemStatus ?? false
                     )
                 }
+                .themedRow()
             }
 
             Section("Meta") {
                 NavigationLink(value: MoreRoute.profile) {
                     Label("Profile", systemImage: "person.text.rectangle")
                 }
+                .themedRow()
 
                 NavigationLink(value: MoreRoute.settings) {
                     Label("Settings", systemImage: "gear")
                 }
+                .themedRow()
             }
 
             Section {
@@ -61,6 +69,7 @@ struct MoreView: View {
                         Label(item.title, systemImage: "safari")
                     }
                 }
+                .themedRow()
             } header: {
                 Text("External Links")
             } footer: {

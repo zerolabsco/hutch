@@ -4,6 +4,7 @@ import SwiftUI
 /// full-screen sheet for token entry on first launch.
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @State private var homePath = NavigationPath()
     @State private var morePath = NavigationPath()
     @State private var repoPath = NavigationPath()
@@ -125,6 +126,7 @@ struct RootView: View {
         .id(appState.sessionIdentity)
         .defaultAppStorage(appState.accountDefaults)
         .modifier(SidebarAdaptableTabStyle())
+        .modifier(AMOLEDToolbarStyle(isAMOLED: isAMOLED))
         .modifier(TabKeyboardShortcuts(selectedTab: Binding(
             get: { appState.selectedTab },
             set: { appState.selectedTab = $0 }
@@ -424,6 +426,25 @@ private struct TabKeyboardShortcuts: ViewModifier {
                 }
                 return .ignored
             }
+    }
+}
+
+// MARK: - AMOLED Toolbar Styling
+
+/// Applies true-black backgrounds to the tab bar and navigation bar when the AMOLED theme is active.
+private struct AMOLEDToolbarStyle: ViewModifier {
+    let isAMOLED: Bool
+
+    func body(content: Content) -> some View {
+        if isAMOLED {
+            content
+                .toolbarBackground(Color.black, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+                .toolbarBackground(Color.black, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+        } else {
+            content
+        }
     }
 }
 

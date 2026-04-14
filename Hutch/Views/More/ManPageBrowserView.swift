@@ -25,8 +25,10 @@ struct ManPageBrowserView: View {
                         Text(doc.title)
                     }
                 }
+                .themedRow()
             }
         }
+        .themedList()
         .navigationTitle("Man Pages")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -94,6 +94,7 @@ struct HomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .themedRow()
             }
         }
     }
@@ -109,6 +110,7 @@ struct HomeView: View {
                     emphasis: .action
                 )
             }
+            .themedRow()
         }
     }
 
@@ -126,6 +128,7 @@ struct HomeView: View {
                     .disabled(isOpeningRecentItem)
                     .listRowSeparator(.hidden)
                 }
+                .themedRow()
             }
         }
     }
@@ -143,6 +146,7 @@ struct HomeView: View {
                     emphasis: .monitoring
                 )
             }
+            .themedRow()
         }
     }
 
@@ -156,6 +160,7 @@ struct HomeView: View {
                 } label: {
                     HomeCompactMessageRow(text: "Pin projects for quick access", systemImage: "pin")
                 }
+                .themedRow()
             } else {
                 LazyVGrid(
                     columns: [
@@ -174,6 +179,7 @@ struct HomeView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .themedRow()
             }
         }
     }

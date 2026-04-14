@@ -79,6 +79,7 @@ struct ProjectsListView: View {
                 .buttonStyle(.plain)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             }
+            .themedRow()
         }
         .themedList()
         .listStyle(.plain)

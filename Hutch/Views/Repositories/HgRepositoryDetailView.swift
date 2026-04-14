@@ -396,7 +396,9 @@ struct HgRepositoryDetailView: View {
                     .onTapGesture {
                         Task { await viewModel.openFile(file) }
                     }
+                    .themedRow()
                 }
+                .themedList()
                 .listStyle(.plain)
             }
         }
@@ -454,6 +456,7 @@ struct HgRepositoryDetailView: View {
                         await viewModel.loadMoreLogIfNeeded(currentItem: revision)
                     }
             }
+            .themedRow()
 
             if viewModel.isLoadingMoreLog {
                 HStack {
@@ -462,8 +465,10 @@ struct HgRepositoryDetailView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
         }
+        .themedList()
         .listStyle(.plain)
         .overlay {
             if viewModel.isLoadingLog, viewModel.log.isEmpty {
@@ -498,7 +503,9 @@ struct HgRepositoryDetailView: View {
         } else {
             List(revisions) { revision in
                 namedRevisionRow(revision)
+                    .themedRow()
             }
+            .themedList()
             .listStyle(.plain)
         }
     }
@@ -699,6 +706,7 @@ private struct HgBrowseRefPickerSheet: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .themedRow()
                 }
 
                 if !viewModel.branches.isEmpty {
@@ -719,6 +727,7 @@ private struct HgBrowseRefPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .themedRow()
                     }
                 }
 
@@ -740,6 +749,7 @@ private struct HgBrowseRefPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .themedRow()
                     }
                 }
 
@@ -761,9 +771,11 @@ private struct HgBrowseRefPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .themedRow()
                     }
                 }
             }
+            .themedList()
             .listStyle(.insetGrouped)
             .navigationTitle("Select Ref")
             .navigationBarTitleDisplayMode(.inline)

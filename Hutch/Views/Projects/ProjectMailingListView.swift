@@ -332,7 +332,9 @@ struct MailingListDetailView: View {
                     .tint(thread.isUnread ? .blue : .gray)
                 }
             }
+            .themedRow()
         }
+        .themedList()
         .listStyle(.plain)
         .searchable(
             text: $vm.searchText,

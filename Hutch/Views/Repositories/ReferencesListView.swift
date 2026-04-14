@@ -10,6 +10,7 @@ struct ReferencesListView: View {
                     ForEach(viewModel.branches, id: \.name) { ref in
                         ReferenceRow(reference: ref, prefix: "refs/heads/")
                     }
+                    .themedRow()
                 }
             }
 
@@ -18,9 +19,11 @@ struct ReferencesListView: View {
                     ForEach(viewModel.tags, id: \.name) { ref in
                         ReferenceRow(reference: ref, prefix: "refs/tags/")
                     }
+                    .themedRow()
                 }
             }
         }
+        .themedList()
         .listStyle(.insetGrouped)
         .overlay {
             if viewModel.isLoadingRefs, viewModel.branches.isEmpty, viewModel.tags.isEmpty {

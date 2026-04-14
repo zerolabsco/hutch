@@ -142,7 +142,9 @@ struct MailingListListView: View {
                     .padding(.vertical, 2)
                 }
             }
+            .themedRow()
         }
+        .themedList()
         .listStyle(.plain)
         .searchable(
             text: $vm.searchText,

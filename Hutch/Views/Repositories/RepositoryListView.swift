@@ -78,6 +78,7 @@ struct RepositoryListView: View {
                         .foregroundStyle(.secondary)
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
 
             ForEach(viewModel.repositories) { repo in
@@ -89,6 +90,7 @@ struct RepositoryListView: View {
                 }
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             }
+            .themedRow()
 
             if viewModel.isLoadingMore {
                 HStack {
@@ -97,6 +99,7 @@ struct RepositoryListView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .themedRow()
             }
         }
         .themedList()
@@ -223,16 +226,20 @@ private struct CreateRepositorySheet: View {
                             Text(service.displayName).tag(service)
                         }
                     }
+                    .themedRow()
                     TextField("Repository name", text: $name)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                     TextField("Short description (optional)", text: $description, axis: .vertical)
                         .lineLimit(2...4)
+                        .themedRow()
                     Picker("Visibility", selection: $visibility) {
                         Text("Public").tag(Visibility.public)
                         Text("Unlisted").tag(Visibility.unlisted)
                         Text("Private").tag(Visibility.private)
                     }
+                    .themedRow()
                 }
 
                 Section("Import Existing Repository") {
@@ -241,16 +248,20 @@ private struct CreateRepositorySheet: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
+                            .themedRow()
                         Text("Import an existing Git repository from a remote URL.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     } else {
                         Text("Importing a Mercurial repository from a remote URL is not available through the public API.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle(service == .git ? "New Git Repository" : "New Mercurial Repository")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

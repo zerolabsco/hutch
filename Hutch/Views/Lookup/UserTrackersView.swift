@@ -12,7 +12,9 @@ struct UserTrackersView: View {
                     UserProfileTrackerRowView(tracker: tracker)
                 }
             }
+            .themedRow()
         }
+        .themedList()
         .listStyle(.plain)
         .navigationTitle("Trackers")
         .navigationBarTitleDisplayMode(.inline)

@@ -356,6 +356,7 @@ struct LookupView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .themedRow()
 
                 TextField(
                     vm.selectedType.inputLabel,
@@ -368,6 +369,7 @@ struct LookupView: View {
                 .onSubmit {
                     Task { await vm.lookup() }
                 }
+                .themedRow()
             }
 
             Section {
@@ -382,6 +384,7 @@ struct LookupView: View {
                         ProgressView()
                     }
                 }
+                .themedRow()
             }
 
             if !vm.history.isEmpty {
@@ -403,11 +406,13 @@ struct LookupView: View {
                         }
                         .disabled(vm.isLooking)
                     }
+                    .themedRow()
 
                     Button("Clear History", role: .destructive) {
                         vm.clearHistory()
                     }
                     .disabled(vm.isLooking)
+                    .themedRow()
                 }
             }
         }

@@ -6,6 +6,7 @@ struct TicketListView: View {
 
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var tracker: TrackerSummary
@@ -277,7 +278,7 @@ struct TicketListView: View {
                     vm.deleteSavedFilter(savedFilter)
                 }
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                .listRowBackground(isAMOLED ? Color.black : Color.clear)
                 .listRowSeparator(.hidden)
 
                 ForEach(viewModel.filteredTickets) { ticket in
@@ -344,6 +345,7 @@ struct TicketListView: View {
                         await viewModel.loadMoreIfNeeded(currentItem: ticket)
                     }
                 }
+                .themedRow()
 
                 if viewModel.isLoadingMore {
                     HStack {
@@ -352,9 +354,11 @@ struct TicketListView: View {
                         Spacer()
                     }
                     .listRowSeparator(.hidden)
+                    .themedRow()
                 }
             }
         }
+        .themedList()
         .listStyle(.plain)
         .listSectionSpacing(.compact)
         .searchable(
@@ -636,10 +640,13 @@ private struct CreateTicketSheet: View {
             Form {
                 Section("Ticket Details") {
                     TextField("Title", text: $subject)
+                        .themedRow()
                     TextField("Description (optional)", text: $descriptionText, axis: .vertical)
                         .lineLimit(6...12)
+                        .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("New Ticket")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -705,7 +712,9 @@ private struct TicketLabelsSheet: View {
                                     }
                                 }
                             }
+                            .themedRow()
                         }
+                        .themedList()
                     }
                 } else {
                     ContentUnavailableView(
@@ -921,6 +930,7 @@ private struct TicketFilterLabelsSheet: View {
                                     }
                                 }
                                 .padding(.vertical, 4)
+                                .themedRow()
                             }
                         }
 
@@ -940,8 +950,10 @@ private struct TicketFilterLabelsSheet: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                            .themedRow()
                         }
                     }
+                    .themedList()
                 }
             }
             .navigationTitle("Filter Labels")
@@ -982,8 +994,10 @@ private struct SaveTicketFilterSheet: View {
                 Section("Name") {
                     TextField("Filter name", text: $name)
                         .textInputAutocapitalization(.words)
+                        .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Save Filter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1085,6 +1099,7 @@ private struct BulkResolveSheet: View {
                     Text("\(viewModel.selectedTicketCount) ticket\(viewModel.selectedTicketCount == 1 ? "" : "s") selected")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 Section("Resolution") {
@@ -1095,8 +1110,10 @@ private struct BulkResolveSheet: View {
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Close Tickets")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1133,6 +1150,7 @@ private struct BulkAssignSheet: View {
                     Text("\(viewModel.selectedTicketCount) ticket\(viewModel.selectedTicketCount == 1 ? "" : "s") selected")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 if let currentUser {
@@ -1146,6 +1164,7 @@ private struct BulkAssignSheet: View {
                             }
                         }
                         .disabled(viewModel.selectedTicketCount == 0 || viewModel.isPerformingAction)
+                        .themedRow()
                     }
                 }
 
@@ -1154,8 +1173,10 @@ private struct BulkAssignSheet: View {
                         .textContentType(.username)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Assign Tickets")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

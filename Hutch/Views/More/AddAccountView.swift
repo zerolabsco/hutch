@@ -15,6 +15,7 @@ struct AddAccountView: View {
                     SecureField("Personal Access Token", text: $token)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .themedRow()
                 } footer: {
                     Text("Generate a token at meta.sr.ht → OAuth2 clients.")
                 }
@@ -23,9 +24,11 @@ struct AddAccountView: View {
                     Section {
                         Text(errorMessage)
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle("Add Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

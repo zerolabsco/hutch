@@ -79,6 +79,7 @@ struct ProfileView: View {
                             error: contributionViewModel.contributionsError ?? contributionViewModel.contributionStatusText,
                             isIndexedButEmpty: contributionViewModel.isContributionActivityIndexedButEmpty
                         )
+                        .themedRow()
                     }
                 }
 
@@ -185,6 +186,7 @@ struct ProfileView: View {
                 }
             }
             .padding(.vertical, 4)
+            .themedRow()
 
             if let bio = profile.bio, !bio.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
@@ -193,36 +195,44 @@ struct ProfileView: View {
                         .foregroundStyle(.secondary)
                     ProfileBioView(markdown: bio)
                 }
+                .themedRow()
             }
 
             if let location = profile.location, !location.isEmpty {
                 LabeledContent("Location", value: location)
+                    .themedRow()
             }
 
             if let url = profile.url, !url.isEmpty {
                 LabeledContent("URL", value: url)
+                    .themedRow()
             }
 
             if let status = profile.paymentStatus {
                 LabeledContent("Payment", value: status.capitalized)
+                    .themedRow()
             }
 
             if let sub = profile.subscription {
                 if let status = sub.status {
                     LabeledContent("Subscription", value: status.capitalized)
+                        .themedRow()
                 }
                 if let interval = sub.interval {
                     LabeledContent("Interval", value: interval.capitalized)
+                        .themedRow()
                 }
             }
 
             Button("Edit Profile") {
                 viewModel.isEditingProfile = true
             }
+            .themedRow()
 
             SRHTShareButton(url: SRHTWebURL.profile(canonicalName: profile.canonicalName), target: .profile) {
                 SwiftUI.Label("Share Profile", systemImage: "square.and.arrow.up")
             }
+            .themedRow()
         }
     }
 
@@ -262,11 +272,13 @@ struct ProfileView: View {
                     }
                 }
             }
+            .themedRow()
 
             if viewModel.isAddingSSHKey {
                 TextField("Paste SSH public key", text: $vm.newSSHKey, axis: .vertical)
                     .font(.caption.monospaced())
                     .lineLimit(3...6)
+                    .themedRow()
 
                 HStack {
                     Button("Cancel") {
@@ -280,12 +292,14 @@ struct ProfileView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(viewModel.newSSHKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .themedRow()
             } else {
                 Button {
                     viewModel.isAddingSSHKey = true
                 } label: {
                     SwiftUI.Label("Add SSH Key", systemImage: "key")
                 }
+                .themedRow()
             }
         } header: {
             Text("SSH Keys")
@@ -316,11 +330,13 @@ struct ProfileView: View {
                     }
                 }
             }
+            .themedRow()
 
             if viewModel.isAddingPGPKey {
                 TextField("Paste PGP public key", text: $vm.newPGPKey, axis: .vertical)
                     .font(.caption.monospaced())
                     .lineLimit(3...6)
+                    .themedRow()
 
                 HStack {
                     Button("Cancel") {
@@ -334,12 +350,14 @@ struct ProfileView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(viewModel.newPGPKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .themedRow()
             } else {
                 Button {
                     viewModel.isAddingPGPKey = true
                 } label: {
                     SwiftUI.Label("Add PGP Key", systemImage: "key.fill")
                 }
+                .themedRow()
             }
         } header: {
             Text("PGP Keys")
@@ -357,10 +375,12 @@ struct ProfileView: View {
                     ProgressView()
                     Spacer()
                 }
+                .themedRow()
             } else if viewModel.personalAccessTokens.isEmpty {
                 Button("Load Tokens") {
                     Task { await viewModel.loadPersonalAccessTokens() }
                 }
+                .themedRow()
             } else {
                 ForEach(viewModel.personalAccessTokens) { token in
                     VStack(alignment: .leading, spacing: 4) {
@@ -390,6 +410,7 @@ struct ProfileView: View {
                         }
                     }
                 }
+                .themedRow()
             }
         } header: {
             Text("Personal Access Tokens")
@@ -426,6 +447,7 @@ private struct EditProfileSheet: View {
     let profile: UserProfile
     let viewModel: SettingsViewModel
 
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @State private var email: String
     @State private var url: String
     @State private var location: String
@@ -492,7 +514,7 @@ private struct EditProfileSheet: View {
                         }
                         Spacer()
                     }
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(isAMOLED ? Color.black : Color.clear)
 
                     if profile.avatar != nil || avatarPreview != nil {
                         HStack {
@@ -506,7 +528,7 @@ private struct EditProfileSheet: View {
                             .disabled(viewModel.isUploadingAvatar)
                             Spacer()
                         }
-                        .listRowBackground(Color.clear)
+                        .listRowBackground(isAMOLED ? Color.black : Color.clear)
                         .listRowSeparator(.hidden)
                     }
                 }
@@ -522,6 +544,7 @@ private struct EditProfileSheet: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                     }
+                    .themedRow()
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("URL")
@@ -533,6 +556,7 @@ private struct EditProfileSheet: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                     }
+                    .themedRow()
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Location")
@@ -540,6 +564,7 @@ private struct EditProfileSheet: View {
                             .foregroundStyle(.secondary)
                         TextField("Enter location", text: $location)
                     }
+                    .themedRow()
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Bio")
@@ -548,8 +573,10 @@ private struct EditProfileSheet: View {
                         TextField("Enter bio", text: $bio, axis: .vertical)
                             .lineLimit(3...6)
                     }
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Edit Profile")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: selectedPhoto) { _, newItem in

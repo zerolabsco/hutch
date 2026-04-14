@@ -51,6 +51,7 @@ struct RepositorySettingsView: View {
             visibilitySection(viewModel)
             deleteSection(viewModel)
         }
+        .themedList()
         .srhtErrorBanner(error: $vm.error)
         .alert(
             visibilityConfirmationTitle(for: viewModel),
@@ -97,15 +98,18 @@ struct RepositorySettingsView: View {
                 Text("\(viewModel.repository.owner.canonicalName)/\(viewModel.repository.name)")
                     .font(.body.monospaced())
             }
+            .themedRow()
 
             LabeledContent("Default Branch") {
                 Text(viewModel.currentDefaultBranchName)
                     .font(.body.monospaced())
             }
+            .themedRow()
 
             LabeledContent("Visibility") {
                 Text(repositoryVisibilityLabel(viewModel.repository.visibility))
             }
+            .themedRow()
         }
     }
 
@@ -115,22 +119,27 @@ struct RepositorySettingsView: View {
             TextField("Repository name", text: Bindable(viewModel).editedName)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .themedRow()
 
             TextField("Description", text: Bindable(viewModel).editedDescription, axis: .vertical)
                 .lineLimit(2...4)
+                .themedRow()
 
             if let metadataValidationMessage = viewModel.metadataValidationMessage {
                 Text(metadataValidationMessage)
                     .font(.caption)
                     .foregroundStyle(.red)
+                    .themedRow()
             } else if viewModel.normalizedEditedName != viewModel.repository.name {
                 Text("Changing the repository name updates the repository URL.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .themedRow()
             } else {
                 Text("Name and description stay pending until you save this section.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .themedRow()
             }
 
             Button {
@@ -153,6 +162,7 @@ struct RepositorySettingsView: View {
                 !viewModel.isMetadataDirty ||
                 viewModel.metadataValidationMessage != nil
             )
+            .themedRow()
         } header: {
             Text("Repository Details")
         }
@@ -165,10 +175,12 @@ struct RepositorySettingsView: View {
                 Text(viewModel.currentDefaultBranchName)
                     .font(.body.monospaced())
             }
+            .themedRow()
 
             if viewModel.branches.isEmpty {
                 Text("This repository doesn't have any branches yet.")
                     .foregroundStyle(.secondary)
+                    .themedRow()
             } else {
                 Picker("Branch", selection: Bindable(viewModel).editedHead) {
                     ForEach(viewModel.availableBranchNames, id: \.self) { branch in
@@ -177,10 +189,12 @@ struct RepositorySettingsView: View {
                             .tag(branch)
                     }
                 }
+                .themedRow()
 
                 Text("Changes stay pending until you set the new default branch.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .themedRow()
 
                 Button {
                     Task {
@@ -202,6 +216,7 @@ struct RepositorySettingsView: View {
                     !viewModel.isDefaultBranchDirty ||
                     viewModel.defaultBranchValidationMessage != nil
                 )
+                .themedRow()
             }
         } header: {
             Text("Default Branch")
@@ -216,10 +231,12 @@ struct RepositorySettingsView: View {
                 Text("Unlisted").tag(Visibility.unlisted)
                 Text("Private").tag(Visibility.private)
             }
+            .themedRow()
 
             Text("Visibility changes apply immediately after you confirm them.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .themedRow()
 
             Button {
                 showVisibilityConfirmation = true
@@ -233,6 +250,7 @@ struct RepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isMutating || !viewModel.isVisibilityDirty)
+            .themedRow()
         } header: {
             Text("Sensitive Settings")
         }
@@ -253,6 +271,7 @@ struct RepositorySettingsView: View {
                 }
             }
             .disabled(viewModel.isMutating)
+            .themedRow()
         } header: {
             Text("Danger Zone")
         }

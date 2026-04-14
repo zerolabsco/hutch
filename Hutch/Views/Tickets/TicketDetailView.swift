@@ -739,8 +739,10 @@ private struct ResolveSheet: View {
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Resolve Ticket")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -801,6 +803,7 @@ private struct AssignSheet: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                        .themedRow()
                     }
                 }
 
@@ -809,6 +812,7 @@ private struct AssignSheet: View {
                         .textContentType(.username)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .themedRow()
 
                     Button("Add Assignee") {
                         let name = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -822,8 +826,10 @@ private struct AssignSheet: View {
                         username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || viewModel.isPerformingAction
                     )
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Assignees")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -877,7 +883,9 @@ private struct LabelsSheet: View {
                                 }
                             }
                         }
+                        .themedRow()
                     }
+                    .themedList()
                 }
             }
             .navigationTitle("Labels")
@@ -917,11 +925,14 @@ private struct CreateLabelSheet: View {
                 Section("Label Details") {
                     TextField("Label name", text: $labelName)
                         .autocorrectionDisabled()
+                        .themedRow()
                 }
 
                 Section("Colors") {
                     ColorPicker("Background color", selection: $backgroundColor, supportsOpacity: false)
+                        .themedRow()
                     ColorPicker("Text color", selection: $foregroundColor, supportsOpacity: false)
+                        .themedRow()
                 }
 
                 Section("Preview") {
@@ -936,8 +947,10 @@ private struct CreateLabelSheet: View {
                             .clipShape(Capsule())
                         Spacer()
                     }
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("New Label")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

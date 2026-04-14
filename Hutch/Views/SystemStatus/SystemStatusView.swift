@@ -36,6 +36,7 @@ struct SystemStatusView: View {
                     Label(staleDataMessage, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
             }
 
@@ -47,6 +48,7 @@ struct SystemStatusView: View {
 
             recentIncidentsSection(viewModel.recentIncidents)
         }
+        .themedList()
         .listStyle(.insetGrouped)
         .refreshable {
             await viewModel.load(forceRefresh: true)
@@ -99,6 +101,7 @@ struct SystemStatusView: View {
                 .font(.subheadline.weight(.medium))
             }
             .padding(.vertical, 4)
+            .themedRow()
         }
     }
 
@@ -119,6 +122,7 @@ struct SystemStatusView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .themedRow()
         }
     }
 
@@ -129,6 +133,7 @@ struct SystemStatusView: View {
                 ForEach(incidents) { incident in
                     incidentRow(incident)
                 }
+                .themedRow()
             }
         }
     }
@@ -142,10 +147,12 @@ struct SystemStatusView: View {
                     systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
                     description: Text("The status feed didn’t return any recent incidents.")
                 )
+                .themedRow()
             } else {
                 ForEach(incidents) { incident in
                     incidentRow(incident)
                 }
+                .themedRow()
             }
         }
     }

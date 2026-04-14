@@ -11,6 +11,7 @@ struct WorkView: View {
 
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HomeViewModel?
     @State private var scope: Scope = .all
@@ -74,6 +75,7 @@ struct WorkView: View {
                 }
             }
             .padding(.vertical, 2)
+            .themedRow()
         }
     }
 
@@ -88,6 +90,7 @@ struct WorkView: View {
         if workCount(viewModel) == 0 {
             Section {
                 WorkCompactMessageRow(text: "Nothing to do", systemImage: "checkmark.circle")
+                    .themedRow()
             }
         }
     }
@@ -100,7 +103,7 @@ struct WorkView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .listRowBackground(Color.clear)
+            .listRowBackground(isAMOLED ? Color.black : Color.clear)
             .listRowInsets(EdgeInsets())
         }
     }
@@ -110,9 +113,11 @@ struct WorkView: View {
         Section {
             if isLoadingUnread(viewModel) {
                 WorkLoadingRow(label: "Loading unread threads")
+                    .themedRow()
             } else if viewModel.unreadInboxThreads.isEmpty {
                 if compactWhenEmpty {
                     WorkCompactMessageRow(text: "No unread threads", systemImage: "tray")
+                        .themedRow()
                 }
             } else {
                 ForEach(viewModel.unreadInboxThreads) { thread in
@@ -137,6 +142,7 @@ struct WorkView: View {
                         }
                     }
                 }
+                .themedRow()
             }
         } header: {
             Text("Unread Threads")
@@ -155,8 +161,10 @@ struct WorkView: View {
         Section {
             if viewModel.isLoadingAssignedTickets && viewModel.assignedTickets.isEmpty {
                 WorkLoadingRow(label: "Loading assigned tickets")
+                    .themedRow()
             } else if viewModel.assignedTickets.isEmpty {
                 WorkCompactMessageRow(text: "No assigned tickets", systemImage: "person.crop.circle.badge.checkmark")
+                    .themedRow()
             } else {
                 ForEach(viewModel.assignedTickets) { ticket in
                     NavigationLink {
@@ -200,6 +208,7 @@ struct WorkView: View {
                         }
                     }
                 }
+                .themedRow()
             }
         } header: {
             Text("Assigned Tickets")

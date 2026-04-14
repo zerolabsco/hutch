@@ -326,13 +326,18 @@ private struct PasteInfoSheet: View {
             List {
                 Section("Paste") {
                     LabeledContent("ID", value: paste.id)
+                        .themedRow()
                     LabeledContent("Owner", value: paste.user.canonicalName)
+                        .themedRow()
                     LabeledContent("Created", value: paste.created.relativeDescription)
+                        .themedRow()
                     LabeledContent("Visibility") {
                         VisibilityBadge(visibility: paste.visibility)
                     }
+                    .themedRow()
                     if paste.files.count > 1 {
                         LabeledContent("Files", value: "\(paste.files.count)")
+                            .themedRow()
                     }
                 }
 
@@ -340,6 +345,7 @@ private struct PasteInfoSheet: View {
                     Section("File") {
                         if let filename = file.filename, !filename.isEmpty {
                             LabeledContent("Filename", value: filename)
+                                .themedRow()
                         }
                         LabeledContent("Hash") {
                             Text(file.hash)
@@ -347,6 +353,7 @@ private struct PasteInfoSheet: View {
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
+                        .themedRow()
                     }
                 }
             }
@@ -407,6 +414,7 @@ private struct PasteVisibilitySheet: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .themedRow()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Visibility")

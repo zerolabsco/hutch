@@ -13,7 +13,9 @@ struct HutchApp: App {
                 .environment(appState)
                 .environment(networkMonitor)
                 .environment(\.displayDensity, displayDensity)
+                .environment(\.isAMOLEDTheme, appTheme == .amoled)
                 .environment(\.defaultMinListRowHeight, displayDensity == .compact ? 36 : 44)
+                .background(appTheme == .amoled ? Color.black : Color.clear)
                 .preferredColorScheme(appTheme.colorScheme)
                 .onOpenURL { url in
                     if let link = DeepLink(url: url) {

@@ -13,9 +13,11 @@ struct ArtifactsView: View {
                             openURL(artifact.url)
                         }
                     }
+                    .themedRow()
                 }
             }
         }
+        .themedList()
         .listStyle(.insetGrouped)
         .overlay {
             if viewModel.isLoadingArtifacts, viewModel.referenceArtifacts.isEmpty {

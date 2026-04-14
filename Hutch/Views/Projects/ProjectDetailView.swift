@@ -103,6 +103,7 @@ struct ProjectDetailView: View {
                 }
             }
             .padding(.vertical, 4)
+            .themedRow()
         }
     }
 
@@ -127,6 +128,7 @@ struct ProjectDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .themedRow()
             }
         }
     }
@@ -155,6 +157,7 @@ struct ProjectDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .themedRow()
             }
         }
     }
@@ -183,6 +186,7 @@ struct ProjectDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .themedRow()
             }
         }
     }
@@ -205,6 +209,7 @@ struct ProjectDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .themedRow()
             }
         }
     }
@@ -218,6 +223,7 @@ struct ProjectDetailView: View {
                     systemImage: "square.stack.3d.up.slash",
                     description: Text("This project doesn’t currently expose repositories, trackers, mailing lists, or external links.")
                 )
+                .themedRow()
             }
         }
     }

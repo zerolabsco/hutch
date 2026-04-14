@@ -123,6 +123,7 @@ struct ThreadDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
+                    .themedRow()
                 }
 
                 Section("Related") {
@@ -138,6 +139,7 @@ struct ThreadDetailView: View {
                     } label: {
                         Label(thread.listDisplayName, systemImage: "list.bullet")
                     }
+                    .themedRow()
 
                     if let repo = self.thread.repo {
                         Button {
@@ -157,6 +159,7 @@ struct ThreadDetailView: View {
                             }
                         }
                         .disabled(isOpeningRepository)
+                        .themedRow()
                     }
                 }
 
@@ -165,6 +168,7 @@ struct ThreadDetailView: View {
                         Text(partialWarning)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     }
                 }
 
@@ -184,8 +188,10 @@ struct ThreadDetailView: View {
                         }
                     )
                 }
+                .themedRow()
             }
         }
+        .themedList()
         .listStyle(.plain)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

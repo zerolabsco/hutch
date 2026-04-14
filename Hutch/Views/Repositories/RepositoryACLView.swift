@@ -6,6 +6,7 @@ struct RepositoryACLView: View {
     let showsDoneButton: Bool
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @State private var viewModel: RepositoryACLViewModel?
     @State private var pendingDeletion: RepositoryACLEntry?
     @State private var showAddSheet = false
@@ -70,7 +71,7 @@ struct RepositoryACLView: View {
                             Text("Only the repository owner currently has access.")
                         }
                         .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
+                        .listRowBackground(isAMOLED ? Color.black : Color.clear)
                     } else {
                         Section {
                             ForEach(viewModel.visibleEntries) { entry in
@@ -86,9 +87,11 @@ struct RepositoryACLView: View {
                                     }
                                 )
                             }
+                            .themedRow()
                         }
                     }
                 }
+                .themedList()
                 .listStyle(.insetGrouped)
                 .refreshable {
                     await viewModel.load()
@@ -192,11 +195,13 @@ private struct RepositoryACLAddUserView: View {
                 TextField("Username or ~username", text: $viewModel.addUsername)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .themedRow()
 
                 if let validation = inlineValidationMessage {
                     Text(validation)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
             }
 
@@ -207,8 +212,10 @@ private struct RepositoryACLAddUserView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .themedRow()
             }
         }
+        .themedList()
         .navigationTitle("Add User")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

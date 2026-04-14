@@ -60,11 +60,13 @@ struct SettingsView: View {
                     Text(theme.label).tag(theme)
                 }
             }
+            .themedRow()
             Picker("Density", selection: $displayDensity) {
                 ForEach(DisplayDensity.allCases) { density in
                     Text(density.label).tag(density)
                 }
             }
+            .themedRow()
         } header: {
             Text("Appearance")
         } footer: {
@@ -76,10 +78,12 @@ struct SettingsView: View {
     private func behaviorSection() -> some View {
         Section {
             Toggle("Swipe actions", isOn: $swipeActionsEnabled)
+                .themedRow()
             Toggle("Contribution graphs", isOn: $contributionGraphsEnabled)
                 .onChange(of: contributionGraphsEnabled) { _, newValue in
                     ContributionWidgetContextStore.setEnabled(newValue)
                 }
+                .themedRow()
         } header: {
             Text("Behavior")
         } footer: {
@@ -101,12 +105,14 @@ struct SettingsView: View {
                 }
             }
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .themedRow()
 
             Button {
                 showAccountSwitcher = true
             } label: {
                 Label("Manage Accounts", systemImage: "person.2")
             }
+            .themedRow()
 
             HStack {
                 Image(systemName: "lock.shield")
@@ -116,14 +122,17 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .themedRow()
 
             Button("Reset App Data", role: .destructive) {
                 pendingDestructiveAction = .resetAppData
             }
+            .themedRow()
 
             Button("Sign Out", role: .destructive) {
                 pendingDestructiveAction = .signOut
             }
+            .themedRow()
         } header: {
             Text("Authentication")
         } footer: {
@@ -139,6 +148,7 @@ struct SettingsView: View {
             } label: {
                 SwiftUI.Label("About Hutch", systemImage: "info.circle")
             }
+            .themedRow()
         }
     }
 }
@@ -211,15 +221,18 @@ private struct AboutView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
+                .themedRow()
 
                 LabeledContent("Version", value: version)
                     .onTapGesture {
                         developerRevealCount = min(developerRevealCount + 1, 5)
                     }
+                    .themedRow()
                 LabeledContent("Build", value: build)
                     .onTapGesture {
                         developerRevealCount = min(developerRevealCount + 1, 5)
                     }
+                    .themedRow()
             } footer: {
                 Text(developerRevealFooterText)
             }
@@ -228,34 +241,41 @@ private struct AboutView: View {
                 Link(destination: URL(string: "https://sr.ht")!) {
                     SwiftUI.Label("SourceHut", systemImage: "link")
                 }
+                .themedRow()
                 Link(destination: URL(string: "https://man.sr.ht")!) {
                     SwiftUI.Label("SourceHut Manuals", systemImage: "book")
                 }
+                .themedRow()
                 Link(destination: URL(string: "https://sr.ht/~ccleberg/Hutch")!) {
                     SwiftUI.Label("Project Repository", systemImage: "folder")
                 }
+                .themedRow()
             }
 
             Section("Support") {
                 Link(destination: URL(string: "mailto:hello@cleberg.net")!) {
                     SwiftUI.Label("Email Support", systemImage: "envelope")
                 }
+                .themedRow()
             }
 
             Section("Privacy") {
                 Text("Hutch uses your SourceHut personal access token to make requests on your behalf. The token is stored locally in the iOS keychain.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .themedRow()
 
                 Link(destination: URL(string: "https://zerolabs.sh/hutch/privacy-policy/")!) {
                     SwiftUI.Label("Privacy Policy", systemImage: "hand.raised")
                 }
+                .themedRow()
             }
 
             Section("Acknowledgements") {
                 Text("Built for SourceHut users who want quick access to repositories, builds, and tickets on iOS.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .themedRow()
             }
 
             if developerToolsVisible {
@@ -264,18 +284,21 @@ private struct AboutView: View {
                         get: { appState.isDebugModeEnabled },
                         set: { appState.isDebugModeEnabled = $0 }
                     ))
+                    .themedRow()
 
                     NavigationLink {
                         HomePrototypeView()
                     } label: {
                         SwiftUI.Label("Home Prototype", systemImage: "house")
                     }
+                    .themedRow()
 
                     NavigationLink {
                         WorkPrototypeView()
                     } label: {
                         SwiftUI.Label("Work Prototype", systemImage: "tray.full")
                     }
+                    .themedRow()
                 } header: {
                     Text("Developer")
                 } footer: {

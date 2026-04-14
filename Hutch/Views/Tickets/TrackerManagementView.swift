@@ -654,22 +654,27 @@ struct TrackerEditorSheet: View {
                     TextField("Tracker name", text: $name)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                     TextField("Short description (optional)", text: $description, axis: .vertical)
                         .lineLimit(2...4)
+                        .themedRow()
                     Picker("Visibility", selection: $visibility) {
                         Text("Public").tag(Visibility.public)
                         Text("Unlisted").tag(Visibility.unlisted)
                         Text("Private").tag(Visibility.private)
                     }
+                    .themedRow()
                 }
 
                 if let error, !error.isEmpty {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -718,10 +723,12 @@ struct TrackerACLManagementSheet: View {
             List {
                 Section("Default Access") {
                     TrackerPermissionSummary(permissions: viewModel.defaultACL.permissions)
+                        .themedRow()
                     Button("Update Default ACL") {
                         editingDefaultACL = true
                     }
                     .disabled(viewModel.isSavingACL)
+                    .themedRow()
                 }
 
                 Section {
@@ -731,9 +738,11 @@ struct TrackerACLManagementSheet: View {
                             ProgressView()
                             Spacer()
                         }
+                        .themedRow()
                     } else if viewModel.acls.isEmpty {
                         Text("No tracker-specific ACLs yet.")
                             .foregroundStyle(.secondary)
+                            .themedRow()
                     } else {
                         ForEach(viewModel.acls) { entry in
                             VStack(alignment: .leading, spacing: 6) {
@@ -756,6 +765,7 @@ struct TrackerACLManagementSheet: View {
                                 .tint(.blue)
                             }
                         }
+                        .themedRow()
                     }
                 } header: {
                     Text("User ACLs")
@@ -763,6 +773,7 @@ struct TrackerACLManagementSheet: View {
                     Text("Each ACL must include all five permission flags.")
                 }
             }
+            .themedList()
             .navigationTitle("ACLs")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -908,6 +919,7 @@ private struct TrackerACLEditorSheet: View {
                     TextField("Username or ~username", text: $username)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .themedRow()
                 }
 
                 permissionSection
@@ -916,9 +928,11 @@ private struct TrackerACLEditorSheet: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -950,10 +964,15 @@ private struct TrackerACLEditorSheet: View {
     private var permissionSection: some View {
         Section("Permissions") {
             Toggle("Browse", isOn: $browse)
+                .themedRow()
             Toggle("Submit", isOn: $submit)
+                .themedRow()
             Toggle("Comment", isOn: $comment)
+                .themedRow()
             Toggle("Edit", isOn: $edit)
+                .themedRow()
             Toggle("Triage", isOn: $triage)
+                .themedRow()
         }
     }
 
@@ -1003,19 +1022,26 @@ private struct TrackerDefaultACLEditorSheet: View {
             Form {
                 Section("Permissions") {
                     Toggle("Browse", isOn: $browse)
+                        .themedRow()
                     Toggle("Submit", isOn: $submit)
+                        .themedRow()
                     Toggle("Comment", isOn: $comment)
+                        .themedRow()
                     Toggle("Edit", isOn: $edit)
+                        .themedRow()
                     Toggle("Triage", isOn: $triage)
+                        .themedRow()
                 }
 
                 if let error, !error.isEmpty {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle("Default ACL")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1073,6 +1099,7 @@ struct TrackerLabelManagementSheet: View {
                     Text("Labels are managed here and reused throughout the tracker.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 if viewModel.isLoadingLabels {
@@ -1081,12 +1108,14 @@ struct TrackerLabelManagementSheet: View {
                         ProgressView()
                         Spacer()
                     }
+                    .themedRow()
                 } else if viewModel.labels.isEmpty {
                     ContentUnavailableView(
                         "No Labels",
                         systemImage: "tag",
                         description: Text("Create labels for triage and organization.")
                     )
+                    .themedRow()
                 } else {
                     ForEach(viewModel.labels) { label in
                         Button {
@@ -1110,8 +1139,10 @@ struct TrackerLabelManagementSheet: View {
                             }
                         }
                     }
+                    .themedRow()
                 }
             }
+            .themedList()
             .navigationTitle("Labels")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1261,8 +1292,11 @@ private struct TrackerLabelEditorSheet: View {
             Form {
                 Section("Details") {
                     TextField("Label name", text: $name)
+                        .themedRow()
                     ColorPicker("Foreground", selection: $foregroundColor, supportsOpacity: false)
+                        .themedRow()
                     ColorPicker("Background", selection: $backgroundColor, supportsOpacity: false)
+                        .themedRow()
                 }
 
                 Section("Preview") {
@@ -1274,15 +1308,18 @@ private struct TrackerLabelEditorSheet: View {
                             foregroundColor: foregroundColor.hexString
                         )
                     )
+                    .themedRow()
                 }
 
                 if let error, !error.isEmpty {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
+                            .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

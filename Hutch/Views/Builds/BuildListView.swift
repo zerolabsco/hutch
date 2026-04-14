@@ -5,6 +5,7 @@ struct BuildListView: View {
     @AppStorage(AppStorageKeys.buildsAutoRefreshInterval) private var autoRefreshRawValue = 0
     @AppStorage(AppStorageKeys.buildsRepoFilter) private var savedRepoFilter = ""
     @Environment(AppState.self) private var appState
+    @Environment(\.isAMOLEDTheme) private var isAMOLED
     @State private var viewModel: BuildListViewModel?
     @State private var showSubmitSheet = false
     @State private var submittedJobId: Int?
@@ -134,7 +135,7 @@ struct BuildListView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 10)
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                .listRowBackground(isAMOLED ? Color.black : Color.clear)
                 .listRowSeparator(.hidden)
 
                 ForEach(viewModel.filteredJobs) { job in
@@ -181,6 +182,7 @@ struct BuildListView: View {
                         await viewModel.loadMoreIfNeeded(currentItem: job)
                     }
                 }
+                .themedRow()
 
                 if viewModel.isLoadingMore {
                     HStack {
@@ -189,6 +191,7 @@ struct BuildListView: View {
                         Spacer()
                     }
                     .listRowSeparator(.hidden)
+                    .themedRow()
                 }
             }
         }
@@ -279,26 +282,33 @@ private struct SubmitBuildSheet: View {
                         .lineLimit(12...24)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                 }
 
                 Section("Build Options") {
                     TextField("Note (optional)", text: $note)
+                        .themedRow()
                     TextField("Tags (comma-separated, optional)", text: $tagsText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .themedRow()
                     Picker("Visibility", selection: $visibility) {
                         Text("Public").tag(Visibility.public)
                         Text("Unlisted").tag(Visibility.unlisted)
                         Text("Private").tag(Visibility.private)
                     }
+                    .themedRow()
                     Toggle("Start build now", isOn: $execute)
+                        .themedRow()
                     Toggle("Allow build secrets", isOn: $secrets)
+                        .themedRow()
                 }
 
                 Section {
                     Text("You need a valid builds.sr.ht manifest and a token with BUILDS:RW.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .themedRow()
                 }
 
                 if let error = viewModel.error {
@@ -310,9 +320,11 @@ private struct SubmitBuildSheet: View {
                                 .foregroundStyle(.red)
                         }
                         .foregroundStyle(.red)
+                        .themedRow()
                     }
                 }
             }
+            .themedList()
             .navigationTitle("Submit Build")
             .navigationBarTitleDisplayMode(.inline)
             .onDisappear {

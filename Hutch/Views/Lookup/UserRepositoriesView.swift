@@ -14,7 +14,9 @@ struct UserRepositoriesView: View {
                     RepositoryRowView(repository: repo, buildStatus: .none)
                 }
             }
+            .themedRow()
         }
+        .themedList()
         .listStyle(.plain)
         .navigationTitle("Repositories")
         .navigationBarTitleDisplayMode(.inline)
