@@ -299,13 +299,34 @@ final class TicketListViewModel {
         hasMore = true
 
         do {
-            let page = try await fetchPage(cursor: nil)
-            tickets = page.results
-            cursor = page.cursor
-            hasMore = page.cursor != nil
+            // todo.sr.ht exposes `tickets(cursor:)` only (see Docs/API/todo.json) — no server-side
+            // status filter. The Open tab filters client-side, so we paginate until the cursor is
+            // exhausted; otherwise older open tickets never appear in the first page (25 items).
+            var accumulated: [TicketSummary] = []
+            var nextCursor: String?
+
+            repeat {
+                let page = try await fetchPage(cursor: nextCursor)
+
+                let existingIDs = Set(accumulated.map(\.id))
+                let newTickets = page.results.filter { !existingIDs.contains($0.id) }
+
+                if newTickets.isEmpty && !page.results.isEmpty {
+                    break
+                }
+
+                accumulated.append(contentsOf: newTickets)
+                nextCursor = page.cursor
+            } while nextCursor != nil
+
+            tickets = accumulated
+            cursor = nextCursor
+            hasMore = nextCursor != nil
             reconcileSelectionWithLoadedTickets()
         } catch {
-            self.error = error.userFacingMessage
+            if !Task.isCancelled {
+                self.error = error.userFacingMessage
+            }
         }
 
         isLoading = false
