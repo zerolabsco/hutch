@@ -118,7 +118,7 @@ struct HomeView: View {
     private var recentSection: some View {
         if !recentItems.isEmpty {
             Section("Recent") {
-                ForEach(recentItems) { item in
+                ForEach(recentItems.prefix(3)) { item in
                     Button {
                         openRecentItem(item)
                     } label: {

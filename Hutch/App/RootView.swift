@@ -336,6 +336,7 @@ enum MoreRoute: Hashable {
     case profile
     case systemStatus
     case settings
+    case about
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
     case manPageBrowser
@@ -363,6 +364,8 @@ private struct MoreNavigationRoot: View {
                     SystemStatusView()
                 case .settings:
                     SettingsView()
+                case .about:
+                    AboutView()
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):

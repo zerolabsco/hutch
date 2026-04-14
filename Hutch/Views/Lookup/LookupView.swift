@@ -441,6 +441,8 @@ struct LookupView: View {
                     SystemStatusView()
                 case .settings:
                     SettingsView()
+                case .about:
+                    AboutView()
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):

@@ -61,6 +61,11 @@ struct MoreView: View {
                     Label("Settings", systemImage: "gear")
                 }
                 .themedRow()
+
+                NavigationLink(value: MoreRoute.about) {
+                    Label("About Hutch", systemImage: "info.circle")
+                }
+                .themedRow()
             }
 
             Section {
