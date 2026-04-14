@@ -66,7 +66,7 @@ struct TrackerListViewModelTests {
             rid: "rid-\(id)",
             name: name,
             description: description,
-            visibility: .public,
+            visibility: .publicVisibility,
             updated: Date(),
             owner: Entity(canonicalName: owner)
         )

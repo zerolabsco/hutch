@@ -230,11 +230,11 @@ extension String {
 extension Visibility {
     var displayName: String {
         switch self {
-        case .public:
+        case .publicVisibility:
             "Public"
         case .unlisted:
             "Unlisted"
-        case .private:
+        case .privateVisibility:
             "Private"
         }
     }

@@ -1828,7 +1828,7 @@ private final class HTMLWebViewCoordinator: NSObject, WKNavigationDelegate, @unc
     }
 
     func webView(
-        _ webView: WKWebView,
+        _: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
     ) {

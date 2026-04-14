@@ -20,26 +20,29 @@ struct RepositorySummary: Codable, Sendable, Identifiable, Hashable {
         case head = "HEAD"
     }
 
-    init(
-        id: Int,
-        rid: String,
-        service: SRHTService,
-        name: String,
-        description: String?,
-        visibility: Visibility,
-        updated: Date,
-        owner: Entity,
-        head: Reference?
-    ) {
-        self.id = id
-        self.rid = rid
-        self.service = service
-        self.name = name
-        self.description = description
-        self.visibility = visibility
-        self.updated = updated
-        self.owner = owner
-        self.head = head
+    /// Grouped initializer fields (single parameter keeps APIs explicit without exceeding parameter-count limits).
+    struct Fields: Sendable, Hashable {
+        let id: Int
+        let rid: String
+        let service: SRHTService
+        let name: String
+        let description: String?
+        let visibility: Visibility
+        let updated: Date
+        let owner: Entity
+        let head: Reference?
+    }
+
+    init(fields: Fields) {
+        id = fields.id
+        rid = fields.rid
+        service = fields.service
+        name = fields.name
+        description = fields.description
+        visibility = fields.visibility
+        updated = fields.updated
+        owner = fields.owner
+        head = fields.head
     }
 
     init(from decoder: any Decoder) throws {
@@ -69,15 +72,17 @@ extension RepositorySummary {
         head: Reference? = nil
     ) -> RepositorySummary {
         RepositorySummary(
-            id: id,
-            rid: rid,
-            service: service,
-            name: name ?? self.name,
-            description: description ?? self.description,
-            visibility: visibility ?? self.visibility,
-            updated: updated ?? self.updated,
-            owner: owner,
-            head: head ?? self.head
+            fields: .init(
+                id: id,
+                rid: rid,
+                service: service,
+                name: name ?? self.name,
+                description: description ?? self.description,
+                visibility: visibility ?? self.visibility,
+                updated: updated ?? self.updated,
+                owner: owner,
+                head: head ?? self.head
+            )
         )
     }
 

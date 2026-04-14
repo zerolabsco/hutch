@@ -37,7 +37,7 @@ struct TrackerListView: View {
                     error: viewModel.error,
                     initialName: "",
                     initialDescription: "",
-                    initialVisibility: .public
+                    initialVisibility: .publicVisibility
                 ) { name, description, visibility in
                     if let tracker = await viewModel.createTracker(
                         name: name,

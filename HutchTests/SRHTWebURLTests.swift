@@ -14,22 +14,24 @@ struct SRHTWebURLTests {
     }
 
     private let repository = RepositorySummary(
-        id: 1,
-        rid: "repo-1",
-        service: .git,
-        name: "hutch",
-        description: nil,
-        visibility: .public,
-        updated: .distantPast,
-        owner: Entity(canonicalName: "~ccleberg"),
-        head: nil
+        fields: .init(
+            id: 1,
+            rid: "repo-1",
+            service: .git,
+            name: "hutch",
+            description: nil,
+            visibility: .publicVisibility,
+            updated: .distantPast,
+            owner: Entity(canonicalName: "~ccleberg"),
+            head: nil
+        )
     )
     private let tracker = TrackerSummary(
         id: 2,
         rid: "tracker-1",
         name: "todo",
         description: nil,
-        visibility: .public,
+        visibility: .publicVisibility,
         updated: .distantPast,
         owner: Entity(canonicalName: "~ccleberg")
     )

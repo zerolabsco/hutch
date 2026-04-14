@@ -15,7 +15,7 @@ struct ProjectTests {
                 name: "Hutch",
                 description: nil,
                 website: nil,
-                visibility: .public,
+                visibility: .publicVisibility,
                 tags: [],
                 updated: Date(timeIntervalSince1970: 0)
             ),
@@ -25,7 +25,7 @@ struct ProjectTests {
                         id: "list-1",
                         name: "hutch-devel",
                         description: nil,
-                        visibility: .public,
+                        visibility: .publicVisibility,
                         owner: Entity(canonicalName: "~owner")
                     )
                 ],
@@ -34,7 +34,7 @@ struct ProjectTests {
                         id: "repo-1",
                         name: "hutch",
                         description: nil,
-                        visibility: .public,
+                        visibility: .publicVisibility,
                         owner: Entity(canonicalName: "~owner"),
                         repoType: .git
                     ),
@@ -42,7 +42,7 @@ struct ProjectTests {
                         id: "repo-2",
                         name: "hutch-web",
                         description: nil,
-                        visibility: .public,
+                        visibility: .publicVisibility,
                         owner: Entity(canonicalName: "~owner"),
                         repoType: .git
                     )
@@ -52,7 +52,7 @@ struct ProjectTests {
                         id: "tracker-1",
                         name: "bugs",
                         description: nil,
-                        visibility: .public,
+                        visibility: .publicVisibility,
                         owner: Entity(canonicalName: "~owner")
                     )
                 ],
@@ -71,7 +71,7 @@ struct ProjectTests {
                 name: "Docs",
                 description: nil,
                 website: Fixture.exampleWebsite,
-                visibility: .public,
+                visibility: .publicVisibility,
                 tags: [],
                 updated: Date(timeIntervalSince1970: 0)
             ),

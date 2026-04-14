@@ -118,15 +118,17 @@ struct RepositorySettingsViewModelTests {
     @MainActor
     private func makeRepository(headName: String?) -> RepositorySummary {
         RepositorySummary(
-            id: 1,
-            rid: "rid-1",
-            service: .git,
-            name: "repo",
-            description: "desc",
-            visibility: .public,
-            updated: .now,
-            owner: Entity(canonicalName: "~owner"),
-            head: headName.map { Reference(name: $0, target: nil) }
+            fields: .init(
+                id: 1,
+                rid: "rid-1",
+                service: .git,
+                name: "repo",
+                description: "desc",
+                visibility: .publicVisibility,
+                updated: .now,
+                owner: Entity(canonicalName: "~owner"),
+                head: headName.map { Reference(name: $0, target: nil) }
+            )
         )
     }
 }

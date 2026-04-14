@@ -57,7 +57,7 @@ final class SRHTClient: Sendable {
         service: SRHTService,
         query: String,
         variables: [String: any Sendable]? = nil,
-        responseType: T.Type
+        responseType _: T.Type
     ) async throws -> T {
         guard let token = _token.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
@@ -164,20 +164,14 @@ final class SRHTClient: Sendable {
     ///   - service: The target SourceHut service.
     ///   - query: The GraphQL mutation string.
     ///   - variables: Variables dict; the file variable should be set to `nil`.
-    ///   - fileVariablePath: The dot-separated path to the file variable (e.g. "input.avatar").
-    ///   - fileData: The raw file data (e.g. JPEG).
-    ///   - fileName: The file name to send (e.g. "avatar.jpg").
-    ///   - mimeType: The MIME type (e.g. "image/jpeg").
+    ///   - file: Multipart file payload (`variablePath` is the dot-separated GraphQL variable, e.g. `input.avatar`).
     ///   - responseType: The expected `Decodable` type nested under `data`.
     func executeMultipart<T: Decodable>(
         service: SRHTService,
         query: String,
         variables: [String: any Sendable],
-        fileVariablePath: String,
-        fileData: Data,
-        fileName: String,
-        mimeType: String,
-        responseType: T.Type
+        file: MultipartUploadFile,
+        responseType _: T.Type
     ) async throws -> T {
         guard let token = _token.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
@@ -197,8 +191,8 @@ final class SRHTClient: Sendable {
         )
         let operationsData = try encoder.encode(operationsBody)
 
-        // Build the map JSON: { "0": ["variables.<fileVariablePath>"] }
-        let mapDict = ["0": ["variables.\(fileVariablePath)"]]
+        // Build the map JSON: { "0": ["variables.<variablePath>"] }
+        let mapDict = ["0": ["variables.\(file.variablePath)"]]
         let mapData = try encoder.encode(mapDict)
 
         // Assemble multipart body
@@ -220,9 +214,9 @@ final class SRHTClient: Sendable {
 
         // Part: file
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"0\"; filename=\"\(fileName)\"\r\n")
-        body.append("Content-Type: \(mimeType)\r\n\r\n")
-        body.append(fileData)
+        body.append("Content-Disposition: form-data; name=\"0\"; filename=\"\(file.fileName)\"\r\n")
+        body.append("Content-Type: \(file.mimeType)\r\n\r\n")
+        body.append(file.fileData)
         body.append("\r\n")
 
         // Closing boundary
@@ -311,7 +305,7 @@ final class SRHTClient: Sendable {
         query: String,
         variables: [String: any Sendable],
         files: [MultipartUploadFile],
-        responseType: T.Type
+        responseType _: T.Type
     ) async throws -> T {
         guard let token = _token.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
@@ -408,15 +402,14 @@ final class SRHTClient: Sendable {
         service: SRHTService,
         query: String,
         variables: [String: any Sendable]? = nil,
-        responseType: T.Type,
+        responseType _: T.Type,
         cacheKey: String
     ) async throws -> T {
         // Try cache first
-        if let cachedData = responseCache.get(forKey: cacheKey) {
-            if let cached = try? decoder.decode(GraphQLResponse<T>.self, from: cachedData),
-               let data = cached.data {
-                return data
-            }
+        if let cachedData = responseCache.get(forKey: cacheKey),
+           let cached = try? decoder.decode(GraphQLResponse<T>.self, from: cachedData),
+           let data = cached.data {
+            return data
         }
 
         // No cache hit — fetch normally
@@ -434,7 +427,7 @@ final class SRHTClient: Sendable {
         service: SRHTService,
         query: String,
         variables: [String: any Sendable]? = nil,
-        responseType: T.Type,
+        responseType _: T.Type,
         cacheKey: String
     ) async throws -> T {
         guard let token = _token.withLock({ $0 }), !token.isEmpty else {
@@ -580,8 +573,7 @@ final class SRHTClient: Sendable {
         service: SRHTService,
         query: String,
         variables: [String: any Sendable]? = nil,
-        resultKeyPath: String,
-        type: T.Type
+        resultKeyPath: String
     ) -> SRHTPaginatedSequence<T> {
         SRHTPaginatedSequence(
             client: self,
@@ -598,16 +590,14 @@ final class SRHTClient: Sendable {
         service: SRHTService,
         query: String,
         variables: [String: any Sendable]? = nil,
-        resultKeyPath: String,
-        type: T.Type
+        resultKeyPath: String
     ) async throws -> [T] {
         var all: [T] = []
         for try await element in paginated(
             service: service,
             query: query,
             variables: variables,
-            resultKeyPath: resultKeyPath,
-            type: type
+            resultKeyPath: resultKeyPath
         ) {
             all.append(element)
         }

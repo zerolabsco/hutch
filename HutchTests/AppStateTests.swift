@@ -39,22 +39,24 @@ struct AppStateTests {
     func navigationHelpersQueueExpectedTargets() {
         let appState = AppState()
         let repository = RepositorySummary(
-            id: 1,
-            rid: "repo",
-            service: .git,
-            name: "hutch",
-            description: nil,
-            visibility: .public,
-            updated: .distantPast,
-            owner: Entity(canonicalName: "~owner"),
-            head: nil
+            fields: .init(
+                id: 1,
+                rid: "repo",
+                service: .git,
+                name: "hutch",
+                description: nil,
+                visibility: .publicVisibility,
+                updated: .distantPast,
+                owner: Entity(canonicalName: "~owner"),
+                head: nil
+            )
         )
         let tracker = TrackerSummary(
             id: 2,
             rid: "tracker",
             name: "todo",
             description: nil,
-            visibility: .public,
+            visibility: .publicVisibility,
             updated: .distantPast,
             owner: Entity(canonicalName: "~owner")
         )

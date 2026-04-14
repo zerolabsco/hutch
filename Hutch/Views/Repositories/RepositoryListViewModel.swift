@@ -397,15 +397,17 @@ final class RepositoryListViewModel {
 
         func repositorySummary(service: SRHTService) -> RepositorySummary {
             RepositorySummary(
-                id: id,
-                rid: rid,
-                service: service,
-                name: name,
-                description: description,
-                visibility: visibility,
-                updated: updated,
-                owner: owner,
-                head: head
+                fields: .init(
+                    id: id,
+                    rid: rid,
+                    service: service,
+                    name: name,
+                    description: description,
+                    visibility: visibility,
+                    updated: updated,
+                    owner: owner,
+                    head: head
+                )
             )
         }
     }
@@ -422,15 +424,17 @@ final class RepositoryListViewModel {
 
         func repositorySummary(service: SRHTService) -> RepositorySummary {
             RepositorySummary(
-                id: id,
-                rid: rid,
-                service: service,
-                name: name,
-                description: description,
-                visibility: visibility,
-                updated: updated,
-                owner: owner,
-                head: tip.map { Reference(name: $0.branch, target: nil) }
+                fields: .init(
+                    id: id,
+                    rid: rid,
+                    service: service,
+                    name: name,
+                    description: description,
+                    visibility: visibility,
+                    updated: updated,
+                    owner: owner,
+                    head: tip.map { Reference(name: $0.branch, target: nil) }
+                )
             )
         }
     }
@@ -463,17 +467,7 @@ final class RepositoryListViewModel {
         }
 
         if useCache && cursor == nil {
-            switch service {
-            case .git:
-                let result = try await client.executeAndCache(
-                    service: service,
-                    query: Self.gitQuery,
-                    variables: variables.isEmpty ? nil : variables,
-                    responseType: RepositoriesResponse.self,
-                    cacheKey: cacheKey(for: service)
-                )
-                return result.repositories ?? Self.emptyPage
-            case .hg:
+            if service == .hg {
                 let hgVariables = cursor.map { ["cursor": $0 as any Sendable] }
                 let result = try await client.executeAndCache(
                     service: service,
@@ -497,27 +491,17 @@ final class RepositoryListViewModel {
                     } ?? [],
                     cursor: result.repositories?.cursor
                 )
-            default:
-                let result = try await client.executeAndCache(
-                    service: service,
-                    query: Self.gitQuery,
-                    variables: variables.isEmpty ? nil : variables,
-                    responseType: RepositoriesResponse.self,
-                    cacheKey: cacheKey(for: service)
-                )
-                return result.repositories ?? Self.emptyPage
             }
+            let result = try await client.executeAndCache(
+                service: service,
+                query: Self.gitQuery,
+                variables: variables.isEmpty ? nil : variables,
+                responseType: RepositoriesResponse.self,
+                cacheKey: cacheKey(for: service)
+            )
+            return result.repositories ?? Self.emptyPage
         } else {
-            switch service {
-            case .git:
-                let result = try await client.execute(
-                    service: service,
-                    query: Self.gitQuery,
-                    variables: variables.isEmpty ? nil : variables,
-                    responseType: RepositoriesResponse.self
-                )
-                return result.repositories ?? Self.emptyPage
-            case .hg:
+            if service == .hg {
                 let hgVariables = cursor.map { ["cursor": $0 as any Sendable] }
                 let result = try await client.execute(
                     service: service,
@@ -540,15 +524,14 @@ final class RepositoryListViewModel {
                     } ?? [],
                     cursor: result.repositories?.cursor
                 )
-            default:
-                let result = try await client.execute(
-                    service: service,
-                    query: Self.gitQuery,
-                    variables: variables.isEmpty ? nil : variables,
-                    responseType: RepositoriesResponse.self
-                )
-                return result.repositories ?? Self.emptyPage
             }
+            let result = try await client.execute(
+                service: service,
+                query: Self.gitQuery,
+                variables: variables.isEmpty ? nil : variables,
+                responseType: RepositoriesResponse.self
+            )
+            return result.repositories ?? Self.emptyPage
         }
     }
 

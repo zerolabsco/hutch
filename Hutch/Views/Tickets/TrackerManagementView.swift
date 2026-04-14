@@ -659,9 +659,9 @@ struct TrackerEditorSheet: View {
                         .lineLimit(2...4)
                         .themedRow()
                     Picker("Visibility", selection: $visibility) {
-                        Text("Public").tag(Visibility.public)
+                        Text("Public").tag(Visibility.publicVisibility)
                         Text("Unlisted").tag(Visibility.unlisted)
-                        Text("Private").tag(Visibility.private)
+                        Text("Private").tag(Visibility.privateVisibility)
                     }
                     .themedRow()
                 }

@@ -79,15 +79,17 @@ struct RepositoryListViewModelTests {
         branch: String = "main"
     ) -> RepositorySummary {
         RepositorySummary(
-            id: id,
-            rid: "rid-\(id)",
-            service: service,
-            name: name,
-            description: description,
-            visibility: .public,
-            updated: Date(timeIntervalSince1970: TimeInterval(id)),
-            owner: Entity(canonicalName: owner),
-            head: Reference(name: branch, target: nil)
+            fields: .init(
+                id: id,
+                rid: "rid-\(id)",
+                service: service,
+                name: name,
+                description: description,
+                visibility: .publicVisibility,
+                updated: Date(timeIntervalSince1970: TimeInterval(id)),
+                owner: Entity(canonicalName: owner),
+                head: Reference(name: branch, target: nil)
+            )
         )
     }
 }

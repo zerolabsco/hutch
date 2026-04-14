@@ -4,9 +4,9 @@ import Foundation
 
 /// Repository visibility level.
 enum Visibility: String, Codable, Sendable {
-    case `public` = "PUBLIC"
+    case publicVisibility = "PUBLIC"
     case unlisted = "UNLISTED"
-    case `private` = "PRIVATE"
+    case privateVisibility = "PRIVATE"
 }
 
 /// Repository access mode.

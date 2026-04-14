@@ -179,33 +179,33 @@ struct PasteListView: View {
 
     private func nextVisibilityLabel(for visibility: Visibility) -> String {
         switch visibility {
-        case .public:
+        case .publicVisibility:
             return "Make Unlisted"
         case .unlisted:
             return "Make Private"
-        case .private:
+        case .privateVisibility:
             return "Make Public"
         }
     }
 
     private func nextVisibilityIcon(for visibility: Visibility) -> String {
         switch visibility {
-        case .public:
+        case .publicVisibility:
             return "eye.slash"
         case .unlisted:
             return "lock"
-        case .private:
+        case .privateVisibility:
             return "globe"
         }
     }
 
     private func nextVisibilityColor(for visibility: Visibility) -> Color {
         switch visibility {
-        case .public:
+        case .publicVisibility:
             return .orange
         case .unlisted:
             return .red
-        case .private:
+        case .privateVisibility:
             return .green
         }
     }
@@ -316,9 +316,9 @@ private struct CreatePasteSheet: View {
 
                 Section("Visibility") {
                     Picker("Visibility", selection: $visibility) {
-                        Text("Public").tag(Visibility.public)
+                        Text("Public").tag(Visibility.publicVisibility)
                         Text("Unlisted").tag(Visibility.unlisted)
-                        Text("Private").tag(Visibility.private)
+                        Text("Private").tag(Visibility.privateVisibility)
                     }
                     .themedRow()
                 }

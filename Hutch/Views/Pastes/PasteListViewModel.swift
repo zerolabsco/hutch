@@ -131,12 +131,12 @@ final class PasteListViewModel {
     func cycleVisibility(for paste: Paste) async {
         let next: Visibility
         switch paste.visibility {
-        case .public:
+        case .publicVisibility:
             next = .unlisted
         case .unlisted:
-            next = .private
-        case .private:
-            next = .public
+            next = .privateVisibility
+        case .privateVisibility:
+            next = .publicVisibility
         }
 
         let original = pastes

@@ -110,15 +110,17 @@ struct RepositoryACLViewModelTests {
     @MainActor
     private func makeRepository() -> RepositorySummary {
         RepositorySummary(
-            id: 1,
-            rid: "rid-1",
-            service: .git,
-            name: "repo",
-            description: nil,
-            visibility: .public,
-            updated: .now,
-            owner: Entity(canonicalName: "~owner"),
-            head: nil
+            fields: .init(
+                id: 1,
+                rid: "rid-1",
+                service: .git,
+                name: "repo",
+                description: nil,
+                visibility: .publicVisibility,
+                updated: .now,
+                owner: Entity(canonicalName: "~owner"),
+                head: nil
+            )
         )
     }
 }

@@ -327,14 +327,11 @@ final class FileTreeViewModel {
             }
 
         case .binaryBlob(let blob):
-            if blob.content != nil {
+            if blob.content != nil || blob.id == nil {
                 viewingEntry = entry
                 viewingObject = object
             } else if let blobId = blob.id {
                 await loadBlob(entry: entry, blobId: blobId)
-            } else {
-                viewingEntry = entry
-                viewingObject = object
             }
 
         case .unknown:

@@ -233,15 +233,17 @@ final class LookupViewModel {
 
         let repository = try await appState.resolveRepository(owner: owner, name: name, service: service)
         let resolvedRepository = RepositorySummary(
-            id: repository.id,
-            rid: repository.rid,
-            service: service,
-            name: repository.name,
-            description: repository.description,
-            visibility: repository.visibility,
-            updated: repository.updated,
-            owner: repository.owner,
-            head: repository.head
+            fields: .init(
+                id: repository.id,
+                rid: repository.rid,
+                service: service,
+                name: repository.name,
+                description: repository.description,
+                visibility: repository.visibility,
+                updated: repository.updated,
+                owner: repository.owner,
+                head: repository.head
+            )
         )
 
         return .repository(resolvedRepository)

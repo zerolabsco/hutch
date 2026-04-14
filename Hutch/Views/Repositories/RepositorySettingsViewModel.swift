@@ -20,15 +20,17 @@ private struct UpdatedRepositoryPayload: Decodable, Sendable {
 
     func repositorySummary(using owner: Entity, service: SRHTService) -> RepositorySummary {
         RepositorySummary(
-            id: id,
-            rid: rid,
-            service: service,
-            name: name,
-            description: description,
-            visibility: visibility,
-            updated: updated,
-            owner: owner,
-            head: head
+            fields: .init(
+                id: id,
+                rid: rid,
+                service: service,
+                name: name,
+                description: description,
+                visibility: visibility,
+                updated: updated,
+                owner: owner,
+                head: head
+            )
         )
     }
 }

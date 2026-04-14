@@ -227,9 +227,9 @@ struct RepositorySettingsView: View {
     private func visibilitySection(_ viewModel: RepositorySettingsViewModel) -> some View {
         Section {
             Picker("Visibility", selection: Bindable(viewModel).editedVisibility) {
-                Text("Public").tag(Visibility.public)
+                Text("Public").tag(Visibility.publicVisibility)
                 Text("Unlisted").tag(Visibility.unlisted)
-                Text("Private").tag(Visibility.private)
+                Text("Private").tag(Visibility.privateVisibility)
             }
             .themedRow()
 
@@ -283,11 +283,11 @@ struct RepositorySettingsView: View {
 
     private func visibilityConfirmationMessage(for viewModel: RepositorySettingsViewModel) -> String {
         switch viewModel.editedVisibility {
-        case .public:
+        case .publicVisibility:
             "Anyone will be able to find and view this repository."
         case .unlisted:
             "People with the link can view this repository, but it won't appear in public listings."
-        case .private:
+        case .privateVisibility:
             "Only people with explicit access will be able to view this repository."
         }
     }

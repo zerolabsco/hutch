@@ -228,10 +228,12 @@ final class SettingsViewModel {
                 service: .meta,
                 query: Self.updateUserMutation,
                 variables: ["input": input],
-                fileVariablePath: "input.avatar",
-                fileData: jpegData,
-                fileName: "avatar.jpg",
-                mimeType: "image/jpeg",
+                file: MultipartUploadFile(
+                    variablePath: "input.avatar",
+                    fileData: jpegData,
+                    fileName: "avatar.jpg",
+                    mimeType: "image/jpeg"
+                ),
                 responseType: UpdateUserResponse.self
             )
             let updated = result.updateUser

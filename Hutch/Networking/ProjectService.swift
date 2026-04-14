@@ -49,7 +49,7 @@ private struct ProjectSummaryPayload: Decodable, Sendable {
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         description = try container.decodeIfPresent(String.self, forKey: .description)
         website = try container.decodeIfPresent(String.self, forKey: .website)
-        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .publicVisibility
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         updated = try container.decodeIfPresent(Date.self, forKey: .updated) ?? .distantPast
     }
@@ -90,7 +90,7 @@ private struct ProjectDetailPayload: Decodable, Sendable {
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         description = try container.decodeIfPresent(String.self, forKey: .description)
         website = try container.decodeIfPresent(String.self, forKey: .website)
-        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .publicVisibility
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         updated = try container.decodeIfPresent(Date.self, forKey: .updated) ?? .distantPast
         mailingLists = try container.decodeIfPresent(ProjectMailingListPage.self, forKey: .mailingLists) ?? .empty
@@ -126,7 +126,7 @@ private struct ProjectMailingListPayload: Decodable, Sendable {
         rid = try container.decode(String.self, forKey: .rid)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         description = try container.decodeIfPresent(String.self, forKey: .description)
-        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .publicVisibility
         owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
     }
 }
@@ -160,7 +160,7 @@ private struct ProjectSourcePayload: Decodable, Sendable {
         rid = try container.decode(String.self, forKey: .rid)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         description = try container.decodeIfPresent(String.self, forKey: .description)
-        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .publicVisibility
         owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
         repoType = try container.decodeIfPresent(Project.SourceRepo.RepoType.self, forKey: .repoType) ?? .git
     }
@@ -193,7 +193,7 @@ private struct ProjectTrackerPayload: Decodable, Sendable {
         rid = try container.decode(String.self, forKey: .rid)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         description = try container.decodeIfPresent(String.self, forKey: .description)
-        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
+        visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .publicVisibility
         owner = try container.decodeIfPresent(Entity.self, forKey: .owner) ?? Entity(canonicalName: "~unknown")
     }
 }

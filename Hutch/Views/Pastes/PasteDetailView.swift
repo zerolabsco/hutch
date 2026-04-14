@@ -442,27 +442,27 @@ private struct PasteVisibilitySheet: View {
     }
 
     private var visibilityOptions: [Visibility] {
-        [.public, .unlisted, .private]
+        [.publicVisibility, .unlisted, .privateVisibility]
     }
 
     private func title(for visibility: Visibility) -> String {
         switch visibility {
-        case .public:
+        case .publicVisibility:
             "Public"
         case .unlisted:
             "Unlisted"
-        case .private:
+        case .privateVisibility:
             "Private"
         }
     }
 
     private func description(for visibility: Visibility) -> String {
         switch visibility {
-        case .public:
+        case .publicVisibility:
             "Visible to everyone and listed on your profile."
         case .unlisted:
             "Visible to anyone with the URL, but not listed on your profile."
-        case .private:
+        case .privateVisibility:
             "Visible only to explicitly allowed viewers."
         }
     }

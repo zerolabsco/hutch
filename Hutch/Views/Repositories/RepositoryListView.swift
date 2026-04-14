@@ -214,7 +214,7 @@ private struct CreateRepositorySheet: View {
     @State private var name = ""
     @State private var description = ""
     @State private var cloneURL = ""
-    @State private var visibility: Visibility = .public
+    @State private var visibility: Visibility = .publicVisibility
     @State private var service: RepositoryCreationService = .git
 
     var body: some View {
@@ -235,9 +235,9 @@ private struct CreateRepositorySheet: View {
                         .lineLimit(2...4)
                         .themedRow()
                     Picker("Visibility", selection: $visibility) {
-                        Text("Public").tag(Visibility.public)
+                        Text("Public").tag(Visibility.publicVisibility)
                         Text("Unlisted").tag(Visibility.unlisted)
-                        Text("Private").tag(Visibility.private)
+                        Text("Private").tag(Visibility.privateVisibility)
                     }
                     .themedRow()
                 }

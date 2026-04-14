@@ -154,17 +154,17 @@ struct VisibilityBadge: View {
 
     private var label: String {
         switch visibility {
-        case .public:   "PUBLIC"
+        case .publicVisibility:   "PUBLIC"
         case .unlisted: "UNLISTED"
-        case .private:  "PRIVATE"
+        case .privateVisibility:  "PRIVATE"
         }
     }
 
     private var color: Color {
         switch visibility {
-        case .public:   .green
+        case .publicVisibility:   .green
         case .unlisted: .orange
-        case .private:  .red
+        case .privateVisibility:  .red
         }
     }
 }

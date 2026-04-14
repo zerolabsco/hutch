@@ -121,9 +121,9 @@ struct HgRepositorySettingsView: View {
                 .themedRow()
 
             Picker("Visibility", selection: Bindable(viewModel).editedVisibility) {
-                Text("Public").tag(Visibility.public)
+                Text("Public").tag(Visibility.publicVisibility)
                 Text("Unlisted").tag(Visibility.unlisted)
-                Text("Private").tag(Visibility.private)
+                Text("Private").tag(Visibility.privateVisibility)
             }
             .themedRow()
 

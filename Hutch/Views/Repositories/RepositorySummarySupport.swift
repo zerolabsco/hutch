@@ -37,11 +37,11 @@ func repositoryCloneURLs(for repository: RepositorySummary) -> RepositoryCloneUR
 
 func repositoryVisibilityLabel(_ visibility: Visibility) -> String {
     switch visibility {
-    case .public:
+    case .publicVisibility:
         return "Public"
     case .unlisted:
         return "Unlisted"
-    case .private:
+    case .privateVisibility:
         return "Private"
     }
 }

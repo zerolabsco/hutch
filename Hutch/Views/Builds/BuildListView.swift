@@ -265,7 +265,7 @@ private struct SubmitBuildSheet: View {
     @State private var note = ""
     @State private var secrets = false
     @State private var execute = true
-    @State private var visibility: Visibility = .public
+    @State private var visibility: Visibility = .publicVisibility
 
     init(viewModel: BuildListViewModel, onSubmitted: @escaping (Int) -> Void) {
         self.viewModel = viewModel
@@ -293,9 +293,9 @@ private struct SubmitBuildSheet: View {
                         .autocorrectionDisabled()
                         .themedRow()
                     Picker("Visibility", selection: $visibility) {
-                        Text("Public").tag(Visibility.public)
+                        Text("Public").tag(Visibility.publicVisibility)
                         Text("Unlisted").tag(Visibility.unlisted)
-                        Text("Private").tag(Visibility.private)
+                        Text("Private").tag(Visibility.privateVisibility)
                     }
                     .themedRow()
                     Toggle("Start build now", isOn: $execute)

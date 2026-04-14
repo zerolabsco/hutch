@@ -468,7 +468,7 @@ private struct EditResubmitBuildSheet: View {
         _manifest = State(initialValue: job.manifest ?? "")
         _tagsText = State(initialValue: job.tags.joined(separator: ", "))
         _note = State(initialValue: job.note ?? "")
-        _visibility = State(initialValue: job.visibility ?? .public)
+        _visibility = State(initialValue: job.visibility ?? .publicVisibility)
     }
 
     var body: some View {
@@ -491,9 +491,9 @@ private struct EditResubmitBuildSheet: View {
                         .autocorrectionDisabled()
                         .themedRow()
                     Picker("Visibility", selection: $visibility) {
-                        Text("Public").tag(Visibility.public)
+                        Text("Public").tag(Visibility.publicVisibility)
                         Text("Unlisted").tag(Visibility.unlisted)
-                        Text("Private").tag(Visibility.private)
+                        Text("Private").tag(Visibility.privateVisibility)
                     }
                     .themedRow()
                     Toggle("Start build now", isOn: $execute)
