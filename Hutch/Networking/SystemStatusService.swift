@@ -60,14 +60,7 @@ struct SystemStatusService: Sendable {
         return data
     }
 
-    private var userAgent: String {
-        let bundle = Bundle.main
-        let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
-            ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
-            ?? "Hutch"
-        let version = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev"
-        return "\(name)/\(version) (System Status)"
-    }
+    private var userAgent: String { Bundle.main.hutchUserAgent }
 }
 
 extension SystemStatusService: SystemStatusServing {}

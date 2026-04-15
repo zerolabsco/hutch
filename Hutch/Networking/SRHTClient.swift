@@ -66,6 +66,7 @@ final class SRHTClient: Sendable {
         // Build request
         var request = URLRequest(url: service.url)
         request.httpMethod = "POST"
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -181,6 +182,7 @@ final class SRHTClient: Sendable {
 
         var request = URLRequest(url: service.url)
         request.httpMethod = "POST"
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -315,6 +317,7 @@ final class SRHTClient: Sendable {
 
         var request = URLRequest(url: service.url)
         request.httpMethod = "POST"
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -436,6 +439,7 @@ final class SRHTClient: Sendable {
 
         var request = URLRequest(url: service.url)
         request.httpMethod = "POST"
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -535,6 +539,7 @@ final class SRHTClient: Sendable {
         }
 
         var request = URLRequest(url: url)
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         let (data, response): (Data, URLResponse)

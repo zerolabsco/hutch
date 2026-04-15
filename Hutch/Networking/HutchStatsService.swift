@@ -54,9 +54,12 @@ struct HutchStatsService: ContributionCalendarServing {
             throw URLError(.badURL)
         }
 
+        var request = URLRequest(url: url)
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
+
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await session.data(for: request)
         } catch {
             throw SRHTError.networkError(error)
         }
