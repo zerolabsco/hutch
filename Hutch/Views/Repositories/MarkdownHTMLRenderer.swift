@@ -1,8 +1,12 @@
 import Markdown
 
-nonisolated func markdownToHTML(_ text: String, imageURLResolver: ((String) -> String?)? = nil) -> String {
+nonisolated func markdownToHTML(
+    _ text: String,
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
+) -> String {
     let document = Document(parsing: text)
-    var renderer = MarkdownHTMLRenderer(imageURLResolver: imageURLResolver)
+    var renderer = MarkdownHTMLRenderer(imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver)
     return renderer.visit(document)
 }
 
@@ -10,12 +14,14 @@ private struct MarkdownHTMLRenderer: MarkupVisitor {
     typealias Result = String
 
     nonisolated(unsafe) let imageURLResolver: ((String) -> String?)?
+    nonisolated(unsafe) let linkURLResolver: ((String) -> String?)?
     nonisolated(unsafe) private var isRenderingTableHead = false
     nonisolated(unsafe) private var currentTableAlignments: [Markdown.Table.ColumnAlignment?] = []
     nonisolated(unsafe) private var currentTableColumnIndex = 0
 
-    nonisolated init(imageURLResolver: ((String) -> String?)?) {
+    nonisolated init(imageURLResolver: ((String) -> String?)?, linkURLResolver: ((String) -> String?)? = nil) {
         self.imageURLResolver = imageURLResolver
+        self.linkURLResolver = linkURLResolver
     }
 
     nonisolated mutating func visit(_ markup: Markup) -> String {
@@ -94,8 +100,11 @@ private struct MarkdownHTMLRenderer: MarkupVisitor {
 
     nonisolated mutating func visitLink(_ link: Markdown.Link) -> String {
         let content = visitChildren(of: link)
-        guard let destination = link.destination,
-              let sanitizedDestination = sanitizedReadmeLinkURLString(destination) else {
+        guard let destination = link.destination else {
+            return content
+        }
+        let resolvedDestination = linkURLResolver?(destination) ?? destination
+        guard let sanitizedDestination = sanitizedReadmeLinkURLString(resolvedDestination) else {
             return content
         }
         let href = escapeHTMLAttribute(decodeHTMLEntities(sanitizedDestination))

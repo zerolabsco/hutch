@@ -1,6 +1,24 @@
 import Foundation
 
+// MARK: - Linked file
+
+/// Identifies a repository file to fetch and display in a sheet.
+struct LinkedFileRequest: Identifiable, Sendable {
+    var id: String { "\(revspec):\(path)" }
+    let path: String
+    let revspec: String
+    let fileName: String
+}
+
 // MARK: - Response types (file-private to avoid @MainActor Decodable issues)
+
+private struct LinkedFileResponse: Decodable, Sendable {
+    let repository: LinkedFileRepository?
+}
+
+private struct LinkedFileRepository: Decodable, Sendable {
+    let path: TreeEntry?
+}
 
 private struct RevparseResponse: Decodable, Sendable {
     let repository: RevparseRepository?
@@ -469,6 +487,43 @@ final class FileTreeViewModel {
             responseType: SubtreeResponse.self
         )
         return result.repository?.object?.entries ?? GitTreeEntryPage(results: [], cursor: nil)
+    }
+
+    // MARK: - Linked File (used by README link interception)
+
+    private static let linkedFileQuery = """
+    query linkedFile($rid: ID!, $revspec: String, $path: String!) {
+        repository(rid: $rid) {
+            path(revspec: $revspec, path: $path) {
+                id
+                name
+                mode
+                object {
+                    __typename
+                    ... on TextBlob { text size }
+                    ... on BinaryBlob { size }
+                }
+            }
+        }
+    }
+    """
+
+    /// Fetch a single file by path using the `repository.path()` field.
+    /// Returns a `TreeEntry` on success, or throws on API/network error.
+    /// Returns `nil` if the path resolves to nothing (file not found).
+    func fetchLinkedFile(path: String, revspec: String) async throws -> TreeEntry? {
+        let variables: [String: any Sendable] = [
+            "rid": repositoryRid,
+            "revspec": revspec,
+            "path": path
+        ]
+        let result = try await client.execute(
+            service: service,
+            query: Self.linkedFileQuery,
+            variables: variables,
+            responseType: LinkedFileResponse.self
+        )
+        return result.repository?.path
     }
 
     /// Dismiss the file view and go back to the directory listing.

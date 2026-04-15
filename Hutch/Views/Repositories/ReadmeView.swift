@@ -7,6 +7,7 @@ struct ReadmeView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isShowingRepositoryDetails = false
+    @State private var linkedFile: LinkedFileRequest?
 
     var body: some View {
         ScrollView {
@@ -21,6 +22,14 @@ struct ReadmeView: View {
                 }
             }
             .padding()
+        }
+        .sheet(item: $linkedFile) { request in
+            LinkedFileSheetView(
+                rid: viewModel.repository.rid,
+                service: viewModel.repository.service,
+                client: appState.client,
+                request: request
+            )
         }
         .task {
             async let readme: () = viewModel.loadReadme()
@@ -128,7 +137,12 @@ struct ReadmeView: View {
                 readmePath: viewModel.readmePath,
                 colorScheme: colorScheme,
                 ownerCanonicalName: viewModel.repository.owner.canonicalName,
-                repositoryName: viewModel.repository.name
+                repositoryName: viewModel.repository.name,
+                onInterceptURL: { url in
+                    guard let request = parseLinkedFileRequest(url) else { return false }
+                    linkedFile = request
+                    return true
+                }
             )
         } else if let error = viewModel.error, !viewModel.readmeLoaded {
             SRHTErrorStateView(
@@ -143,6 +157,29 @@ struct ReadmeView: View {
                 description: Text("This repository does not have a README file.")
             )
         }
+    }
+
+    /// Parses a resolved blob URL for this repository and returns a `LinkedFileRequest`
+    /// if the URL matches the pattern `{host}/{owner}/{repo}/blob/{revspec}/{path}`.
+    /// Returns `nil` for any other URL (external links, fragment links, etc.).
+    private func parseLinkedFileRequest(_ url: URL) -> LinkedFileRequest? {
+        let expectedHost = "\(viewModel.repository.service.rawValue).sr.ht"
+        guard let host = url.host, host == expectedHost else { return nil }
+
+        // pathComponents for https://git.sr.ht/~owner/repo/blob/HEAD/file
+        // → ["/", "~owner", "repo", "blob", "HEAD", "file"]
+        let parts = url.pathComponents
+        guard parts.count >= 6,
+              parts[1] == viewModel.repository.owner.canonicalName,
+              parts[2] == viewModel.repository.name,
+              parts[3] == "blob" else { return nil }
+
+        let revspec = parts[4]
+        let path = parts[5...].joined(separator: "/")
+        guard !path.isEmpty else { return nil }
+
+        let fileName = parts.last ?? path
+        return LinkedFileRequest(path: path, revspec: revspec, fileName: fileName)
     }
 
     private func sharedReadmeContent(from content: RepositoryDetailViewModel.ReadmeContent) -> RenderedMarkupContent {
@@ -192,6 +229,7 @@ struct RenderedMarkupContentView: View {
     let ownerCanonicalName: String
     let repositoryName: String
     var repositoryHost = "git.sr.ht"
+    var onInterceptURL: ((URL) -> Bool)? = nil
 
     @State private var renderedHTML: String?
 
@@ -212,10 +250,10 @@ struct RenderedMarkupContentView: View {
         Group {
             switch content {
             case .html(let html):
-                HTMLWebView(html: html, colorScheme: colorScheme)
+                HTMLWebView(html: html, colorScheme: colorScheme, onInterceptURL: onInterceptURL)
             case .markdown, .org:
                 if let renderedHTML {
-                    HTMLWebView(html: renderedHTML, colorScheme: colorScheme)
+                    HTMLWebView(html: renderedHTML, colorScheme: colorScheme, onInterceptURL: onInterceptURL)
                 } else {
                     SRHTLoadingStateView(message: "Preparing README…")
                 }
@@ -240,15 +278,27 @@ struct RenderedMarkupContentView: View {
                 return
             }
             let html = await Task.detached(priority: .userInitiated) {
-                markdownToHTML(text) { source in
-                    resolveRepositoryAssetURL(
-                        source,
-                        owner: ownerCanonicalName,
-                        repositoryName: repositoryName,
-                        readmePath: readmePath
-                    )?
-                    .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
-                }
+                markdownToHTML(
+                    text,
+                    imageURLResolver: { source in
+                        resolveRepositoryAssetURL(
+                            source,
+                            owner: ownerCanonicalName,
+                            repositoryName: repositoryName,
+                            readmePath: readmePath
+                        )?
+                        .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
+                    },
+                    linkURLResolver: { source in
+                        resolveRepositoryLinkURL(
+                            source,
+                            owner: ownerCanonicalName,
+                            repositoryName: repositoryName,
+                            readmePath: readmePath
+                        )?
+                        .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
+                    }
+                )
             }.value
             RenderedReadmeHTMLCache.shared.setHTML(html, forKey: cacheKey)
             guard !Task.isCancelled else { return }
@@ -259,15 +309,27 @@ struct RenderedMarkupContentView: View {
                 return
             }
             let html = await Task.detached(priority: .userInitiated) {
-                orgToHTML(text) { source in
-                    resolveRepositoryAssetURL(
-                        source,
-                        owner: ownerCanonicalName,
-                        repositoryName: repositoryName,
-                        readmePath: readmePath
-                    )?
-                    .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
-                }
+                orgToHTML(
+                    text,
+                    imageURLResolver: { source in
+                        resolveRepositoryAssetURL(
+                            source,
+                            owner: ownerCanonicalName,
+                            repositoryName: repositoryName,
+                            readmePath: readmePath
+                        )?
+                        .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
+                    },
+                    linkURLResolver: { source in
+                        resolveRepositoryLinkURL(
+                            source,
+                            owner: ownerCanonicalName,
+                            repositoryName: repositoryName,
+                            readmePath: readmePath
+                        )?
+                        .replacingOccurrences(of: "git.sr.ht", with: repositoryHost)
+                    }
+                )
             }.value
             RenderedReadmeHTMLCache.shared.setHTML(html, forKey: cacheKey)
             guard !Task.isCancelled else { return }
@@ -302,7 +364,11 @@ func clearWebContentRenderCaches() {
 
 // MARK: - Markdown to HTML
 
-nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> String?)? = nil) -> String {
+nonisolated func processInline(
+    _ text: String,
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
+) -> String {
 
     var protectedFragments: [String: String] = [:]
     var result = protectMatches(
@@ -330,7 +396,8 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
     result = replaceMatches(in: result, pattern: #"\[([^\]]+)\]\(([^)]+)\)"#) { match, nsText in
         let label = nsText.substring(with: match.range(at: 1))
         let rawURL = decodeHTMLEntities(nsText.substring(with: match.range(at: 2)))
-        guard let sanitizedURL = sanitizedReadmeLinkURLString(rawURL) else {
+        let resolvedURL = linkURLResolver?(rawURL) ?? rawURL
+        guard let sanitizedURL = sanitizedReadmeLinkURLString(resolvedURL) else {
             return label
         }
         return #"<a href="\#(sanitizedURL)">\#(label)</a>"#
@@ -387,7 +454,11 @@ nonisolated func processInline(_ text: String, imageURLResolver: ((String) -> St
 
 // MARK: - Org-mode to HTML
 
-nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String?)? = nil) -> String {
+nonisolated func orgToHTML(
+    _ text: String,
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
+) -> String {
     let normalizedText = text
         .replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
@@ -445,7 +516,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
     func closePendingBlockWrapper() {
         guard isWrappingBlockFigure else { return }
         if let activeBlockCaption {
-            html += "<figcaption>" + processOrgInline(activeBlockCaption, imageURLResolver: imageURLResolver) + "</figcaption>\n"
+            html += "<figcaption>" + processOrgInline(activeBlockCaption, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) + "</figcaption>\n"
         }
         html += "</figure>\n"
         activeBlockCaption = nil
@@ -457,7 +528,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
             let normalizedParagraph = paragraph
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .joined(separator: " ")
-            html += "<p>" + processOrgInline(normalizedParagraph, imageURLResolver: imageURLResolver) + "</p>\n"
+            html += "<p>" + processOrgInline(normalizedParagraph, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) + "</p>\n"
             paragraph = []
         }
     }
@@ -466,7 +537,8 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
         guard !currentListItemLines.isEmpty else { return }
         html += "<li>" + renderOrgListItemBody(
             currentListItemLines,
-            imageURLResolver: imageURLResolver
+            imageURLResolver: imageURLResolver,
+            linkURLResolver: linkURLResolver
         ) + "</li>\n"
         currentListItemLines = []
     }
@@ -489,7 +561,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
         beginPendingBlockWrapperIfNeeded()
         html += renderHTMLTable(
             rows: tableRows,
-            inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
+            inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) }
         )
         closePendingBlockWrapper()
         tableRows = []
@@ -500,7 +572,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
         html += "<dl class=\"org-properties\">\n"
         for (key, value) in propertyRows {
             html += "<dt>" + escapeHTML(key) + "</dt>"
-            html += "<dd>" + processOrgInline(value, imageURLResolver: imageURLResolver) + "</dd>\n"
+            html += "<dd>" + processOrgInline(value, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) + "</dd>\n"
         }
         html += "</dl>\n"
         propertyRows = []
@@ -542,7 +614,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
     func closeVerseBlock() {
         if inVerseBlock {
             let content = verseLines
-                .map { processOrgInline($0, imageURLResolver: imageURLResolver) }
+                .map { processOrgInline($0, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) }
                 .joined(separator: "\n")
             html += #"<blockquote class="org-verse">"# + "\n"
             html += content + "\n"
@@ -738,7 +810,7 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
             closeQuoteBlock()
             flushBlockState()
             let level = match.1.count
-            let content = processOrgInline(String(match.2), imageURLResolver: imageURLResolver)
+            let content = processOrgInline(String(match.2), imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver)
             html += "<h\(level)>" + content + "</h\(level)>\n"
             continue
         }
@@ -803,7 +875,11 @@ nonisolated func orgToHTML(_ text: String, imageURLResolver: ((String) -> String
     return html
 }
 
-nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((String) -> String?)? = nil) -> String {
+nonisolated private func processOrgInline(
+    _ text: String,
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
+) -> String {
     var result = escapeHTML(text)
     var protectedFragments: [String: String] = [:]
 
@@ -821,13 +897,19 @@ nonisolated private func processOrgInline(_ text: String, imageURLResolver: ((St
         ) else {
             return source
         }
-        guard let sanitizedURL = sanitizedReadmeLinkURLString(destination) else {
+        let resolvedDestination = linkURLResolver?(destination) ?? destination
+        guard let sanitizedURL = sanitizedReadmeLinkURLString(resolvedDestination) else {
             return imageHTML
         }
         return #"<a href="\#(sanitizedURL)">\#(imageHTML)</a>"#
     }
 
-    result = protectOrgLinks(in: result, protectedFragments: &protectedFragments, imageURLResolver: imageURLResolver)
+    result = protectOrgLinks(
+        in: result,
+        protectedFragments: &protectedFragments,
+        imageURLResolver: imageURLResolver,
+        linkURLResolver: linkURLResolver
+    )
     result = protectMatches(
         in: result,
         pattern: #"(?<!\S)~(.+?)~(?=\s|$|[.,;:!?])|(?<!\S)=(.+?)=(?=\s|$|[.,;:!?])"#,
@@ -1067,7 +1149,8 @@ nonisolated private func orderedListItem(in line: String) -> String? {
 
 nonisolated private func renderOrgListItemBody(
     _ lines: [String],
-    imageURLResolver: ((String) -> String?)? = nil
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
 ) -> String {
     guard let firstLine = lines.first else { return "" }
 
@@ -1089,17 +1172,18 @@ nonisolated private func renderOrgListItemBody(
 
     var html = renderTaskListItem(
         contentLines.joined(separator: " "),
-        inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver) }
+        inlineRenderer: { processOrgInline($0, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) }
     )
     if !nestedLines.isEmpty {
-        html += "\n" + renderNestedOrgListHTML(nestedLines, imageURLResolver: imageURLResolver)
+        html += "\n" + renderNestedOrgListHTML(nestedLines, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver)
     }
     return html
 }
 
 nonisolated private func renderNestedOrgListHTML(
     _ lines: [String],
-    imageURLResolver: ((String) -> String?)? = nil
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
 ) -> String {
     var html = ""
     var listType: OrgListType?
@@ -1107,7 +1191,7 @@ nonisolated private func renderNestedOrgListHTML(
 
     func flushNestedItem() {
         guard !currentItemLines.isEmpty else { return }
-        html += "<li>" + renderOrgListItemBody(currentItemLines, imageURLResolver: imageURLResolver) + "</li>\n"
+        html += "<li>" + renderOrgListItemBody(currentItemLines, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver) + "</li>\n"
         currentItemLines = []
     }
 
@@ -1160,7 +1244,8 @@ nonisolated private func renderNestedOrgListHTML(
 nonisolated private func protectOrgLinks(
     in text: String,
     protectedFragments: inout [String: String],
-    imageURLResolver: ((String) -> String?)? = nil
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
 ) -> String {
     var result = text
 
@@ -1172,7 +1257,8 @@ nonisolated private func protectOrgLinks(
         protectedFragments[token] = renderOrgLink(
             destination: parsed.destination,
             label: parsed.label,
-            imageURLResolver: imageURLResolver
+            imageURLResolver: imageURLResolver,
+            linkURLResolver: linkURLResolver
         )
         result.replaceSubrange(parsed.range, with: token)
     }
@@ -1221,12 +1307,14 @@ nonisolated private func parseOrgLink(
 nonisolated private func renderOrgLink(
     destination: String,
     label: String?,
-    imageURLResolver: ((String) -> String?)? = nil
+    imageURLResolver: ((String) -> String?)? = nil,
+    linkURLResolver: ((String) -> String?)? = nil
 ) -> String {
     if let label, label.hasPrefix("[["), label.hasSuffix("]]") {
         let source = String(label.dropFirst(2).dropLast(2))
         if let imageHTML = makeOrgImageHTML(source: source, alt: nil, imageURLResolver: imageURLResolver) {
-            guard let sanitizedURL = sanitizedReadmeLinkURLString(destination) else {
+            let resolvedDestination = linkURLResolver?(destination) ?? destination
+            guard let sanitizedURL = sanitizedReadmeLinkURLString(resolvedDestination) else {
                 return imageHTML
             }
             return #"<a href="\#(sanitizedURL)">\#(imageHTML)</a>"#
@@ -1241,11 +1329,14 @@ nonisolated private func renderOrgLink(
         return imageHTML
     }
 
-    guard let sanitizedURL = sanitizedReadmeLinkURLString(destination) else {
+    let resolvedDestination = linkURLResolver?(destination) ?? destination
+    guard let sanitizedURL = sanitizedReadmeLinkURLString(resolvedDestination) else {
         return label ?? destination
     }
 
-    let renderedLabel = label.map { processOrgInline($0, imageURLResolver: imageURLResolver) } ?? destination
+    let renderedLabel = label.map {
+        processOrgInline($0, imageURLResolver: imageURLResolver, linkURLResolver: linkURLResolver)
+    } ?? destination
     return #"<a href="\#(sanitizedURL)">\#(renderedLabel)</a>"#
 }
 
@@ -1459,6 +1550,28 @@ nonisolated private func isRenderableImageSource(_ source: String) -> Bool {
     let lowercased = source.lowercased()
     return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".heic"]
         .contains(where: { lowercased.hasSuffix($0) })
+}
+
+nonisolated func resolveRepositoryLinkURL(
+    _ source: String,
+    owner: String,
+    repositoryName: String,
+    readmePath: String?
+) -> String? {
+    let trimmedSource = source.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedSource.isEmpty else { return nil }
+
+    if trimmedSource.hasPrefix("http://") || trimmedSource.hasPrefix("https://")
+        || trimmedSource.hasPrefix("mailto:") || trimmedSource.hasPrefix("#") {
+        return trimmedSource
+    }
+
+    return resolveRepositoryAssetURL(
+        trimmedSource,
+        owner: owner,
+        repositoryName: repositoryName,
+        readmePath: readmePath
+    )
 }
 
 nonisolated func resolveRepositoryAssetURL(

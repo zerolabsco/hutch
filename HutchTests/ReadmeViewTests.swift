@@ -104,6 +104,44 @@ struct MarkdownRenderingTests {
     }
 
     @Test
+    func markdownRelativeLinkWithoutResolverDropped() {
+        let html = markdownToHTML("[LICENSE](LICENSE)")
+
+        #expect(!html.contains("href="))
+        #expect(html.contains("LICENSE"))
+    }
+
+    @Test
+    func markdownRelativeLinkWithResolverRendersAnchor() {
+        let html = markdownToHTML(
+            "[LICENSE](LICENSE)",
+            linkURLResolver: { source in
+                source == "LICENSE" ? "https://git.sr.ht/~ccleberg/Hutch/blob/HEAD/LICENSE" : nil
+            }
+        )
+
+        #expect(html.contains(#"href="https://git.sr.ht/~ccleberg/Hutch/blob/HEAD/LICENSE""#))
+        #expect(html.contains(">LICENSE</a>"))
+    }
+
+    @Test
+    func markdownFragmentLinkWithResolverPreservesFragment() {
+        let html = markdownToHTML(
+            "[section](#install)",
+            linkURLResolver: { source in
+                resolveRepositoryLinkURL(
+                    source,
+                    owner: "~ccleberg",
+                    repositoryName: "Hutch",
+                    readmePath: "README.md"
+                )
+            }
+        )
+
+        #expect(html.contains("href=\"#install\""))
+    }
+
+    @Test
     func markdownImageRenders() {
         let html = markdownToHTML("![logo](https://example.com/logo.png)")
 
@@ -347,5 +385,68 @@ struct RepositoryAssetURLTests {
         )
 
         #expect(url == "https://git.sr.ht/~ccleberg/Hutch/blob/HEAD/images/My%20Logo.png")
+    }
+}
+
+struct RepositoryLinkURLTests {
+
+    @Test
+    func repositoryLinkURLResolvesRelativePath() {
+        let url = resolveRepositoryLinkURL(
+            "LICENSE",
+            owner: "~ccleberg",
+            repositoryName: "Hutch",
+            readmePath: "README.md"
+        )
+
+        #expect(url == "https://git.sr.ht/~ccleberg/Hutch/blob/HEAD/LICENSE")
+    }
+
+    @Test
+    func repositoryLinkURLPassesThroughAbsoluteURL() {
+        let url = resolveRepositoryLinkURL(
+            "https://example.com/page",
+            owner: "~ccleberg",
+            repositoryName: "Hutch",
+            readmePath: "README.md"
+        )
+
+        #expect(url == "https://example.com/page")
+    }
+
+    @Test
+    func repositoryLinkURLPassesThroughFragment() {
+        let url = resolveRepositoryLinkURL(
+            "#install",
+            owner: "~ccleberg",
+            repositoryName: "Hutch",
+            readmePath: "README.md"
+        )
+
+        #expect(url == "#install")
+    }
+
+    @Test
+    func repositoryLinkURLPassesThroughMailto() {
+        let url = resolveRepositoryLinkURL(
+            "mailto:hello@example.com",
+            owner: "~ccleberg",
+            repositoryName: "Hutch",
+            readmePath: "README.md"
+        )
+
+        #expect(url == "mailto:hello@example.com")
+    }
+
+    @Test
+    func repositoryLinkURLResolvesSubdirectoryRelativePath() {
+        let url = resolveRepositoryLinkURL(
+            "docs/SECURITY.md",
+            owner: "~ccleberg",
+            repositoryName: "Hutch",
+            readmePath: "README.md"
+        )
+
+        #expect(url == "https://git.sr.ht/~ccleberg/Hutch/blob/HEAD/docs/SECURITY.md")
     }
 }
