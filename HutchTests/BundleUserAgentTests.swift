@@ -9,7 +9,7 @@ import Testing
 private final class CapturingURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canInit(with _: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
@@ -25,7 +25,9 @@ private final class CapturingURLProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        // No cleanup is needed because the stub responds immediately in `startLoading()`.
+    }
 
     static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -79,10 +81,10 @@ struct BundleUserAgentTests {
     }
 
     @Test
-    func sRHTClientSetsUserAgentOnFetchText() async {
+    func sRHTClientSetsUserAgentOnFetchText() async throws {
         CapturingURLProtocol.capturedRequests = []
         let client = SRHTClient(session: CapturingURLProtocol.makeSession(), token: "test-token")
-        let url = try! #require(URL(string: "https://builds.sr.ht/~test/job/1/log"))
+        let url = try #require(URL(string: "https://builds.sr.ht/~test/job/1/log"))
 
         _ = try? await client.fetchText(url: url)
 
