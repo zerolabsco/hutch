@@ -93,12 +93,18 @@ struct AboutView: View {
 
             Section {
                 if storeViewModel.isLoading {
-                    ProgressView()
+                    ProgressView("Loading tip options…")
                         .themedRow()
                 } else if storeViewModel.products.isEmpty {
-                    Text("Tips unavailable")
-                        .foregroundStyle(.secondary)
-                        .themedRow()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Tips unavailable")
+                            .font(.headline)
+                        Text(storeViewModel.errorMessage ?? "Hutch couldn't load tip products from the App Store yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                    .themedRow()
                 } else {
                     ForEach(storeViewModel.products, id: \.id) { product in
                         Button {
@@ -107,15 +113,49 @@ struct AboutView: View {
                             }
                         } label: {
                             HStack {
-                                Text(product.displayName)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(product.displayName)
+                                    Text(product.id)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                Text(product.displayPrice)
-                                    .foregroundStyle(.secondary)
+                                if storeViewModel.isPurchasing(product) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Text(product.displayPrice)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                        .disabled(storeViewModel.purchasingProductID != nil || storeViewModel.isRestoringPurchases)
                         .themedRow()
                     }
                 }
+
+                if let errorMessage = storeViewModel.errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .themedRow()
+                }
+
+                Button("Retry Loading Tips") {
+                    Task {
+                        await storeViewModel.loadProducts()
+                    }
+                }
+                .disabled(storeViewModel.isLoading || storeViewModel.purchasingProductID != nil)
+                .themedRow()
+
+                Button(storeViewModel.isRestoringPurchases ? "Syncing Purchases…" : "Restore / Sync Purchases") {
+                    Task {
+                        await storeViewModel.restorePurchases()
+                    }
+                }
+                .disabled(storeViewModel.isLoading || storeViewModel.purchasingProductID != nil || storeViewModel.isRestoringPurchases)
+                .themedRow()
             } header: {
                 Text("Support Development")
             } footer: {
@@ -139,6 +179,23 @@ struct AboutView: View {
         .themedList()
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Store Message",
+            isPresented: Binding(
+                get: { storeViewModel.statusMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        storeViewModel.clearStatusMessage()
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                storeViewModel.clearStatusMessage()
+            }
+        } message: {
+            Text(storeViewModel.statusMessage ?? "")
+        }
         .task {
             await storeViewModel.loadProducts()
         }
