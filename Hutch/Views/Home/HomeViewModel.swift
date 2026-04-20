@@ -758,9 +758,11 @@ final class HomeViewModel {
             throw SRHTError.graphQLErrors([GraphQLError(message: "Failed to load inbox threads", locations: nil)])
         }
 
+        let deduplicatedThreads = Self.deduplicateInboxThreads(unreadThreads)
+
         return HomeInboxUnreadSnapshot(
-            unreadCount: unreadCount,
-            threads: unreadThreads.sorted(by: Self.sortInboxThreadsForTriage)
+            unreadCount: deduplicatedThreads.count,
+            threads: deduplicatedThreads
         )
     }
 
@@ -824,7 +826,7 @@ final class HomeViewModel {
                     latestSender: thread.sender,
                     lastActivityAt: thread.updated,
                     messageCount: thread.replies + 1,
-                    repo: InboxViewModel.deriveRepositoryName(from: mailingList.name),
+                    repo: InboxThreadUtilities.deriveRepositoryName(from: mailingList.name),
                     containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
                     isUnread: InboxReadStateStore.isUnread(
                         threadID: "\(mailingList.rid)#\(InboxThreadSummary.normalizationKey(for: thread.subject))",
@@ -1097,6 +1099,46 @@ final class HomeViewModel {
         }
         return InboxThreadSummary.normalizationKey(for: lhs.subject)
             .localizedCaseInsensitiveCompare(InboxThreadSummary.normalizationKey(for: rhs.subject)) == .orderedAscending
+    }
+
+    nonisolated static func deduplicateInboxThreads(_ threads: [InboxThreadSummary]) -> [InboxThreadSummary] {
+        var grouped: [String: InboxThreadSummary] = [:]
+
+        for thread in threads {
+            guard let existing = grouped[thread.threadGroupingKey] else {
+                grouped[thread.threadGroupingKey] = thread
+                continue
+            }
+
+            let latest = thread.lastActivityAt >= existing.lastActivityAt ? thread : existing
+            let mergedRootEmailIDs = Array(Set(existing.threadRootEmailIDs + thread.threadRootEmailIDs)).sorted()
+            let mergedRootMessageIDs = Array(Set(existing.threadRootMessageIDs + thread.threadRootMessageIDs)).sorted()
+            let mergedMessageCount = max(
+                existing.messageCount ?? existing.threadRootMessageIDs.count,
+                thread.messageCount ?? thread.threadRootMessageIDs.count,
+                mergedRootMessageIDs.count
+            )
+
+            grouped[thread.threadGroupingKey] = InboxThreadSummary(
+                rootEmailID: latest.rootEmailID,
+                rootMessageID: latest.rootMessageID,
+                threadRootEmailIDs: mergedRootEmailIDs,
+                threadRootMessageIDs: mergedRootMessageIDs,
+                listID: latest.listID,
+                listRID: latest.listRID,
+                listName: latest.listName,
+                listOwner: latest.listOwner,
+                subject: latest.subject,
+                latestSender: latest.latestSender,
+                lastActivityAt: max(existing.lastActivityAt, thread.lastActivityAt),
+                messageCount: mergedMessageCount,
+                repo: latest.repo ?? existing.repo,
+                containsPatch: latest.containsPatch || existing.containsPatch,
+                isUnread: latest.isUnread || existing.isUnread
+            )
+        }
+
+        return grouped.values.sorted(by: sortInboxThreadsForTriage)
     }
 
     nonisolated static func matchesCurrentUserAssignee(_ entity: Entity, currentUser: User) -> Bool {

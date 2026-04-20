@@ -51,7 +51,7 @@ struct InboxThreadSummary: Identifiable, Hashable, Sendable {
         "subject=\(subject) listRID=\(listRID) listID=\(listID) rootEmailID=\(rootEmailID) rootMessageID=\(rootMessageID) groupingKey=\(threadGroupingKey)"
     }
 
-    var threadGroupingKey: String {
+    nonisolated var threadGroupingKey: String {
         "\(listRID)#\(Self.normalizationKey(for: subject))"
     }
 

@@ -90,6 +90,58 @@ struct HomeViewModelTests {
     }
 
     @Test
+    func deduplicateInboxThreadsCollapsesMessagesIntoOneThreadSummary() {
+        let list = InboxMailingListReference(
+            id: 1,
+            rid: "list",
+            name: "hutch-devel",
+            owner: Entity(canonicalName: "~owner")
+        )
+        let first = InboxThreadSummary(
+            rootEmailID: 10,
+            rootMessageID: "message-1",
+            threadRootEmailIDs: [10],
+            threadRootMessageIDs: ["message-1"],
+            listID: list.id,
+            listRID: list.rid,
+            listName: list.name,
+            listOwner: list.owner,
+            subject: "Re: [PATCH] add search",
+            latestSender: Entity(canonicalName: "~alice"),
+            lastActivityAt: Date(timeIntervalSince1970: 100),
+            messageCount: 1,
+            repo: "hutch",
+            containsPatch: true,
+            isUnread: true
+        )
+        let second = InboxThreadSummary(
+            rootEmailID: 11,
+            rootMessageID: "message-2",
+            threadRootEmailIDs: [11],
+            threadRootMessageIDs: ["message-2"],
+            listID: list.id,
+            listRID: list.rid,
+            listName: list.name,
+            listOwner: list.owner,
+            subject: "[PATCH] add search",
+            latestSender: Entity(canonicalName: "~bob"),
+            lastActivityAt: Date(timeIntervalSince1970: 200),
+            messageCount: 2,
+            repo: "hutch",
+            containsPatch: true,
+            isUnread: true
+        )
+
+        let deduplicated = HomeViewModel.deduplicateInboxThreads([first, second])
+
+        #expect(deduplicated.count == 1)
+        #expect(deduplicated[0].rootEmailID == 11)
+        #expect(deduplicated[0].threadRootEmailIDs == [10, 11])
+        #expect(deduplicated[0].threadRootMessageIDs == ["message-1", "message-2"])
+        #expect(deduplicated[0].messageCount == 2)
+    }
+
+    @Test
     func matchesCurrentUserAssigneeNormalizesCanonicalNameAndUsername() {
         let currentUser = User(
             id: 42,

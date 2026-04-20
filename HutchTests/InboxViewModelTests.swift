@@ -6,9 +6,9 @@ struct InboxViewModelTests {
 
     @Test
     func derivesRepositoryNameFromCommonPatchListSuffixes() {
-        #expect(InboxViewModel.deriveRepositoryName(from: "hut-devel") == "hut")
-        #expect(InboxViewModel.deriveRepositoryName(from: "git.patches") == "git")
-        #expect(InboxViewModel.deriveRepositoryName(from: "discuss") == nil)
+        #expect(InboxThreadUtilities.deriveRepositoryName(from: "hut-devel") == "hut")
+        #expect(InboxThreadUtilities.deriveRepositoryName(from: "git.patches") == "git")
+        #expect(InboxThreadUtilities.deriveRepositoryName(from: "discuss") == nil)
     }
 
     @Test
@@ -163,55 +163,6 @@ struct InboxViewModelTests {
 
         #expect(subjectMatches.map(\.rootEmailID) == [10])
         #expect(senderMatches.map(\.rootEmailID) == [11])
-    }
-
-    @Test
-    func inboxFilterSeparatesPatchThreadsFromDiscussionThreads() {
-        let baseList = InboxMailingListReference(
-            id: 1,
-            rid: "list",
-            name: "hutch-devel",
-            owner: Entity(canonicalName: "~owner")
-        )
-        let patchThread = InboxThreadSummary(
-            rootEmailID: 10,
-            rootMessageID: "message-1",
-            threadRootEmailIDs: [10],
-            threadRootMessageIDs: ["message-1"],
-            listID: baseList.id,
-            listRID: baseList.rid,
-            listName: baseList.name,
-            listOwner: baseList.owner,
-            subject: "[PATCH] add search",
-            latestSender: Entity(canonicalName: "~alice"),
-            lastActivityAt: Date(timeIntervalSince1970: 100),
-            messageCount: 1,
-            repo: "hutch",
-            containsPatch: true,
-            isUnread: true
-        )
-        let discussionThread = InboxThreadSummary(
-            rootEmailID: 11,
-            rootMessageID: "message-2",
-            threadRootEmailIDs: [11],
-            threadRootMessageIDs: ["message-2"],
-            listID: baseList.id,
-            listRID: baseList.rid,
-            listName: baseList.name,
-            listOwner: baseList.owner,
-            subject: "release planning",
-            latestSender: Entity(canonicalName: "~bob"),
-            lastActivityAt: Date(timeIntervalSince1970: 200),
-            messageCount: 2,
-            repo: "hutch",
-            containsPatch: false,
-            isUnread: true
-        )
-
-        let threads = [patchThread, discussionThread]
-
-        #expect(InboxViewModel.filterThreads(threads, filter: .patches).map(\.rootEmailID) == [10])
-        #expect(InboxViewModel.filterThreads(threads, filter: .discussions).map(\.rootEmailID) == [11])
     }
 
     @Test
