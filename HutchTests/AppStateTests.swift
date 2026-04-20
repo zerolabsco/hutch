@@ -36,6 +36,17 @@ struct AppStateTests {
 
     @Test
     @MainActor
+    func navigateToBuildsListSelectsBuildsTabAndQueuesBuildsNavigation() {
+        let appState = AppState()
+
+        appState.navigateToBuildsList()
+
+        #expect(appState.selectedTab == .builds)
+        #expect(appState.pendingTabNavigation == .builds)
+    }
+
+    @Test
+    @MainActor
     func navigationHelpersQueueExpectedTargets() {
         let appState = AppState()
         let repository = RepositorySummary(

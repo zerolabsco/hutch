@@ -135,8 +135,8 @@ struct HomeView: View {
 
     private func buildsSection(_ viewModel: HomeViewModel) -> some View {
         Section("Builds") {
-            NavigationLink {
-                BuildListView()
+            Button {
+                appState.navigateToBuildsList()
             } label: {
                 HomeSummaryRow(
                     title: buildsTitle(viewModel),
@@ -146,6 +146,7 @@ struct HomeView: View {
                     emphasis: .monitoring
                 )
             }
+            .buttonStyle(.plain)
             .themedRow()
         }
     }
