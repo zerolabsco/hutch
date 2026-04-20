@@ -105,6 +105,39 @@ final class MailingListDetailViewModel {
         NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: accountID)
     }
 
+    func markAllThreadsRead() {
+        let unreadThreads = threads.filter(\.isUnread)
+        guard !unreadThreads.isEmpty else { return }
+
+        let viewedAt = Date()
+        for thread in unreadThreads {
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id, defaults: defaults)
+        }
+
+        threads = threads.map { thread in
+            guard thread.isUnread else { return thread }
+            return InboxThreadSummary(
+                rootEmailID: thread.rootEmailID,
+                rootMessageID: thread.rootMessageID,
+                threadRootEmailIDs: thread.threadRootEmailIDs,
+                threadRootMessageIDs: thread.threadRootMessageIDs,
+                listID: thread.listID,
+                listRID: thread.listRID,
+                listName: thread.listName,
+                listOwner: thread.listOwner,
+                subject: thread.subject,
+                latestSender: thread.latestSender,
+                lastActivityAt: thread.lastActivityAt,
+                messageCount: thread.messageCount,
+                repo: thread.repo,
+                containsPatch: thread.containsPatch,
+                isUnread: false
+            )
+        }
+
+        NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -unreadThreads.count, accountID: accountID)
+    }
+
     private func makeSummary(from thread: ProjectMailingListThreadPayload) -> InboxThreadSummary {
         let normalizedSubject = thread.subject
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
@@ -241,6 +274,10 @@ struct MailingListDetailView: View {
         return HomePinStore.isPinned(.mailingList(mailingList), for: currentUserKey, defaults: appState.accountDefaults)
     }
 
+    private var hasUnreadThreads: Bool {
+        viewModel?.threads.contains(where: \.isUnread) == true
+    }
+
     var body: some View {
         Group {
             if let viewModel {
@@ -252,6 +289,12 @@ struct MailingListDetailView: View {
         .navigationTitle(mailingList.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Mark All Read") {
+                    viewModel?.markAllThreadsRead()
+                }
+                .disabled(hasUnreadThreads == false)
+            }
             if currentUserKey != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -299,16 +342,13 @@ struct MailingListDetailView: View {
                     ThreadDetailView(
                         thread: thread,
                         onViewed: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
+                            viewModel.markThreadRead(thread)
                         },
                         onMarkRead: {
-                            InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: appState.accountDefaults)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: appState.activeAccountID)
+                            viewModel.markThreadRead(thread)
                         },
                         onMarkUnread: {
-                            InboxReadStateStore.markUnread(for: thread.id, defaults: appState.accountDefaults)
-                            NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: appState.activeAccountID)
+                            viewModel.markThreadUnread(thread)
                         }
                     )
                 } label: {

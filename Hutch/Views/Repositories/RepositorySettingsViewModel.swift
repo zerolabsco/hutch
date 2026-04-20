@@ -166,10 +166,7 @@ final class RepositorySettingsViewModel {
         defer { isSavingMetadata = false }
         error = nil
 
-        let input: [String: any Sendable] = [
-            "name": normalizedEditedName,
-            "description": normalizedEditedDescription
-        ]
+        let input = metadataInputForSave()
 
         do {
             return try await updateRepository(with: input)
@@ -294,5 +291,19 @@ final class RepositorySettingsViewModel {
         return branches.first {
             RepositorySummary.displayBranchName(for: $0.name) == normalizedEditedHead
         }?.name
+    }
+
+    func metadataInputForSave() -> [String: any Sendable] {
+        var input: [String: any Sendable] = [:]
+
+        if normalizedEditedName != repository.name {
+            input["name"] = normalizedEditedName
+        }
+
+        if normalizedEditedDescription != (repository.description ?? "") {
+            input["description"] = normalizedEditedDescription.isEmpty ? Optional<String>.none as String? : normalizedEditedDescription
+        }
+
+        return input
     }
 }

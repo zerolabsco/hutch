@@ -627,6 +627,20 @@ final class HomeViewModel {
         persistNeedsAttentionSnapshot()
     }
 
+    func markAllInboxThreadsRead() {
+        guard !unreadInboxThreads.isEmpty else { return }
+
+        let viewedAt = Date()
+        for thread in unreadInboxThreads {
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id, defaults: defaults)
+        }
+
+        unreadInboxThreads = []
+        unreadInboxThreadCount = 0
+        hasUnreadInboxThreads = false
+        persistNeedsAttentionSnapshot()
+    }
+
     func markInboxThreadUnread(_ thread: InboxThreadSummary) {
         InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
         if unreadInboxThreads.contains(where: { $0.id == thread.id }) == false {

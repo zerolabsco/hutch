@@ -115,6 +115,39 @@ struct RepositorySettingsViewModelTests {
         #expect(viewModel.isMetadataDirty == false)
     }
 
+    @Test
+    @MainActor
+    func metadataInputOmitsUnchangedNameWhenOnlyDescriptionChanges() {
+        let viewModel = RepositorySettingsViewModel(
+            repository: makeRepository(headName: "refs/heads/main"),
+            branches: [ReferenceDetail(name: "refs/heads/main", target: nil, date: nil)],
+            client: SRHTClient(token: "test-token")
+        )
+        viewModel.editedDescription = "an ios client for sourcehut"
+
+        let input = viewModel.metadataInputForSave()
+
+        #expect(input["name"] == nil)
+        #expect(input["description"] as? String == "an ios client for sourcehut")
+    }
+
+    @Test
+    @MainActor
+    func metadataInputUsesNilToClearDescription() {
+        let viewModel = RepositorySettingsViewModel(
+            repository: makeRepository(headName: "refs/heads/main"),
+            branches: [ReferenceDetail(name: "refs/heads/main", target: nil, date: nil)],
+            client: SRHTClient(token: "test-token")
+        )
+        viewModel.editedDescription = "   "
+
+        let input = viewModel.metadataInputForSave()
+
+        #expect(input["name"] == nil)
+        #expect(input.keys.contains("description"))
+        #expect(input["description"] as? String == nil)
+    }
+
     @MainActor
     private func makeRepository(headName: String?) -> RepositorySummary {
         RepositorySummary(

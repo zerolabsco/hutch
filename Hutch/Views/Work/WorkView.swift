@@ -26,6 +26,14 @@ struct WorkView: View {
         }
         .navigationTitle("Work")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Mark All Read") {
+                    viewModel?.markAllInboxThreadsRead()
+                }
+                .disabled(viewModel.map { unreadCount($0) } ?? 0 == 0)
+            }
+        }
         .task {
             guard let currentUser = appState.currentUser else { return }
             await ensureViewModel(currentUser: currentUser).loadDashboard()
