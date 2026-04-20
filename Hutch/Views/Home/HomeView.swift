@@ -3,6 +3,8 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppStorageKeys.homeFailedBuildLookbackDays, store: .standard)
+    private var failedBuildLookbackDays = HomeViewModel.defaultFailedBuildLookbackDays
     @State private var viewModel: HomeViewModel?
     @State private var recentItems: [RecentActivityEntry] = []
     @State private var isOpeningRecentItem = false
@@ -142,7 +144,7 @@ struct HomeView: View {
                     title: buildsTitle(viewModel),
                     summary: buildsSummary(viewModel),
                     systemImage: "hammer",
-                    tint: viewModel.failedBuildCount > 0 ? .orange : .secondary,
+                    tint: failedBuildCount(viewModel) > 0 ? .orange : .secondary,
                     emphasis: .monitoring
                 )
             }
@@ -208,7 +210,7 @@ struct HomeView: View {
     }
 
     private func buildsTitle(_ viewModel: HomeViewModel) -> String {
-        let failed = viewModel.failedBuildCount
+        let failed = failedBuildCount(viewModel)
         let running = viewModel.activeBuildCount
 
         if failed == 0 && running == 0 {
@@ -221,18 +223,18 @@ struct HomeView: View {
     }
 
     private func buildsSummary(_ viewModel: HomeViewModel) -> String {
-        let failed = viewModel.failedBuildCount
+        let failed = failedBuildCount(viewModel)
         let running = viewModel.activeBuildCount
         if failed == 0 && running == 0 {
-            return "No failures • \(buildTimeframeLabel(viewModel))"
+            return "No failures • \(buildTimeframeLabel())"
         }
         if failed > 0 && running > 0 {
-            return "\(failed) failed • \(running) running • \(buildTimeframeLabel(viewModel))"
+            return "\(failed) failed • \(running) running • \(buildTimeframeLabel())"
         }
         if failed > 0 {
-            return "\(failed) failed • \(buildTimeframeLabel(viewModel))"
+            return "\(failed) failed • \(buildTimeframeLabel())"
         }
-        return "\(running) running • \(buildTimeframeLabel(viewModel))"
+        return "\(running) running now"
     }
 
     private func pinnedItems(_ viewModel: HomeViewModel) -> [HomePinnedItem] {
@@ -251,15 +253,12 @@ struct HomeView: View {
         }
     }
 
-    private func buildTimeframeLabel(_ viewModel: HomeViewModel) -> String {
-        let calendar = Calendar.current
-        let buildDates = viewModel.recentBuilds.map(\.job.updated)
+    private func buildTimeframeLabel() -> String {
+        HomeViewModel.failedBuildLookbackLabel(days: failedBuildLookbackDays)
+    }
 
-        guard !buildDates.isEmpty else {
-            return "today"
-        }
-
-        return buildDates.allSatisfy(calendar.isDateInToday) ? "today" : "this week"
+    private func failedBuildCount(_ viewModel: HomeViewModel) -> Int {
+        viewModel.recentFailedBuilds(lookbackDays: failedBuildLookbackDays).count
     }
 
     private func hasHomeContent(_ viewModel: HomeViewModel) -> Bool {
@@ -464,6 +463,8 @@ private struct HomeSummaryRow: View {
 
             Spacer(minLength: 8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.vertical, verticalPadding)
     }
 
@@ -508,6 +509,8 @@ private struct HomeRecentRow: View {
 
             Spacer(minLength: 8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.vertical, 1)
     }
 

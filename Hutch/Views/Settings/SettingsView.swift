@@ -6,6 +6,8 @@ struct SettingsView: View {
     @AppStorage(AppStorageKeys.displayDensity, store: .standard) private var displayDensity: DisplayDensity = .standard
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.contributionGraphsEnabled, store: .standard) private var contributionGraphsEnabled = true
+    @AppStorage(AppStorageKeys.homeFailedBuildLookbackDays, store: .standard)
+    private var failedBuildLookbackDays = HomeViewModel.defaultFailedBuildLookbackDays
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
     @State private var showAccountSwitcher = false
 
@@ -85,10 +87,16 @@ struct SettingsView: View {
                     ContributionWidgetContextStore.setEnabled(newValue)
                 }
                 .themedRow()
+            Picker("Failed build window", selection: $failedBuildLookbackDays) {
+                ForEach(HomeViewModel.allowedFailedBuildLookbackDays, id: \.self) { days in
+                    Text(failedBuildWindowLabel(days)).tag(days)
+                }
+            }
+            .themedRow()
         } header: {
             Text("Behavior")
         } footer: {
-            Text("When enabled, swipe list rows to quickly take actions like resolving tickets, cancelling builds, and deleting pastes. Contribution graphs controls whether SourceHut activity heatmaps appear in lookup profiles.")
+            Text("When enabled, swipe list rows to quickly take actions like resolving tickets, cancelling builds, and deleting pastes. Contribution graphs controls whether SourceHut activity heatmaps appear in lookup profiles. Failed build window controls how far back the Home tab counts failed builds.")
         }
     }
 
@@ -143,6 +151,13 @@ struct SettingsView: View {
 
 }
 
+private func failedBuildWindowLabel(_ days: Int) -> String {
+    if days == 1 {
+        return "Today only"
+    }
+    return "Last \(days) days"
+}
+
 func settingsBioAttributedString(_ markdown: String) -> AttributedString {
     profileBioAttributedString(markdown)
 }
@@ -178,4 +193,3 @@ private enum SettingsDestructiveAction {
         }
     }
 }
-

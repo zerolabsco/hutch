@@ -172,6 +172,9 @@ struct HomeBuildItem: Identifiable, Hashable, Sendable {
 @Observable
 @MainActor
 final class HomeViewModel {
+    nonisolated static let defaultFailedBuildLookbackDays = 7
+    nonisolated static let allowedFailedBuildLookbackDays = [1, 3, 7, 14, 30]
+
     private(set) var projects: [Project] = []
     var assignedTickets: [HomeAssignedTicket] = []
     var recentBuilds: [HomeBuildItem] = []
@@ -434,14 +437,7 @@ final class HomeViewModel {
     }
 
     var failedBuildCount: Int {
-        recentBuilds.filter {
-            switch $0.job.status {
-            case .failed, .timeout:
-                return true
-            default:
-                return false
-            }
-        }.count
+        recentFailedBuilds().count
     }
 
     var activeBuildCount: Int {
@@ -530,6 +526,19 @@ final class HomeViewModel {
             return "Recent builds are clear"
         }
         return parts.joined(separator: " • ")
+    }
+
+    func recentFailedBuilds(
+        lookbackDays: Int? = nil,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [HomeBuildItem] {
+        Self.failedBuilds(
+            in: recentBuilds,
+            lookbackDays: lookbackDays ?? Self.failedBuildLookbackDays(),
+            now: now,
+            calendar: calendar
+        )
     }
 
     var systemSummaryText: String {
@@ -949,20 +958,12 @@ final class HomeViewModel {
     }
 
     private func persistNeedsAttentionSnapshot() {
+        let failedBuildCount = recentFailedBuilds().count
         NeedsAttentionSnapshotStore.save(
             NeedsAttentionSnapshot(
                 unreadInboxThreads: unreadInboxThreadCount,
                 assignedOpenTickets: assignedTicketsError == nil ? assignedTickets.count : nil,
-                failedBuilds: recentBuildsError == nil
-                    ? recentBuilds.filter {
-                        switch $0.job.status {
-                        case .failed, .timeout:
-                            true
-                        default:
-                            false
-                        }
-                    }.count
-                    : nil,
+                failedBuilds: recentBuildsError == nil ? failedBuildCount : nil,
                 updatedAt: .now
             ),
             accountID: accountID
@@ -1011,6 +1012,47 @@ final class HomeViewModel {
                 false
             }
         }
+    }
+
+    nonisolated static func failedBuildLookbackDays(defaults: UserDefaults = .standard) -> Int {
+        let value = defaults.object(forKey: AppStorageKeys.homeFailedBuildLookbackDays) as? Int
+        guard let value, allowedFailedBuildLookbackDays.contains(value) else {
+            return defaultFailedBuildLookbackDays
+        }
+        return value
+    }
+
+    nonisolated static func failedBuilds(
+        in builds: [HomeBuildItem],
+        lookbackDays: Int,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [HomeBuildItem] {
+        let normalizedLookbackDays = allowedFailedBuildLookbackDays.contains(lookbackDays)
+            ? lookbackDays
+            : defaultFailedBuildLookbackDays
+        let startOfToday = calendar.startOfDay(for: now)
+        let windowStart = calendar.date(byAdding: .day, value: -(normalizedLookbackDays - 1), to: startOfToday) ?? startOfToday
+
+        return builds.filter { build in
+            guard build.job.updated >= windowStart else { return false }
+            switch build.job.status {
+            case .failed, .timeout:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    nonisolated static func failedBuildLookbackLabel(days: Int) -> String {
+        let normalizedDays = allowedFailedBuildLookbackDays.contains(days)
+            ? days
+            : defaultFailedBuildLookbackDays
+        if normalizedDays == 1 {
+            return "today"
+        }
+        return "last \(normalizedDays) days"
     }
 
     nonisolated static func sortBuildItemsForTriage(_ lhs: HomeBuildItem, _ rhs: HomeBuildItem) -> Bool {

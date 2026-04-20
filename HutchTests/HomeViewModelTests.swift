@@ -19,6 +19,77 @@ struct HomeViewModelTests {
     }
 
     @Test
+    func failedBuildsWithinLookbackExcludeOlderFailures() {
+        let now = Date(timeIntervalSince1970: 60 * 60 * 24 * 20)
+        let recentFailure = HomeBuildItem(
+            job: JobSummary(
+                id: 1,
+                created: now.addingTimeInterval(-(60 * 60 * 24)),
+                updated: now.addingTimeInterval(-(60 * 60 * 24)),
+                status: .failed,
+                note: nil,
+                tags: [],
+                visibility: nil,
+                image: nil,
+                tasks: []
+            ),
+            repositoryName: nil,
+            repositoryOwner: nil
+        )
+        let oldFailure = HomeBuildItem(
+            job: JobSummary(
+                id: 2,
+                created: now.addingTimeInterval(-(60 * 60 * 24 * 10)),
+                updated: now.addingTimeInterval(-(60 * 60 * 24 * 10)),
+                status: .timeout,
+                note: nil,
+                tags: [],
+                visibility: nil,
+                image: nil,
+                tasks: []
+            ),
+            repositoryName: nil,
+            repositoryOwner: nil
+        )
+        let recentSuccess = HomeBuildItem(
+            job: JobSummary(
+                id: 3,
+                created: now.addingTimeInterval(-(60 * 60 * 24)),
+                updated: now.addingTimeInterval(-(60 * 60 * 24)),
+                status: .success,
+                note: nil,
+                tags: [],
+                visibility: nil,
+                image: nil,
+                tasks: []
+            ),
+            repositoryName: nil,
+            repositoryOwner: nil
+        )
+
+        let filtered = HomeViewModel.failedBuilds(
+            in: [recentFailure, oldFailure, recentSuccess],
+            lookbackDays: 7,
+            now: now,
+            calendar: Calendar(identifier: .gregorian)
+        )
+
+        #expect(filtered.map(\.job.id) == [1])
+    }
+
+    @Test
+    func failedBuildLookbackDaysFallsBackToDefaultWhenUnsetOrInvalid() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+
+        #expect(HomeViewModel.failedBuildLookbackDays(defaults: defaults) == HomeViewModel.defaultFailedBuildLookbackDays)
+
+        defaults.set(99, forKey: AppStorageKeys.homeFailedBuildLookbackDays)
+
+        #expect(HomeViewModel.failedBuildLookbackDays(defaults: defaults) == HomeViewModel.defaultFailedBuildLookbackDays)
+    }
+
+    @Test
     func matchesCurrentUserAssigneeNormalizesCanonicalNameAndUsername() {
         let currentUser = User(
             id: 42,

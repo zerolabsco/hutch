@@ -23,4 +23,5 @@ enum AppStorageKeys {
     static let appTheme = "appTheme"
     static let displayDensity = "displayDensity"
     static let debugModeEnabled = "debugModeEnabled"
+    nonisolated static let homeFailedBuildLookbackDays = "homeFailedBuildLookbackDays"
 }
