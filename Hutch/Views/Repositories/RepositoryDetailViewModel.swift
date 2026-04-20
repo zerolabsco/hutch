@@ -240,9 +240,9 @@ final class RepositoryDetailViewModel {
     // MARK: - References
 
     private static let refsQuery = """
-    query refs($rid: ID!) {
+    query refs($rid: ID!, $cursor: Cursor) {
         repository(rid: $rid) {
-            references {
+            references(cursor: $cursor) {
                 results {
                     name
                     target
@@ -263,15 +263,15 @@ final class RepositoryDetailViewModel {
         error = nil
 
         do {
-            let result = try await client.execute(
-                service: service,
-                query: Self.refsQuery,
-                variables: ["rid": repository.rid],
-                responseType: RefsResponse.self
-            )
-            let allRefs = result.repository?.references.results ?? []
-            branches = allRefs.filter { $0.name.hasPrefix("refs/heads/") }.map { $0.toDetail() }
-            tags = allRefs.filter { $0.name.hasPrefix("refs/tags/") }.map { $0.toDetail() }
+            let allRefs = try await fetchAllReferences()
+            branches = allRefs
+                .filter { $0.name.hasPrefix("refs/heads/") }
+                .map { $0.toDetail() }
+                .sorted(by: Self.sortBranches)
+            tags = allRefs
+                .filter { $0.name.hasPrefix("refs/tags/") }
+                .map { $0.toDetail() }
+                .sorted(by: Self.sortTags)
         } catch {
             if isEmptyRepositoryError(error) {
                 branches = []
@@ -282,6 +282,64 @@ final class RepositoryDetailViewModel {
         }
 
         isLoadingRefs = false
+    }
+
+    var defaultBranchReference: ReferenceDetail? {
+        if let headName = repository.head?.name,
+           let branch = branches.first(where: { $0.name == headName }) {
+            return branch
+        }
+        return branches.first
+    }
+
+    var latestTagReference: ReferenceDetail? {
+        tags.first
+    }
+
+    private func fetchAllReferences() async throws -> [ReferencePayload] {
+        var allRefs: [ReferencePayload] = []
+        var cursor: String?
+
+        repeat {
+            let page = try await fetchReferencePage(cursor: cursor)
+            allRefs.append(contentsOf: page.results)
+            cursor = page.cursor
+        } while cursor != nil
+
+        return allRefs
+    }
+
+    private func fetchReferencePage(cursor: String?) async throws -> RefsPage {
+        var variables: [String: any Sendable] = ["rid": repository.rid]
+        if let cursor {
+            variables["cursor"] = cursor
+        }
+
+        let result = try await client.execute(
+            service: service,
+            query: Self.refsQuery,
+            variables: variables,
+            responseType: RefsResponse.self
+        )
+
+        return result.repository?.references ?? RefsPage(results: [], cursor: nil)
+    }
+
+    nonisolated private static func sortBranches(_ lhs: ReferenceDetail, _ rhs: ReferenceDetail) -> Bool {
+        lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+
+    nonisolated private static func sortTags(_ lhs: ReferenceDetail, _ rhs: ReferenceDetail) -> Bool {
+        switch (lhs.date, rhs.date) {
+        case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
+            return lhsDate > rhsDate
+        case (.some, nil):
+            return true
+        case (nil, .some):
+            return false
+        default:
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
     }
 
     // MARK: - README

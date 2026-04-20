@@ -5,21 +5,39 @@ struct ReferencesListView: View {
 
     var body: some View {
         List {
-            if !viewModel.branches.isEmpty {
-                Section("Branches") {
-                    ForEach(viewModel.branches, id: \.name) { ref in
-                        ReferenceRow(reference: ref, prefix: "refs/heads/")
+            if let defaultBranch = viewModel.defaultBranchReference {
+                Section {
+                    ReferenceRow(reference: defaultBranch, prefix: "refs/heads/")
+                        .themedRow()
+
+                    NavigationLink("See All Branches") {
+                        ReferencesDetailListView(
+                            title: "Branches",
+                            references: viewModel.branches,
+                            prefix: "refs/heads/"
+                        )
                     }
                     .themedRow()
+                } header: {
+                    sectionHeader(title: "Default Branch")
                 }
             }
 
-            if !viewModel.tags.isEmpty {
-                Section("Tags") {
-                    ForEach(viewModel.tags, id: \.name) { ref in
-                        ReferenceRow(reference: ref, prefix: "refs/tags/")
+            if let latestTag = viewModel.latestTagReference {
+                Section {
+                    ReferenceRow(reference: latestTag, prefix: "refs/tags/")
+                        .themedRow()
+
+                    NavigationLink("See All Tags") {
+                        ReferencesDetailListView(
+                            title: "Tags",
+                            references: viewModel.tags,
+                            prefix: "refs/tags/"
+                        )
                     }
                     .themedRow()
+                } header: {
+                    sectionHeader(title: "Latest Tag")
                 }
             }
         }
@@ -51,6 +69,41 @@ struct ReferencesListView: View {
             await viewModel.loadReferences()
         }
     }
+
+    @ViewBuilder
+    private func sectionHeader(title: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+        }
+    }
+}
+
+private struct ReferencesDetailListView: View {
+    let title: String
+    let references: [ReferenceDetail]
+    let prefix: String
+
+    var body: some View {
+        List {
+            ForEach(references, id: \.name) { reference in
+                ReferenceRow(reference: reference, prefix: prefix)
+                    .themedRow()
+            }
+        }
+        .themedList()
+        .listStyle(.insetGrouped)
+        .navigationTitle(title)
+        .overlay {
+            if references.isEmpty {
+                ContentUnavailableView(
+                    "No \(title)",
+                    systemImage: prefix.contains("tags") ? "tag" : "arrow.triangle.branch",
+                    description: Text("This repository does not have any \(title.lowercased()).")
+                )
+            }
+        }
+    }
 }
 
 private struct ReferenceRow: View {
@@ -80,6 +133,8 @@ private struct ReferenceRow: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var shortName: String {
