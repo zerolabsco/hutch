@@ -243,7 +243,7 @@ struct ProfileView: View {
         Section {
             ForEach(viewModel.sshKeys) { key in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(key.fingerprint)
+                    Text(key.displayLabel)
                         .font(.caption.monospaced())
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -677,7 +677,7 @@ private enum ProfileDestructiveAction {
     var message: String {
         switch self {
         case .deleteSSHKey(let key):
-            "Remove SSH key \(key.fingerprint) from your account?"
+            "Remove \(key.displayLabel) from your account?"
         case .deletePGPKey(let key):
             "Remove PGP key \(key.fingerprint) from your account?"
         }

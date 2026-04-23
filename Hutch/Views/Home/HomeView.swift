@@ -56,6 +56,9 @@ struct HomeView: View {
                 loadRecentActivity()
             }
         }
+        .onChange(of: failedBuildLookbackDays) { _, _ in
+            viewModel?.refreshNeedsAttentionSnapshot()
+        }
     }
 
     @ViewBuilder

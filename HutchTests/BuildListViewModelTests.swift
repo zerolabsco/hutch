@@ -49,22 +49,70 @@ struct BuildListViewModelTests {
             makeJob(id: 4, status: .cancelled, tags: [])
         ]
 
-        let attention = BuildListViewModel.filterJobs(jobs, filter: .attention)
-        let active = BuildListViewModel.filterJobs(jobs, filter: .active)
+        let attention = BuildListViewModel.filterJobs(
+            jobs,
+            filter: .attention,
+            lookbackDays: BuildListViewModel.defaultLookbackDays
+        )
+        let active = BuildListViewModel.filterJobs(
+            jobs,
+            filter: .active,
+            lookbackDays: BuildListViewModel.defaultLookbackDays
+        )
 
         #expect(attention.map(\.id) == [2, 3])
         #expect(active.map(\.id) == [3])
+    }
+
+    @Test
+    func buildFilterRestrictsJobsToSelectedLookbackWindow() {
+        let now = Date(timeIntervalSince1970: 60 * 60 * 24 * 20)
+        let jobs = [
+            makeJob(
+                id: 1,
+                status: .failed,
+                tags: [],
+                updated: now.addingTimeInterval(-(60 * 60 * 24))
+            ),
+            makeJob(
+                id: 2,
+                status: .running,
+                tags: [],
+                updated: now.addingTimeInterval(-(60 * 60 * 24 * 8))
+            ),
+            makeJob(
+                id: 3,
+                status: .success,
+                tags: [],
+                updated: now.addingTimeInterval(-(60 * 60 * 24 * 2))
+            ),
+        ]
+
+        let filtered = BuildListViewModel.filterJobs(
+            jobs,
+            filter: .all,
+            lookbackDays: 3,
+            now: now,
+            calendar: Calendar(identifier: .gregorian)
+        )
+
+        #expect(filtered.map(\.id) == [1, 3])
     }
 
     private func filterJobs(_ jobs: [JobSummary], query: String) -> [JobSummary] {
         BuildListViewModel.searchJobs(jobs, matching: query)
     }
 
-    private func makeJob(id: Int, status: JobStatus = .success, tags: [String]) -> JobSummary {
+    private func makeJob(
+        id: Int,
+        status: JobStatus = .success,
+        tags: [String],
+        updated: Date = Date()
+    ) -> JobSummary {
         JobSummary(
             id: id,
-            created: Date(),
-            updated: Date(),
+            created: updated,
+            updated: updated,
             status: status,
             note: nil,
             tags: tags,

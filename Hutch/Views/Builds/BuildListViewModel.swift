@@ -45,6 +45,7 @@ enum AutoRefreshInterval: Int, CaseIterable, Sendable {
 @MainActor
 final class BuildListViewModel {
     private static let searchHistoryScopeID = "builds"
+    nonisolated static let defaultLookbackDays = HomeViewModel.defaultFailedBuildLookbackDays
 
     private(set) var jobs: [JobSummary] = [] {
         didSet { updateFilteredJobs() }
@@ -67,6 +68,9 @@ final class BuildListViewModel {
             repoFilterDidChange()
             updateFilteredJobs()
         }
+    }
+    var lookbackDays = defaultLookbackDays {
+        didSet { updateFilteredJobs() }
     }
     // Cached filtered result. Updated whenever jobs, filter, searchText, or
     // repoFilter changes. Only notifies observers when the content actually
@@ -99,7 +103,7 @@ final class BuildListViewModel {
     }
 
     private func updateFilteredJobs() {
-        var result = Self.filterJobs(jobs, filter: filter)
+        var result = Self.filterJobs(jobs, filter: filter, lookbackDays: lookbackDays)
         if !repoFilter.isEmpty {
             result = result.filter { $0.tags.contains(repoFilter) }
         }
@@ -382,8 +386,14 @@ final class BuildListViewModel {
         let cancel: CancelResult
     }
 
-    nonisolated static func filterJobs(_ jobs: [JobSummary], filter: BuildListFilter) -> [JobSummary] {
-        jobs.filter { job in
+    nonisolated static func filterJobs(
+        _ jobs: [JobSummary],
+        filter: BuildListFilter,
+        lookbackDays: Int,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [JobSummary] {
+        let filteredByStatus = jobs.filter { job in
             switch filter {
             case .attention:
                 switch job.status {
@@ -403,6 +413,18 @@ final class BuildListViewModel {
                 return true
             }
         }
+
+        let normalizedLookbackDays = HomeViewModel.allowedFailedBuildLookbackDays.contains(lookbackDays)
+            ? lookbackDays
+            : defaultLookbackDays
+        let startOfToday = calendar.startOfDay(for: now)
+        let windowStart = calendar.date(
+            byAdding: .day,
+            value: -(normalizedLookbackDays - 1),
+            to: startOfToday
+        ) ?? startOfToday
+
+        return filteredByStatus.filter { $0.updated >= windowStart }
     }
 
     nonisolated static func searchJobs(_ jobs: [JobSummary], matching query: String) -> [JobSummary] {

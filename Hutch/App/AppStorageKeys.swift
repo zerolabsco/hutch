@@ -18,6 +18,7 @@ enum AppStorageKeys {
     static let homeBuildsExpanded = "homeBuildsExpanded"
     static let buildsAutoRefreshInterval = "buildsAutoRefreshInterval"
     static let buildsRepoFilter = "buildsRepoFilter"
+    static let buildsLookbackDays = "buildsLookbackDays"
     static let ticketFilterState = "ticketFilterState"
     static let ticketSavedFilters = "ticketSavedFilters"
     static let appTheme = "appTheme"

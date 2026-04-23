@@ -90,7 +90,7 @@ final class SettingsViewModel {
             avatar
             userType
             sshKeys {
-                results { id fingerprint comment created lastUsed }
+                results { id comment created lastUsed }
                 cursor
             }
             pgpKeys {
@@ -114,7 +114,7 @@ final class SettingsViewModel {
     private static let createSSHKeyMutation = """
     mutation createSSHKey($key: String!) {
         createSSHKey(key: $key) {
-            id fingerprint comment created lastUsed
+            id comment created lastUsed
         }
     }
     """

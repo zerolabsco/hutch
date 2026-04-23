@@ -670,6 +670,10 @@ final class HomeViewModel {
         persistNeedsAttentionSnapshot()
     }
 
+    func refreshNeedsAttentionSnapshot() {
+        persistNeedsAttentionSnapshot()
+    }
+
     private func loadProjects() async -> Result<[Project], Error> {
         do {
             return .success(try await projectService.fetchProjects())

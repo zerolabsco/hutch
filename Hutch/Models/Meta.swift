@@ -22,10 +22,16 @@ struct UserProfile: Codable, Sendable {
 
 struct SSHKey: Codable, Sendable, Identifiable {
     let id: Int
-    let fingerprint: String
     let comment: String?
     let created: Date
     let lastUsed: Date?
+
+    var displayLabel: String {
+        if let comment, !comment.isEmpty {
+            return comment
+        }
+        return "SSH key #\(id)"
+    }
 }
 
 struct SSHKeyPage: Codable, Sendable {

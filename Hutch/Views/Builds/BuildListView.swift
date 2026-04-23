@@ -4,6 +4,8 @@ struct BuildListView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @AppStorage(AppStorageKeys.buildsAutoRefreshInterval) private var autoRefreshRawValue = 0
     @AppStorage(AppStorageKeys.buildsRepoFilter) private var savedRepoFilter = ""
+    @AppStorage(AppStorageKeys.buildsLookbackDays, store: .standard)
+    private var lookbackDays = BuildListViewModel.defaultLookbackDays
     @Environment(AppState.self) private var appState
     @Environment(\.isAMOLEDTheme) private var isAMOLED
     @State private var viewModel: BuildListViewModel?
@@ -65,6 +67,20 @@ struct BuildListView: View {
                                 }
                             }
                         }
+                        Section("Timeframe") {
+                            ForEach(HomeViewModel.allowedFailedBuildLookbackDays, id: \.self) { days in
+                                Button {
+                                    lookbackDays = days
+                                    viewModel.lookbackDays = days
+                                } label: {
+                                    if lookbackDays == days {
+                                        Label(HomeViewModel.failedBuildLookbackLabel(days: days), systemImage: "checkmark")
+                                    } else {
+                                        Text(HomeViewModel.failedBuildLookbackLabel(days: days))
+                                    }
+                                }
+                            }
+                        }
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
@@ -107,12 +123,16 @@ struct BuildListView: View {
             if viewModel == nil {
                 let vm = BuildListViewModel(client: appState.client, defaults: appState.accountDefaults)
                 vm.repoFilter = savedRepoFilter
+                vm.lookbackDays = lookbackDays
                 viewModel = vm
                 await vm.loadJobs()
             }
             // Restart auto-refresh every time the view (re)appears, since
             // onDisappear stops it when navigating away.
             viewModel?.startAutoRefresh(interval: autoRefreshInterval)
+        }
+        .onChange(of: lookbackDays) { _, newValue in
+            viewModel?.lookbackDays = newValue
         }
         .onDisappear {
             viewModel?.stopAutoRefresh()
@@ -235,6 +255,12 @@ struct BuildListView: View {
                     "No Build Matches",
                     systemImage: "magnifyingglass",
                     description: Text("No builds matched “\(viewModel.searchText)”.")
+                )
+            } else if !viewModel.jobs.isEmpty, viewModel.filteredJobs.isEmpty {
+                ContentUnavailableView(
+                    "No Builds In Timeframe",
+                    systemImage: "calendar.badge.clock",
+                    description: Text("No builds were updated \(HomeViewModel.failedBuildLookbackLabel(days: lookbackDays)).")
                 )
             } else if viewModel.jobs.isEmpty, viewModel.error == nil {
                 ContentUnavailableView(
