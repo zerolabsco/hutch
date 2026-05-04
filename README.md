@@ -44,7 +44,7 @@ Some SourceHut services are still browser-only from within Hutch. Unsupported ar
 
 You can create a token at:
 
-- `https://meta.sr.ht/oauth/personal-access-tokens`
+- `https://meta.sr.ht/oauth2/personal-token`
 
 ## Using Hutch
 

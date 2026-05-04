@@ -3,7 +3,7 @@ import SwiftUI
 /// Token entry screen shown when the user is not authenticated.
 struct TokenEntryView: View {
     private let createAccountURL = URL(string: "https://meta.sr.ht/register")!
-    private let personalAccessTokensURL = URL(string: "https://meta.sr.ht/oauth/personal-access-tokens")!
+    private let personalAccessTokensURL = URL(string: "https://meta.sr.ht/oauth2/personal-token")!
 
     @Environment(AppState.self) private var appState
     @State private var token = ""
