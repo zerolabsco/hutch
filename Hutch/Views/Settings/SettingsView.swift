@@ -133,6 +133,13 @@ struct SettingsView: View {
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             .themedRow()
 
+            Button {
+                Task { await appState.client.clearPersistentCache() }
+            } label: {
+                Label("Clear Cache", systemImage: "externaldrive.badge.xmark")
+            }
+            .themedRow()
+
             Button("Reset App Data", role: .destructive) {
                 pendingDestructiveAction = .resetAppData
             }

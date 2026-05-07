@@ -166,6 +166,12 @@ struct BuildDetailView: View {
             )
         } else if let job = viewModel.job {
             List {
+                if let cacheMetadata = viewModel.cacheMetadata {
+                    Section {
+                        StaleCacheStatusRow(metadata: cacheMetadata, isRefreshing: viewModel.isRefreshingCachedData)
+                    }
+                }
+
                 Section("Details") {
                     HStack {
                         Text("Status")

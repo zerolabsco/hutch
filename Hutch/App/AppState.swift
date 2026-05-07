@@ -212,6 +212,7 @@ final class AppState {
         clearActiveSessionState()
         try? KeychainHelper.deleteAll()
         URLCache.shared.removeAllCachedResponses()
+        await client.clearPersistentCache()
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
@@ -232,6 +233,7 @@ final class AppState {
         }
         try? KeychainHelper.deleteAll()
         URLCache.shared.removeAllCachedResponses()
+        await client.clearPersistentCache()
         HTTPCookieStorage.shared.cookies?.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         await clearWebData()
         clearWebContentRenderCaches()
@@ -450,7 +452,10 @@ final class AppState {
     }
 
     private func makeSession(for account: AccountEntry, knownUser: User? = nil) async throws -> AccountSession {
-        let sessionClient = SRHTClient(token: account.token)
+        let sessionClient = SRHTClient(
+            token: account.token,
+            cache: PersistentAPICache(configuration: .accountScoped(accountID: account.id))
+        )
         let user: User
         if let knownUser {
             user = knownUser

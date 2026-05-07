@@ -98,7 +98,7 @@ private struct LabelsPage: Decodable, Sendable {
 @MainActor
 final class TicketDetailViewModel {
     private static func cacheKey(ownerUsername: String, trackerRid: String, ticketId: Int) -> String {
-        "ticket.detail.\(ownerUsername).\(trackerRid).\(ticketId)"
+        APICacheKeys.ticketDetail(owner: ownerUsername, trackerRid: trackerRid, ticketId: ticketId)
     }
 
     let ownerUsername: String
@@ -114,6 +114,8 @@ final class TicketDetailViewModel {
     private(set) var isPerformingAction = false
     private(set) var trackerLabels: [TicketLabel] = []
     private(set) var rawTicketResponse: String?
+    private(set) var cacheMetadata: CacheEntryMetadata?
+    private(set) var isRefreshingCachedData = false
     var commentText = ""
     var error: String?
 
@@ -291,30 +293,25 @@ final class TicketDetailViewModel {
         rawTicketResponse = nil
 
         do {
-            let result = try await client.execute(
+            let result = try await client.executeCached(
                 service: .todo,
                 query: Self.detailQuery,
                 variables: [
                     "rid": trackerRid,
                     "ticketId": ticketId
                 ],
-                responseType: TicketDetailResponse.self
+                responseType: TicketDetailResponse.self,
+                cacheKey: Self.cacheKey(ownerUsername: ownerUsername, trackerRid: trackerRid, ticketId: ticketId),
+                resourceType: .ticketDetail,
+                ttl: APICacheTTLs.ticketDetail,
+                policy: .cacheFirstThenRefresh
             )
-            let payload = result.tracker.ticket
-            ticket = TicketDetail(
-                id: payload.id,
-                created: payload.created,
-                updated: payload.updated,
-                title: payload.title,
-                description: payload.description,
-                status: payload.status,
-                resolution: payload.resolution,
-                authenticity: payload.authenticity,
-                submitter: payload.submitter,
-                assignees: payload.assignees,
-                labels: payload.labels
-            )
-            events = payload.events.results.sorted(by: Self.timelineOrder)
+            apply(result.value, metadata: result.metadata)
+            if result.isFromCache {
+                isLoading = false
+                await refreshTicketInBackground()
+                return
+            }
         } catch {
             self.error = error.userFacingMessage
         }
@@ -329,7 +326,7 @@ final class TicketDetailViewModel {
 
         do {
             let cacheKey = Self.cacheKey(ownerUsername: ownerUsername, trackerRid: trackerRid, ticketId: ticketId)
-            let result = try await client.executeAndCache(
+            let result = try await client.executeCached(
                 service: .todo,
                 query: Self.detailQuery,
                 variables: [
@@ -337,25 +334,14 @@ final class TicketDetailViewModel {
                     "ticketId": ticketId
                 ],
                 responseType: TicketDetailResponse.self,
-                cacheKey: cacheKey
+                cacheKey: cacheKey,
+                resourceType: .ticketDetail,
+                ttl: APICacheTTLs.ticketDetail,
+                policy: .refreshIgnoringCache
             )
-            rawTicketResponse = client.responseCache.get(forKey: cacheKey)
+            rawTicketResponse = await client.cachedPayload(forKey: cacheKey)
                 .flatMap { String(data: $0, encoding: .utf8) }
-            let payload = result.tracker.ticket
-            ticket = TicketDetail(
-                id: payload.id,
-                created: payload.created,
-                updated: payload.updated,
-                title: payload.title,
-                description: payload.description,
-                status: payload.status,
-                resolution: payload.resolution,
-                authenticity: payload.authenticity,
-                submitter: payload.submitter,
-                assignees: payload.assignees,
-                labels: payload.labels
-            )
-            events = payload.events.results.sorted(by: Self.timelineOrder)
+            apply(result.value, metadata: result.metadata)
         } catch {
             self.error = error.userFacingMessage
         }
@@ -391,6 +377,7 @@ final class TicketDetailViewModel {
             events.append(event)
             events.sort(by: Self.timelineOrder)
             commentText = ""
+            await invalidateAfterMutation()
         } catch {
             self.error = error.userFacingMessage
         }
@@ -423,6 +410,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: UpdateStatusResponse.self
             )
+            await invalidateAfterMutation()
             // Re-fetch the ticket to get updated status/resolution
             await reloadTicketPreservingDebugState()
         } catch {
@@ -457,6 +445,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: AssignUserResponse.self
             )
+            await invalidateAfterMutation()
             // Reload to reflect the change
             await reloadTicketPreservingDebugState()
         } catch {
@@ -503,6 +492,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: AssignUserResponse.self
             )
+            await invalidateAfterMutation()
             await reloadTicketPreservingDebugState()
         } catch {
             ticket = TicketDetail(
@@ -550,6 +540,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: UnassignUserResponse.self
             )
+            await invalidateAfterMutation()
             // Reload to reflect the change
             await reloadTicketPreservingDebugState()
         } catch {
@@ -575,6 +566,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: LabelTicketResponse.self
             )
+            await invalidateAfterMutation()
             await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
@@ -599,6 +591,7 @@ final class TicketDetailViewModel {
                 ],
                 responseType: UnlabelTicketResponse.self
             )
+            await invalidateAfterMutation()
             await reloadTicketPreservingDebugState()
         } catch {
             self.error = error.userFacingMessage
@@ -652,6 +645,61 @@ final class TicketDetailViewModel {
         } else {
             await loadTicket()
         }
+    }
+
+    private func refreshTicketInBackground() async {
+        guard !isRefreshingCachedData else { return }
+        isRefreshingCachedData = true
+        defer { isRefreshingCachedData = false }
+
+        do {
+            let result = try await client.executeCached(
+                service: .todo,
+                query: Self.detailQuery,
+                variables: [
+                    "rid": trackerRid,
+                    "ticketId": ticketId
+                ],
+                responseType: TicketDetailResponse.self,
+                cacheKey: Self.cacheKey(ownerUsername: ownerUsername, trackerRid: trackerRid, ticketId: ticketId),
+                resourceType: .ticketDetail,
+                ttl: APICacheTTLs.ticketDetail,
+                policy: .refreshIgnoringCache
+            )
+            apply(result.value, metadata: result.metadata)
+        } catch {
+            if ticket == nil {
+                self.error = error.userFacingMessage
+            }
+        }
+    }
+
+    private func apply(_ response: TicketDetailResponse, metadata: CacheEntryMetadata?) {
+        cacheMetadata = metadata
+        let payload = response.tracker.ticket
+        let updatedTicket = TicketDetail(
+            id: payload.id,
+            created: payload.created,
+            updated: payload.updated,
+            title: payload.title,
+            description: payload.description,
+            status: payload.status,
+            resolution: payload.resolution,
+            authenticity: payload.authenticity,
+            submitter: payload.submitter,
+            assignees: payload.assignees,
+            labels: payload.labels
+        )
+        ticket = updatedTicket
+        let updatedEvents = payload.events.results.sorted(by: Self.timelineOrder)
+        events = updatedEvents
+    }
+
+    private func invalidateAfterMutation() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "ticket"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tickets"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tracker"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
     }
 
     static func matchesAssignee(_ entity: Entity, user: User) -> Bool {

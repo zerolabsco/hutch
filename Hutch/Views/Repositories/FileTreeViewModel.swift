@@ -90,6 +90,7 @@ final class FileTreeViewModel {
     private(set) var viewingObject: GitObject?
 
     private(set) var isLoading = false
+    private(set) var cacheMetadata: CacheEntryMetadata?
     var error: String?
 
     // Available references for the branch/tag picker
@@ -285,12 +286,18 @@ final class FileTreeViewModel {
         do {
             let result: RevparseResponse
             do {
-                result = try await client.execute(
+                let cached = try await client.executeCached(
                     service: service,
                     query: Self.rootTreeQuery,
                     variables: variables,
-                    responseType: RevparseResponse.self
+                    responseType: RevparseResponse.self,
+                    cacheKey: APICacheKeys.treeRoot(service: service, rid: repositoryRid, ref: revspec),
+                    resourceType: .repositoryTree,
+                    ttl: APICacheTTLs.movingRefFileContent,
+                    policy: .cacheFirstThenRefresh
                 )
+                result = cached.value
+                cacheMetadata = cached.metadata
             } catch {
                 if isMissingGitReferenceError(error) {
                     navStack = [FileNavEntry(name: "root", treeId: "")]
@@ -375,12 +382,18 @@ final class FileTreeViewModel {
         ]
 
         do {
-            let result = try await client.execute(
+            let cached = try await client.executeCached(
                 service: service,
                 query: Self.subtreeQuery,
                 variables: variables,
-                responseType: SubtreeResponse.self
+                responseType: SubtreeResponse.self,
+                cacheKey: APICacheKeys.treeEntries(service: service, rid: repositoryRid, treeId: treeId),
+                resourceType: .repositoryTree,
+                ttl: APICacheTTLs.immutableFileContent,
+                policy: .cacheFirstThenRefresh
             )
+            let result = cached.value
+            cacheMetadata = cached.metadata
             navStack.append(FileNavEntry(name: name, treeId: treeId))
             var allEntries = result.repository?.object?.entries?.results ?? []
             var cursor = result.repository?.object?.entries?.cursor
@@ -407,12 +420,18 @@ final class FileTreeViewModel {
         ]
 
         do {
-            let result = try await client.execute(
+            let cached = try await client.executeCached(
                 service: service,
                 query: Self.blobQuery,
                 variables: variables,
-                responseType: BlobResponse.self
+                responseType: BlobResponse.self,
+                cacheKey: APICacheKeys.blob(service: service, rid: repositoryRid, blobId: blobId),
+                resourceType: .repositoryFile,
+                ttl: APICacheTTLs.immutableFileContent,
+                policy: .cacheFirstThenRefresh
             )
+            let result = cached.value
+            cacheMetadata = cached.metadata
             viewingEntry = entry
             viewingObject = result.repository?.object ?? .unknown
         } catch {
@@ -453,12 +472,18 @@ final class FileTreeViewModel {
             ]
 
             do {
-                let result = try await client.execute(
+                let cached = try await client.executeCached(
                     service: service,
                     query: Self.subtreeQuery,
                     variables: variables,
-                    responseType: SubtreeResponse.self
+                    responseType: SubtreeResponse.self,
+                    cacheKey: APICacheKeys.treeEntries(service: service, rid: repositoryRid, treeId: targetEntry.treeId),
+                    resourceType: .repositoryTree,
+                    ttl: APICacheTTLs.immutableFileContent,
+                    policy: .cacheFirstThenRefresh
                 )
+                let result = cached.value
+                cacheMetadata = cached.metadata
                 var allEntries = result.repository?.object?.entries?.results ?? []
                 var cursor = result.repository?.object?.entries?.cursor
                 while let nextCursor = cursor {
@@ -480,13 +505,17 @@ final class FileTreeViewModel {
             "treeId": treeId,
             "cursor": cursor
         ]
-        let result = try await client.execute(
+        let cached = try await client.executeCached(
             service: service,
             query: Self.treeEntriesPageQuery,
             variables: variables,
-            responseType: SubtreeResponse.self
+            responseType: SubtreeResponse.self,
+            cacheKey: APICacheKeys.treeEntries(service: service, rid: repositoryRid, treeId: treeId, cursor: cursor),
+            resourceType: .repositoryTree,
+            ttl: APICacheTTLs.immutableFileContent,
+            policy: .cacheFirstThenRefresh
         )
-        return result.repository?.object?.entries ?? GitTreeEntryPage(results: [], cursor: nil)
+        return cached.value.repository?.object?.entries ?? GitTreeEntryPage(results: [], cursor: nil)
     }
 
     // MARK: - Linked File (used by README link interception)
@@ -517,13 +546,17 @@ final class FileTreeViewModel {
             "revspec": revspec,
             "path": path
         ]
-        let result = try await client.execute(
+        let cached = try await client.executeCached(
             service: service,
             query: Self.linkedFileQuery,
             variables: variables,
-            responseType: LinkedFileResponse.self
+            responseType: LinkedFileResponse.self,
+            cacheKey: APICacheKeys.path(service: service, rid: repositoryRid, ref: revspec, path: path),
+            resourceType: .repositoryFile,
+            ttl: revspec == "HEAD" ? APICacheTTLs.movingRefFileContent : APICacheTTLs.immutableFileContent,
+            policy: .cacheFirstThenRefresh
         )
-        return result.repository?.path
+        return cached.value.repository?.path
     }
 
     /// Dismiss the file view and go back to the directory listing.

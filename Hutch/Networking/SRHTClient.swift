@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 
@@ -20,6 +21,8 @@ final class SRHTClient: Sendable {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let cache: any APICache
+    private let requestCoalescer = RequestCoalescer()
 
     /// The personal access token used for `Authorization: Bearer` headers.
     /// Loaded from Keychain on init; can be refreshed via ``reloadToken()``.
@@ -32,12 +35,19 @@ final class SRHTClient: Sendable {
         tokenLock.withLock { $0 != nil }
     }
 
-    init(session: URLSession = .shared, token: String? = nil) {
+    init(
+        session: URLSession = .shared,
+        token: String? = nil,
+        cache: (any APICache)? = nil
+    ) {
         self.session = session
         self.decoder = JSONDecoder()
         self.decoder.dateDecodingStrategy = .srhtFlexible
         self.encoder = JSONEncoder()
         self.tokenLock = OSAllocatedUnfairLock(initialState: token)
+        self.cache = cache ?? PersistentAPICache(
+            configuration: .accountScoped(accountID: token.map { Self.tokenCacheScope($0) } ?? "anonymous")
+        )
     }
 
     /// Update the stored token (e.g. after the user saves a new one in Keychain).
@@ -154,6 +164,130 @@ final class SRHTClient: Sendable {
         }
 
         return result
+    }
+
+    func executeCached<T: Decodable>(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]? = nil,
+        responseType _: T.Type,
+        cacheKey: String,
+        resourceType: CacheResourceType,
+        ttl: TimeInterval,
+        policy: CachePolicy = .cacheFirstThenRefresh
+    ) async throws -> CachedValue<T> {
+        switch policy {
+        case .networkOnly:
+            let data = try await performGraphQLRequest(
+                service: service,
+                query: query,
+                variables: variables
+            )
+            let value: T = try decodeGraphQLData(data, service: service, query: query, variables: variables)
+            return CachedValue(value: value, metadata: nil, source: .network)
+
+        case .cacheOnly:
+            let entry = try await cache.read(cacheKey: cacheKey)
+            let value: T = try decodeGraphQLData(entry.payload, service: service, query: query, variables: variables)
+            return CachedValue(value: value, metadata: entry.metadata, source: .cache)
+
+        case .cacheFirstThenRefresh:
+            if let entry = try? await cache.read(cacheKey: cacheKey) {
+                let value: T = try decodeGraphQLData(entry.payload, service: service, query: query, variables: variables)
+                if entry.metadata.isExpired() {
+                    Task.detached { [self] in
+                        _ = try? await self.fetchAndCacheGraphQLData(
+                            service: service,
+                            query: query,
+                            variables: variables,
+                            cacheKey: cacheKey,
+                            resourceType: resourceType,
+                            ttl: ttl
+                        )
+                    }
+                }
+                return CachedValue(value: value, metadata: entry.metadata, source: .cache)
+            }
+
+            let (value, metadata): (T, CacheEntryMetadata?) = try await fetchAndCacheGraphQL(
+                service: service,
+                query: query,
+                variables: variables,
+                cacheKey: cacheKey,
+                resourceType: resourceType,
+                ttl: ttl
+            )
+            return CachedValue(value: value, metadata: metadata, source: .network)
+
+        case .refreshIgnoringCache:
+            let (value, metadata): (T, CacheEntryMetadata?) = try await fetchAndCacheGraphQL(
+                service: service,
+                query: query,
+                variables: variables,
+                cacheKey: cacheKey,
+                resourceType: resourceType,
+                ttl: ttl
+            )
+            return CachedValue(value: value, metadata: metadata, source: .network)
+        }
+    }
+
+    func fetchCachedText(
+        url: URL,
+        cacheKey: String,
+        resourceType: CacheResourceType = .buildLog,
+        ttl: TimeInterval,
+        policy: CachePolicy = .cacheFirstThenRefresh
+    ) async throws -> CachedValue<String> {
+        switch policy {
+        case .networkOnly:
+            let text = try await fetchText(url: url)
+            return CachedValue(value: text, metadata: nil, source: .network)
+        case .cacheOnly:
+            let entry = try await cache.read(cacheKey: cacheKey)
+            guard let text = String(data: entry.payload, encoding: .utf8) else {
+                throw SRHTError.decodingError(
+                    DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Cached text is not UTF-8"))
+                )
+            }
+            return CachedValue(value: text, metadata: entry.metadata, source: .cache)
+        case .cacheFirstThenRefresh:
+            if let entry = try? await cache.read(cacheKey: cacheKey),
+               let text = String(data: entry.payload, encoding: .utf8) {
+                if entry.metadata.isExpired() {
+                    Task.detached { [self] in
+                        _ = try? await self.fetchAndCacheText(url: url, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+                    }
+                }
+                return CachedValue(value: text, metadata: entry.metadata, source: .cache)
+            }
+            let (text, metadata) = try await fetchAndCacheText(url: url, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+            return CachedValue(value: text, metadata: metadata, source: .network)
+        case .refreshIgnoringCache:
+            let (text, metadata) = try await fetchAndCacheText(url: url, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+            return CachedValue(value: text, metadata: metadata, source: .network)
+        }
+    }
+
+    func cachedPayload(forKey cacheKey: String) async -> Data? {
+        if let entry = try? await cache.read(cacheKey: cacheKey) {
+            return entry.payload
+        }
+        return responseCache.get(forKey: cacheKey)
+    }
+
+    func invalidateCache(prefix: String) async {
+        await cache.removeByPrefix(prefix)
+    }
+
+    func removeCachedValue(forKey cacheKey: String) async {
+        await cache.remove(cacheKey: cacheKey)
+        responseCache.remove(forKey: cacheKey)
+    }
+
+    func clearPersistentCache() async {
+        await cache.clearAll()
+        responseCache.clear()
     }
 
     // MARK: - Multipart Upload
@@ -614,6 +748,152 @@ final class SRHTClient: Sendable {
 // MARK: - Data Helper
 
 private extension SRHTClient {
+    func performGraphQLRequest(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]?
+    ) async throws -> Data {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
+            throw SRHTError.unauthorized
+        }
+
+        var request = URLRequest(url: service.url)
+        request.httpMethod = "POST"
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = GraphQLRequestBody(
+            query: query,
+            variables: variables?.mapValues { AnyCodable($0) }
+        )
+        request.httpBody = try encoder.encode(body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw SRHTError.networkError(error)
+        }
+
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 401 {
+                throw SRHTError.unauthorized
+            }
+            if !(200...299).contains(http.statusCode) {
+                try throwGraphQLErrorsIfPresent(in: data)
+                throw SRHTError.httpError(http.statusCode)
+            }
+        }
+
+        try throwGraphQLErrorsIfPresent(in: data)
+        return data
+    }
+
+    func decodeGraphQLData<T: Decodable>(
+        _ data: Data,
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]?
+    ) throws -> T {
+        let graphQLResponse: GraphQLResponse<T>
+        do {
+            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
+        } catch {
+            #if DEBUG
+            let responseBody = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
+            logger.error(
+                """
+                Decoding failed for \(String(describing: T.self), privacy: .public)
+                service: \(service.rawValue, privacy: .public)
+                query:
+                \(query, privacy: .public)
+                variables:
+                \(String(describing: variables), privacy: .public)
+                error:
+                \(String(describing: error), privacy: .public)
+                response:
+                \(responseBody, privacy: .public)
+                """
+            )
+            #endif
+            throw SRHTError.decodingError(error)
+        }
+
+        if let errors = graphQLResponse.errors, !errors.isEmpty {
+            throw SRHTError.graphQLErrors(errors)
+        }
+
+        guard let result = graphQLResponse.data else {
+            throw SRHTError.decodingError(
+                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
+            )
+        }
+        return result
+    }
+
+    func fetchAndCacheGraphQL<T: Decodable>(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]?,
+        cacheKey: String,
+        resourceType: CacheResourceType,
+        ttl: TimeInterval
+    ) async throws -> (T, CacheEntryMetadata?) {
+        let data = try await requestCoalescer.value(for: cacheKey) {
+            try await self.performGraphQLRequest(service: service, query: query, variables: variables)
+        }
+        let value: T = try decodeGraphQLData(data, service: service, query: query, variables: variables)
+        responseCache.set(data, forKey: cacheKey)
+        let metadata = try? await cache.write(payload: data, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+        return (value, metadata)
+    }
+
+    func fetchAndCacheGraphQLData(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]?,
+        cacheKey: String,
+        resourceType: CacheResourceType,
+        ttl: TimeInterval
+    ) async throws -> CacheEntryMetadata? {
+        let data = try await requestCoalescer.value(for: cacheKey) {
+            try await self.performGraphQLRequest(service: service, query: query, variables: variables)
+        }
+        responseCache.set(data, forKey: cacheKey)
+        return try? await cache.write(payload: data, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+    }
+
+    func fetchAndCacheText(
+        url: URL,
+        cacheKey: String,
+        resourceType: CacheResourceType,
+        ttl: TimeInterval
+    ) async throws -> (String, CacheEntryMetadata?) {
+        let data = try await requestCoalescer.value(for: cacheKey) {
+            let text = try await self.fetchText(url: url)
+            guard let data = text.data(using: .utf8) else {
+                throw SRHTError.decodingError(
+                    DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Text could not be encoded as UTF-8"))
+                )
+            }
+            return data
+        }
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw SRHTError.decodingError(
+                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Response is not UTF-8 text"))
+            )
+        }
+        responseCache.set(data, forKey: cacheKey)
+        let metadata = try? await cache.write(payload: data, cacheKey: cacheKey, resourceType: resourceType, ttl: ttl)
+        return (text, metadata)
+    }
+
+    static func tokenCacheScope(_ token: String) -> String {
+        let digest = SHA256.hash(data: Data(token.utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
     func throwGraphQLErrorsIfPresent(in data: Data) throws {
         if let envelope = try? decoder.decode(GraphQLResponse<EmptyData>.self, from: data),
            let errors = envelope.errors,
@@ -629,6 +909,23 @@ private extension SRHTClient {
         }
 
         return host.hasSuffix(".sr.ht")
+    }
+}
+
+private actor RequestCoalescer {
+    private var tasks: [String: Task<Data, Error>] = [:]
+
+    func value(for key: String, operation: @Sendable @escaping () async throws -> Data) async throws -> Data {
+        if let task = tasks[key] {
+            return try await task.value
+        }
+
+        let task = Task {
+            try await operation()
+        }
+        tasks[key] = task
+        defer { tasks.removeValue(forKey: key) }
+        return try await task.value
     }
 }
 

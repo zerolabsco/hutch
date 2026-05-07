@@ -169,6 +169,12 @@ struct TicketDetailView: View {
         } else if let ticket = viewModel.ticket {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if let cacheMetadata = viewModel.cacheMetadata {
+                        StaleCacheStatusRow(metadata: cacheMetadata, isRefreshing: viewModel.isRefreshingCachedData)
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                    }
+
                     // Header
                     ticketHeader(ticket, viewModel: viewModel)
 

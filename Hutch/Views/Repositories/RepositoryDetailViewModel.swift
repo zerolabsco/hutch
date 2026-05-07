@@ -138,6 +138,7 @@ final class RepositoryDetailViewModel {
     private(set) var readmePath: String?
     private(set) var isLoadingReadme = false
     private(set) var readmeLoaded = false
+    private(set) var readmeCacheMetadata: CacheEntryMetadata?
 
     // MARK: - Artifacts state
 
@@ -379,13 +380,18 @@ final class RepositoryDetailViewModel {
 
         do {
             // Step 1: Check the custom HTML readme set via the web UI
-            let result = try await client.execute(
+            let result = try await client.executeCached(
                 service: service,
                 query: Self.readmeQuery,
                 variables: ["rid": repository.rid],
-                responseType: ReadmeResponse.self
+                responseType: ReadmeResponse.self,
+                cacheKey: APICacheKeys.readme(service: service, rid: repository.rid),
+                resourceType: .repositoryReadme,
+                ttl: APICacheTTLs.movingRefFileContent,
+                policy: .cacheFirstThenRefresh
             )
-            if let html = result.repository?.readme, !html.isEmpty {
+            readmeCacheMetadata = result.metadata
+            if let html = result.value.repository?.readme, !html.isEmpty {
                 readmePath = nil
                 readmeContent = .html(html)
                 readmeLoaded = true
@@ -396,12 +402,18 @@ final class RepositoryDetailViewModel {
             for filename in Self.readmeFilenames {
                 let pathResult: PathResponse
                 do {
-                    pathResult = try await client.execute(
+                    let cached = try await client.executeCached(
                         service: service,
                         query: Self.readmeFileQuery(filename: filename),
                         variables: ["rid": repository.rid],
-                        responseType: PathResponse.self
+                        responseType: PathResponse.self,
+                        cacheKey: APICacheKeys.readme(service: service, rid: repository.rid, path: filename),
+                        resourceType: .repositoryReadme,
+                        ttl: APICacheTTLs.movingRefFileContent,
+                        policy: .cacheFirstThenRefresh
                     )
+                    pathResult = cached.value
+                    readmeCacheMetadata = cached.metadata
                 } catch {
                     if isEmptyRepositoryError(error) {
                         readmeContent = nil

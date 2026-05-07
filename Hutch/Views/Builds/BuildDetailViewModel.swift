@@ -28,7 +28,7 @@ private struct SubmittedJob: Decodable, Sendable {
 @MainActor
 final class BuildDetailViewModel {
     private static let autoRefreshInterval: Duration = .seconds(5)
-    private static func cacheKey(for jobId: Int) -> String { "build.detail.\(jobId)" }
+    private static func cacheKey(for jobId: Int) -> String { APICacheKeys.buildDetail(jobId: jobId) }
 
     let jobId: Int
     private let client: SRHTClient
@@ -46,6 +46,8 @@ final class BuildDetailViewModel {
     private(set) var isRebuilding = false
     private(set) var isSubmittingEditedBuild = false
     private(set) var rawJobResponse: String?
+    private(set) var cacheMetadata: CacheEntryMetadata?
+    private(set) var isRefreshingCachedData = false
     var error: String?
     /// Transient error shown for action failures (cancel, rebuild, submit).
     /// Separate from `error` so auto-refresh doesn't immediately clear it.
@@ -128,22 +130,21 @@ final class BuildDetailViewModel {
         rawJobResponse = nil
 
         do {
-            let result = try await client.execute(
+            let result = try await client.executeCached(
                 service: .builds,
                 query: Self.detailQuery,
                 variables: ["id": jobId],
-                responseType: JobDetailResponse.self
+                responseType: JobDetailResponse.self,
+                cacheKey: Self.cacheKey(for: jobId),
+                resourceType: .buildDetail,
+                ttl: job?.status.isTerminal == true ? APICacheTTLs.completedBuildDetail : APICacheTTLs.activeBuild,
+                policy: .cacheFirstThenRefresh
             )
-            var loadedJob = result.job
-            loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
-                task.withOrdinal(index)
-            }
-            if job != loadedJob {
-                job = loadedJob
-            }
-
-            if loadedJob.status.isTerminal {
-                stopAutoRefresh()
+            apply(result.value, metadata: result.metadata)
+            if result.isFromCache {
+                isLoading = false
+                await refreshJobInBackground()
+                return
             }
         } catch {
             self.error = error.userFacingMessage
@@ -159,26 +160,19 @@ final class BuildDetailViewModel {
 
         do {
             let cacheKey = Self.cacheKey(for: jobId)
-            let result = try await client.executeAndCache(
+            let result = try await client.executeCached(
                 service: .builds,
                 query: Self.detailQuery,
                 variables: ["id": jobId],
                 responseType: JobDetailResponse.self,
-                cacheKey: cacheKey
+                cacheKey: cacheKey,
+                resourceType: .buildDetail,
+                ttl: job?.status.isTerminal == true ? APICacheTTLs.completedBuildDetail : APICacheTTLs.activeBuild,
+                policy: .refreshIgnoringCache
             )
-            rawJobResponse = client.responseCache.get(forKey: cacheKey)
+            rawJobResponse = await client.cachedPayload(forKey: cacheKey)
                 .flatMap { String(data: $0, encoding: .utf8) }
-            var loadedJob = result.job
-            loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
-                task.withOrdinal(index)
-            }
-            if job != loadedJob {
-                job = loadedJob
-            }
-
-            if loadedJob.status.isTerminal {
-                stopAutoRefresh()
-            }
+            apply(result.value, metadata: result.metadata)
         } catch {
             self.error = error.userFacingMessage
         }
@@ -201,7 +195,14 @@ final class BuildDetailViewModel {
         loadingTaskLogs.insert(cacheKey)
 
         do {
-            taskLogs[cacheKey] = try await client.fetchText(url: logURL)
+            let logCacheKey = APICacheKeys.buildLog(url: logURL, jobId: jobId, task: cacheKey)
+            let result = try await client.fetchCachedText(
+                url: logURL,
+                cacheKey: logCacheKey,
+                ttl: APICacheTTLs.completedBuildLog,
+                policy: .cacheFirstThenRefresh
+            )
+            taskLogs[cacheKey] = result.value
             failedTaskLogs.remove(cacheKey)
         } catch {
             failedTaskLogs.insert(cacheKey)
@@ -222,7 +223,13 @@ final class BuildDetailViewModel {
         isLoadingBuildLog = true
 
         do {
-            buildLogText = try await client.fetchText(url: logURL)
+            let result = try await client.fetchCachedText(
+                url: logURL,
+                cacheKey: APICacheKeys.buildLog(url: logURL, jobId: jobId),
+                ttl: jobIsTerminal ? APICacheTTLs.completedBuildLog : APICacheTTLs.activeBuild,
+                policy: jobIsTerminal ? .cacheFirstThenRefresh : .refreshIgnoringCache
+            )
+            buildLogText = result.value
         } catch {
             self.error = error.userFacingMessage
         }
@@ -287,6 +294,7 @@ final class BuildDetailViewModel {
                 variables: ["id": jobId],
                 responseType: CancelResponse.self
             )
+            await invalidateAfterMutation()
             await reloadJobPreservingDebugState()
         } catch {
             // Revert optimistic update on failure.
@@ -329,6 +337,7 @@ final class BuildDetailViewModel {
                 variables: variables,
                 responseType: SubmitJobResponse.self
             )
+            await invalidateAfterMutation()
             return result.submit.id
         } catch {
             setActionError("Couldn't rebuild. \(error.userFacingMessage)")
@@ -377,6 +386,7 @@ final class BuildDetailViewModel {
                 variables: variables,
                 responseType: SubmitJobResponse.self
             )
+            await invalidateAfterMutation()
             return result.submit.id
         } catch {
             setActionError("Couldn’t submit the build. \(error.userFacingMessage)")
@@ -415,6 +425,52 @@ final class BuildDetailViewModel {
         } else {
             await loadJob()
         }
+    }
+
+    private func refreshJobInBackground() async {
+        guard !isRefreshingCachedData else { return }
+        isRefreshingCachedData = true
+        defer { isRefreshingCachedData = false }
+
+        do {
+            let result = try await client.executeCached(
+                service: .builds,
+                query: Self.detailQuery,
+                variables: ["id": jobId],
+                responseType: JobDetailResponse.self,
+                cacheKey: Self.cacheKey(for: jobId),
+                resourceType: .buildDetail,
+                ttl: job?.status.isTerminal == true ? APICacheTTLs.completedBuildDetail : APICacheTTLs.activeBuild,
+                policy: .refreshIgnoringCache
+            )
+            apply(result.value, metadata: result.metadata)
+        } catch {
+            if job == nil {
+                self.error = error.userFacingMessage
+            }
+        }
+    }
+
+    private func apply(_ response: JobDetailResponse, metadata: CacheEntryMetadata?) {
+        cacheMetadata = metadata
+        var loadedJob = response.job
+        loadedJob.tasks = loadedJob.tasks.enumerated().map { index, task in
+            task.withOrdinal(index)
+        }
+        if job != loadedJob {
+            job = loadedJob
+        }
+
+        if loadedJob.status.isTerminal {
+            stopAutoRefresh()
+        }
+    }
+
+    private func invalidateAfterMutation() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "job"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "jobs"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "log"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
     }
 
     private var shouldAutoRefresh: Bool {
