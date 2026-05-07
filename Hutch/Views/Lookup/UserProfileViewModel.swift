@@ -49,13 +49,17 @@ final class UserProfileViewModel {
         defer { isLoadingRepositories = false }
 
         do {
-            let result = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .git,
                 query: Self.repositoriesQuery,
                 variables: ["owner": ownerUsername],
-                responseType: UserRepositoriesResponse.self
+                responseType: UserRepositoriesResponse.self,
+                cacheKey: APICacheKeys.userRepositories(owner: ownerUsername),
+                resourceType: .userProfile,
+                ttl: APICacheTTLs.userProfile,
+                policy: .cacheFirstThenRefresh
             )
-            repositories = result.user.repositories.results.map { $0.repositorySummary(service: .git) }
+            repositories = cached.value.user.repositories.results.map { $0.repositorySummary(service: .git) }
         } catch {
             repositoriesError = error.userFacingMessage
         }
@@ -78,13 +82,17 @@ final class UserProfileViewModel {
         defer { isLoadingTrackers = false }
 
         do {
-            let result = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .todo,
                 query: Self.trackersQuery,
                 variables: ["owner": ownerUsername],
-                responseType: UserTrackersResponse.self
+                responseType: UserTrackersResponse.self,
+                cacheKey: APICacheKeys.userTrackers(owner: ownerUsername),
+                resourceType: .userProfile,
+                ttl: APICacheTTLs.userProfile,
+                policy: .cacheFirstThenRefresh
             )
-            trackers = result.user.trackers.results
+            trackers = cached.value.user.trackers.results
         } catch {
             trackersError = error.userFacingMessage
         }

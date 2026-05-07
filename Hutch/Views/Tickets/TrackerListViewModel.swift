@@ -118,6 +118,12 @@ final class TrackerListViewModel {
         hasMore = true
 
         do {
+            if trackers.isEmpty, let cached = try? await fetchPage(cursor: nil, policy: .cacheOnly) {
+                trackers = cached.results
+                cursor = cached.cursor
+                hasMore = cached.cursor != nil
+                isLoading = false
+            }
             let page = try await fetchPage(cursor: nil)
             trackers = page.results
             cursor = page.cursor
@@ -181,6 +187,7 @@ final class TrackerListViewModel {
                 responseType: CreateTrackerResponse.self
             )
             let tracker = result.createTracker
+            await invalidateTrackerCaches()
             trackers.insert(tracker, at: 0)
             return tracker
         } catch {
@@ -224,6 +231,7 @@ final class TrackerListViewModel {
                 ],
                 responseType: UpdateTrackerResponse.self
             )
+            await invalidateTrackerCaches()
             applyTrackerUpdate(result.updateTracker)
             return result.updateTracker
         } catch {
@@ -246,6 +254,7 @@ final class TrackerListViewModel {
                 variables: ["id": tracker.id],
                 responseType: DeleteTrackerResponse.self
             )
+            await invalidateTrackerCaches()
             trackers.removeAll { $0.id == tracker.id }
             await loadTrackers()
             return true
@@ -269,18 +278,22 @@ final class TrackerListViewModel {
 
     // MARK: - Private
 
-    private func fetchPage(cursor: String?) async throws -> TrackersPage {
+    private func fetchPage(cursor: String?, policy: CachePolicy = .cacheFirstThenRefresh) async throws -> TrackersPage {
         var variables: [String: any Sendable] = [:]
         if let cursor {
             variables["cursor"] = cursor
         }
-        let result = try await client.execute(
+        let cached = try await client.executeCached(
             service: .todo,
             query: Self.query,
             variables: variables.isEmpty ? nil : variables,
-            responseType: TrackersResponse.self
+            responseType: TrackersResponse.self,
+            cacheKey: APICacheKeys.trackers(cursor: cursor),
+            resourceType: .ticketList,
+            ttl: APICacheTTLs.ticketList,
+            policy: policy
         )
-        return result.trackers
+        return cached.value.trackers
     }
 
     private struct CreateTrackerResponse: Decodable, Sendable {
@@ -289,5 +302,11 @@ final class TrackerListViewModel {
 
     private func trackerCreationErrorMessage(for error: Error) -> String {
         "Couldn’t create the tracker. \(error.userFacingMessage)"
+    }
+
+    private func invalidateTrackerCaches() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "trackers"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tracker"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
     }
 }

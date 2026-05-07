@@ -299,6 +299,13 @@ final class TicketListViewModel {
         hasMore = true
 
         do {
+            if tickets.isEmpty, let cachedPage = try? await fetchPage(cursor: nil, policy: .cacheOnly) {
+                tickets = cachedPage.results
+                cursor = cachedPage.cursor
+                hasMore = cachedPage.cursor != nil
+                reconcileSelectionWithLoadedTickets()
+                isLoading = false
+            }
             // todo.sr.ht exposes `tickets(cursor:)` only (see Docs/API/todo.json) — no server-side
             // status filter. The Open tab filters client-side, so we paginate until the cursor is
             // exhausted; otherwise older open tickets never appear in the first page (25 items).
@@ -405,6 +412,7 @@ final class TicketListViewModel {
                 responseType: SubmitTicketResponse.self
             )
             let ticket = result.submitTicket
+            await invalidateTicketCaches()
             tickets.insert(ticket, at: 0)
             return ticket
         } catch {
@@ -460,6 +468,7 @@ final class TicketListViewModel {
                 ],
                 responseType: AssignmentMutationResponse.self
             )
+            await invalidateTicketCaches()
         } catch {
             tickets = original
             self.error = error.userFacingMessage
@@ -502,6 +511,7 @@ final class TicketListViewModel {
                 ],
                 responseType: AssignmentMutationResponse.self
             )
+            await invalidateTicketCaches()
         } catch {
             tickets = original
             self.error = error.userFacingMessage
@@ -512,13 +522,17 @@ final class TicketListViewModel {
 
     func loadTrackerLabels() async {
         do {
-            let result = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .todo,
                 query: Self.trackerLabelsQuery,
                 variables: ["rid": trackerRid],
-                responseType: TrackerLabelsResponse.self
+                responseType: TrackerLabelsResponse.self,
+                cacheKey: APICacheKeys.trackerLabels(trackerRid: trackerRid),
+                resourceType: .ticketList,
+                ttl: APICacheTTLs.ticketList,
+                policy: .cacheFirstThenRefresh
             )
-            syncTrackerLabels(result.tracker.labels.results)
+            syncTrackerLabels(cached.value.tracker.labels.results)
         } catch {
             self.error = error.userFacingMessage
         }
@@ -652,6 +666,7 @@ final class TicketListViewModel {
                 ],
                 responseType: LabelMutationResponse.self
             )
+            await invalidateTicketCaches()
         } catch {
             tickets = original
             self.error = error.userFacingMessage
@@ -692,6 +707,7 @@ final class TicketListViewModel {
                 ],
                 responseType: LabelMutationResponse.self
             )
+            await invalidateTicketCaches()
         } catch {
             tickets = original
             self.error = error.userFacingMessage
@@ -790,6 +806,7 @@ final class TicketListViewModel {
                 responseType: UpdateStatusResponse.self
             )
             _ = result.updateTicketStatus
+            await invalidateTicketCaches()
             if let index = tickets.firstIndex(where: { $0.id == ticket.id }) {
                 tickets[index] = updatedTicket(from: ticket, input: input)
             }
@@ -800,18 +817,22 @@ final class TicketListViewModel {
         isPerformingAction = false
     }
 
-    private func fetchPage(cursor: String?) async throws -> TicketsPage {
+    private func fetchPage(cursor: String?, policy: CachePolicy = .cacheFirstThenRefresh) async throws -> TicketsPage {
         var variables: [String: any Sendable] = ["rid": trackerRid]
         if let cursor {
             variables["cursor"] = cursor
         }
-        let result = try await client.execute(
+        let cached = try await client.executeCached(
             service: .todo,
             query: Self.query,
             variables: variables,
-            responseType: TrackerTicketsResponse.self
+            responseType: TrackerTicketsResponse.self,
+            cacheKey: APICacheKeys.tickets(trackerRid: trackerRid, cursor: cursor),
+            resourceType: .ticketList,
+            ttl: APICacheTTLs.ticketList,
+            policy: policy
         )
-        return result.tracker.tickets
+        return cached.value.tracker.tickets
     }
 
     private struct SubmitTicketResponse: Decodable, Sendable {
@@ -919,6 +940,7 @@ final class TicketListViewModel {
         )
 
         if failedTicketIDs.isEmpty {
+            await invalidateTicketCaches()
             clearTicketSelection()
             isSelectionMode = false
         } else {
@@ -958,6 +980,13 @@ final class TicketListViewModel {
             ],
             responseType: AssignmentMutationResponse.self
         )
+    }
+
+    private func invalidateTicketCaches() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tickets"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "ticket"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tracker"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
     }
 
     private static func bulkStatusUpdateInput(resolution: TicketResolution) -> [String: any Sendable] {

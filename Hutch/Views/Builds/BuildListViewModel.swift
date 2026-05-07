@@ -188,7 +188,7 @@ final class BuildListViewModel {
     func loadJobs() async {
         // Show cached data immediately on first load (may populate `jobs` from cache).
         if jobs.isEmpty {
-            loadFromCache()
+            await loadFromCache()
         }
 
         let treatAsInitialLoad = jobs.isEmpty
@@ -279,6 +279,7 @@ final class BuildListViewModel {
                 variables: variables,
                 responseType: SubmitJobResponse.self
             )
+            await invalidateBuildListCache()
             await loadJobs()
             return result.submit.id
         } catch {
@@ -297,6 +298,7 @@ final class BuildListViewModel {
                 variables: ["id": job.id],
                 responseType: CancelResponse.self
             )
+            await invalidateBuildListCache()
             if let index = jobs.firstIndex(where: { $0.id == job.id }) {
                 let updated = JobSummary(
                     id: job.id,
@@ -345,14 +347,17 @@ final class BuildListViewModel {
         }
 
         if useCache && cursor == nil {
-            let result = try await client.executeAndCache(
+            let cached = try await client.executeCached(
                 service: .builds,
                 query: Self.query,
                 variables: variables.isEmpty ? nil : variables,
                 responseType: JobsResponse.self,
-                cacheKey: Self.cacheKey
+                cacheKey: APICacheKeys.builds(cursor: cursor),
+                resourceType: .buildList,
+                ttl: APICacheTTLs.activeBuild,
+                policy: .cacheFirstThenRefresh
             )
-            return result.jobs
+            return cached.value.jobs
         } else {
             let result = try await client.execute(
                 service: .builds,
@@ -364,8 +369,14 @@ final class BuildListViewModel {
         }
     }
 
-    private func loadFromCache() {
-        guard let data = client.responseCache.get(forKey: Self.cacheKey) else { return }
+    private func invalidateBuildListCache() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "jobs"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "job"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
+    }
+
+    private func loadFromCache() async {
+        guard let data = await client.cachedPayload(forKey: APICacheKeys.builds()) ?? client.responseCache.get(forKey: Self.cacheKey) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .srhtFlexible
         if let response = try? decoder.decode(

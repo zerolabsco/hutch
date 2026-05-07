@@ -35,7 +35,7 @@ struct CacheEntryMetadata: Codable, Sendable, Equatable {
     let schemaVersion: Int
     let payloadSize: Int
 
-    func isExpired(now: Date = Date()) -> Bool {
+    nonisolated func isExpired(now: Date = Date()) -> Bool {
         expiresAt <= now
     }
 }
@@ -83,7 +83,7 @@ struct APICacheConfiguration: Sendable {
     var memoryEntryLimit: Int
     var schemaVersion: Int
 
-    static func accountScoped(accountID: String) -> APICacheConfiguration {
+    nonisolated static func accountScoped(accountID: String) -> APICacheConfiguration {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         return APICacheConfiguration(
@@ -98,7 +98,7 @@ struct APICacheConfiguration: Sendable {
         )
     }
 
-    static func temporary(directory: URL) -> APICacheConfiguration {
+    nonisolated static func temporary(directory: URL) -> APICacheConfiguration {
         APICacheConfiguration(
             directory: directory,
             maxCacheSizeBytes: 4 * 1024 * 1024,
@@ -126,15 +126,13 @@ actor PersistentAPICache: APICache {
     }
 
     private let configuration: APICacheConfiguration
-    private let fileManager: FileManager
     private var memoryEntries: [String: APICacheEntry] = [:]
     private var memoryOrder: [String] = []
     private var knownMetadata: [String: CacheEntryMetadata] = [:]
     private var writeCountSincePrune = 0
 
-    init(configuration: APICacheConfiguration, fileManager: FileManager = .default) {
+    init(configuration: APICacheConfiguration) {
         self.configuration = configuration
-        self.fileManager = fileManager
     }
 
     func read(cacheKey: String) async throws -> APICacheEntry {
@@ -147,13 +145,13 @@ actor PersistentAPICache: APICache {
         }
 
         let url = fileURL(for: cacheKey)
-        guard fileManager.fileExists(atPath: url.path) else {
+        guard FileManager.default.fileExists(atPath: url.path) else {
             throw APICacheError.miss
         }
 
         var stored = try decodeEntry(from: url)
         guard stored.metadata.schemaVersion == configuration.schemaVersion else {
-            try? fileManager.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url)
             throw APICacheError.miss
         }
 
@@ -223,7 +221,7 @@ actor PersistentAPICache: APICache {
         memoryEntries.removeValue(forKey: cacheKey)
         memoryOrder.removeAll { $0 == cacheKey }
         knownMetadata.removeValue(forKey: cacheKey)
-        try? fileManager.removeItem(at: fileURL(for: cacheKey))
+        try? FileManager.default.removeItem(at: fileURL(for: cacheKey))
     }
 
     func removeByPrefix(_ prefix: String) async {
@@ -237,7 +235,7 @@ actor PersistentAPICache: APICache {
         memoryEntries.removeAll()
         memoryOrder.removeAll()
         knownMetadata.removeAll()
-        try? fileManager.removeItem(at: configuration.directory)
+        try? FileManager.default.removeItem(at: configuration.directory)
     }
 
     func pruneExpired(now: Date = Date()) async {
@@ -289,7 +287,7 @@ actor PersistentAPICache: APICache {
 
     private func loadKnownMetadataIfNeeded() async {
         guard knownMetadata.isEmpty else { return }
-        guard let urls = try? fileManager.contentsOfDirectory(
+        guard let urls = try? FileManager.default.contentsOfDirectory(
             at: configuration.directory,
             includingPropertiesForKeys: nil
         ) else { return }
@@ -301,8 +299,8 @@ actor PersistentAPICache: APICache {
     }
 
     private func ensureDirectoryExists() throws {
-        if !fileManager.fileExists(atPath: configuration.directory.path) {
-            try fileManager.createDirectory(
+        if !FileManager.default.fileExists(atPath: configuration.directory.path) {
+            try FileManager.default.createDirectory(
                 at: configuration.directory,
                 withIntermediateDirectories: true
             )
@@ -315,13 +313,13 @@ actor PersistentAPICache: APICache {
             .appendingPathExtension("json")
     }
 
-    private static func payloadHash(_ data: Data) -> String {
+    nonisolated private static func payloadHash(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
 
 extension JSONEncoder {
-    static var srhtCache: JSONEncoder {
+    nonisolated static var srhtCache: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return encoder
@@ -329,7 +327,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-    static var srhtCache: JSONDecoder {
+    nonisolated static var srhtCache: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder

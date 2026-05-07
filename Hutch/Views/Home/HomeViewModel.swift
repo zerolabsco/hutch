@@ -578,6 +578,7 @@ final class HomeViewModel {
                 ],
                 responseType: UnassignResponse.self
             )
+            await invalidateHomeRelatedCaches()
             assignedTickets.removeAll { $0.id == ticket.id }
             persistNeedsAttentionSnapshot()
         } catch {
@@ -595,6 +596,7 @@ final class HomeViewModel {
                 variables: ["id": build.job.id],
                 responseType: CancelBuildResponse.self
             )
+            await invalidateHomeRelatedCaches()
             if let index = recentBuilds.firstIndex(where: { $0.id == build.id }) {
                 let updatedJob = JobSummary(
                     id: build.job.id,
@@ -684,12 +686,16 @@ final class HomeViewModel {
 
     private func loadRecentJobs() async -> Result<[HomeJobPayload], Error> {
         do {
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .builds,
                 query: Self.jobsQuery,
-                responseType: HomeJobsResponse.self
+                responseType: HomeJobsResponse.self,
+                cacheKey: APICacheKeys.homeJobs(actor: currentUser.canonicalName),
+                resourceType: .buildList,
+                ttl: APICacheTTLs.homeDashboard,
+                policy: .cacheFirstThenRefresh
             )
-            return .success(response.jobs.results)
+            return .success(cached.value.jobs.results)
         } catch {
             return .failure(error)
         }
@@ -780,12 +786,17 @@ final class HomeViewModel {
                 variables["cursor"] = cursor
             }
 
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .lists,
                 query: Self.inboxSubscriptionsQuery,
                 variables: variables.isEmpty ? nil : variables,
-                responseType: HomeInboxSubscriptionsResponse.self
+                responseType: HomeInboxSubscriptionsResponse.self,
+                cacheKey: APICacheKeys.inboxSubscriptions(cursor: cursor),
+                resourceType: .ticketList,
+                ttl: APICacheTTLs.inboxSummary,
+                policy: .cacheFirstThenRefresh
             )
+            let response = cached.value
 
             subscriptions.append(contentsOf: response.subscriptions.results)
             guard let nextCursor = response.subscriptions.cursor else {
@@ -809,12 +820,17 @@ final class HomeViewModel {
                 variables["cursor"] = cursor
             }
 
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .lists,
                 query: Self.inboxListThreadsQuery,
                 variables: variables,
-                responseType: HomeInboxListThreadsResponse.self
+                responseType: HomeInboxListThreadsResponse.self,
+                cacheKey: APICacheKeys.inboxThreads(listRid: mailingList.rid, cursor: cursor),
+                resourceType: .ticketList,
+                ttl: APICacheTTLs.inboxSummary,
+                policy: .cacheFirstThenRefresh
             )
+            let response = cached.value
 
             let unreadThreadSummaries = response.list.threads.results.compactMap { thread -> InboxThreadSummary? in
                 let summary = InboxThreadSummary(
@@ -876,12 +892,17 @@ final class HomeViewModel {
                 variables["cursor"] = cursor
             }
 
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .todo,
                 query: Self.trackersQuery,
                 variables: variables.isEmpty ? nil : variables,
-                responseType: HomeTrackersResponse.self
+                responseType: HomeTrackersResponse.self,
+                cacheKey: APICacheKeys.trackers(cursor: cursor),
+                resourceType: .ticketList,
+                ttl: APICacheTTLs.ticketList,
+                policy: .cacheFirstThenRefresh
             )
+            let response = cached.value
 
             allTrackers.append(contentsOf: response.trackers.results)
             guard let nextCursor = response.trackers.cursor else {
@@ -925,7 +946,7 @@ final class HomeViewModel {
     }
 
     private func fetchAssignedTickets(for tracker: TrackerSummary) async throws -> [HomeAssignedTicket] {
-        let response = try await client.execute(
+        let cached = try await client.executeCached(
             service: .todo,
             query: Self.trackerTicketsQuery,
             variables: [
@@ -934,8 +955,18 @@ final class HomeViewModel {
                     : tracker.owner.canonicalName,
                 "tracker": tracker.name
             ],
-            responseType: HomeTrackerTicketsResponse.self
+            responseType: HomeTrackerTicketsResponse.self,
+            cacheKey: APICacheKeys.homeTrackerTickets(
+                owner: tracker.owner.canonicalName.hasPrefix("~")
+                    ? String(tracker.owner.canonicalName.dropFirst())
+                    : tracker.owner.canonicalName,
+                tracker: tracker.name
+            ),
+            resourceType: .ticketList,
+            ttl: APICacheTTLs.ticketList,
+            policy: .cacheFirstThenRefresh
         )
+        let response = cached.value
 
         return response.user.tracker.tickets.results.compactMap { payload in
             guard payload.status.isOpen else {
@@ -970,11 +1001,21 @@ final class HomeViewModel {
                 ],
                 responseType: StatusEventResponse.self
             )
+            await invalidateHomeRelatedCaches()
             assignedTickets.removeAll { $0.id == ticket.id }
             persistNeedsAttentionSnapshot()
         } catch {
             homeLogger.error("Ticket status update failed: \(error, privacy: .public)")
         }
+    }
+
+    private func invalidateHomeRelatedCaches() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tickets"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "ticket"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "trackers"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "jobs"))
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.builds.rawValue, "job"))
     }
 
     private func persistNeedsAttentionSnapshot() {

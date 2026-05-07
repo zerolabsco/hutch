@@ -109,13 +109,17 @@ final class PasteService: Sendable {
         let variables = cursor.map { ["cursor": $0 as any Sendable] }
         let result: PasteListResponse
         if useCache, cursor == nil {
-            result = try await client.executeAndCache(
+            let cached = try await client.executeCached(
                 service: .paste,
                 query: Self.listQuery,
                 variables: variables,
                 responseType: PasteListResponse.self,
-                cacheKey: Self.cacheKey
+                cacheKey: APICacheKeys.pasteList(cursor: cursor),
+                resourceType: .pasteList,
+                ttl: APICacheTTLs.ticketList,
+                policy: .cacheFirstThenRefresh
             )
+            result = cached.value
         } else {
             result = try await client.execute(
                 service: .paste,
@@ -127,8 +131,8 @@ final class PasteService: Sendable {
         return result.pastes ?? PasteListPage(results: [], cursor: nil)
     }
 
-    func loadCachedPastes() -> PasteListPage? {
-        guard let data = client.responseCache.get(forKey: Self.cacheKey) else {
+    func loadCachedPastes() async -> PasteListPage? {
+        guard let data = await client.cachedPayload(forKey: APICacheKeys.pasteList()) ?? client.responseCache.get(forKey: Self.cacheKey) else {
             return nil
         }
 
@@ -171,6 +175,7 @@ final class PasteService: Sendable {
             },
             responseType: CreatePasteResponse.self
         )
+        await invalidatePasteCaches()
         return result.create
     }
 
@@ -181,6 +186,7 @@ final class PasteService: Sendable {
             variables: ["id": id, "visibility": visibility.rawValue],
             responseType: UpdatePasteResponse.self
         )
+        await invalidatePasteCaches()
         return result.update
     }
 
@@ -191,6 +197,7 @@ final class PasteService: Sendable {
             variables: ["id": id],
             responseType: DeletePasteResponse.self
         )
+        await invalidatePasteCaches()
         return result.delete
     }
 
@@ -207,6 +214,10 @@ final class PasteService: Sendable {
 
             return (draft.filename, data)
         }
+    }
+
+    private func invalidatePasteCaches() async {
+        await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.paste.rawValue, "pastes"))
     }
 }
 

@@ -51,6 +51,14 @@ enum APICacheKeys {
         make([SRHTService.todo.rawValue, "tracker-labels", "tracker:\(trackerRid)"])
     }
 
+    static func trackers(cursor: String? = nil) -> String {
+        make([SRHTService.todo.rawValue, "trackers", cursor.map { "cursor:\($0)" }])
+    }
+
+    static func tickets(trackerRid: String, cursor: String? = nil) -> String {
+        make([SRHTService.todo.rawValue, "tickets", "tracker:\(trackerRid)", cursor.map { "cursor:\($0)" }])
+    }
+
     static func builds(cursor: String? = nil, filter: String? = nil) -> String {
         make([SRHTService.builds.rawValue, "jobs", cursor.map { "cursor:\($0)" }, filter.map { "filter:\($0)" }])
     }
@@ -69,6 +77,37 @@ enum APICacheKeys {
 
     static func userTrackers(owner: String, cursor: String? = nil) -> String {
         make([SRHTService.todo.rawValue, "user-trackers", normalize(owner), cursor.map { "cursor:\($0)" }])
+    }
+
+    static func projects(cursor: String? = nil) -> String {
+        make([SRHTService.hub.rawValue, "projects", cursor.map { "cursor:\($0)" }])
+    }
+
+    static func projectDetail(rid: String, mailingListsCursor: String? = nil, sourcesCursor: String? = nil, trackersCursor: String? = nil) -> String {
+        make([
+            SRHTService.hub.rawValue,
+            "project",
+            "rid:\(rid)",
+            mailingListsCursor.map { "ml:\($0)" },
+            sourcesCursor.map { "src:\($0)" },
+            trackersCursor.map { "trk:\($0)" }
+        ])
+    }
+
+    static func homeJobs(actor: String) -> String {
+        make(["home", "jobs", normalize(actor)])
+    }
+
+    static func homeTrackerTickets(owner: String, tracker: String) -> String {
+        make(["home", "tickets", normalize(owner), normalize(tracker)])
+    }
+
+    static func inboxSubscriptions(cursor: String? = nil) -> String {
+        make([SRHTService.lists.rawValue, "subscriptions", cursor.map { "cursor:\($0)" }])
+    }
+
+    static func inboxThreads(listRid: String, cursor: String? = nil) -> String {
+        make([SRHTService.lists.rawValue, "threads", "list:\(listRid)", cursor.map { "cursor:\($0)" }])
     }
 
     static func pasteList(cursor: String? = nil) -> String {
@@ -102,4 +141,8 @@ enum APICacheTTLs {
     static let movingRefFileContent: TimeInterval = 10 * 60
     static let userProfile: TimeInterval = 30 * 60
     static let status: TimeInterval = 5 * 60
+    static let homeDashboard: TimeInterval = 2 * 60
+    static let inboxSummary: TimeInterval = 2 * 60
+    static let projectList: TimeInterval = 10 * 60
+    static let projectDetail: TimeInterval = 10 * 60
 }

@@ -155,7 +155,7 @@ final class RepositoryListViewModel {
 
         // Only use cache for non-search, initial loads
         if !isSearch, repositories.isEmpty {
-            loadFromCache()
+            await loadFromCache()
         }
 
         // During search, never show the full-screen loading overlay (which
@@ -282,6 +282,8 @@ final class RepositoryListViewModel {
                 )
                 repository = result.createRepository.repositorySummary(service: .hg)
             }
+            await client.invalidateCache(prefix: APICacheKeys.prefix(repository.service.rawValue, "repositories"))
+            await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
             repositories.insert(repository, at: 0)
             insertIntoSearchIndex(repository)
             scheduleBuildStatusRefresh()
@@ -469,13 +471,17 @@ final class RepositoryListViewModel {
         if useCache && cursor == nil {
             if service == .hg {
                 let hgVariables = cursor.map { ["cursor": $0 as any Sendable] }
-                let result = try await client.executeAndCache(
+                let cached = try await client.executeCached(
                     service: service,
                     query: Self.hgQuery,
                     variables: hgVariables,
                     responseType: HGRepositoriesResponse.self,
-                    cacheKey: cacheKey(for: service)
+                    cacheKey: cacheKey(for: service),
+                    resourceType: .repositoryList,
+                    ttl: APICacheTTLs.repositoryList,
+                    policy: .cacheFirstThenRefresh
                 )
+                let result = cached.value
                 return Page(
                     results: result.repositories?.results.map {
                         RepositoryPayload(
@@ -492,14 +498,17 @@ final class RepositoryListViewModel {
                     cursor: result.repositories?.cursor
                 )
             }
-            let result = try await client.executeAndCache(
+            let cached = try await client.executeCached(
                 service: service,
                 query: Self.gitQuery,
                 variables: variables.isEmpty ? nil : variables,
                 responseType: RepositoriesResponse.self,
-                cacheKey: cacheKey(for: service)
+                cacheKey: cacheKey(for: service),
+                resourceType: .repositoryList,
+                ttl: APICacheTTLs.repositoryList,
+                policy: .cacheFirstThenRefresh
             )
-            return result.repositories ?? Self.emptyPage
+            return cached.value.repositories ?? Self.emptyPage
         } else {
             if service == .hg {
                 let hgVariables = cursor.map { ["cursor": $0 as any Sendable] }
@@ -535,37 +544,51 @@ final class RepositoryListViewModel {
         }
     }
 
-    private func loadFromCache() {
-        let cachedRepositories = [SRHTService.git, .hg].flatMap { service -> [RepositorySummary] in
-            guard let data = client.responseCache.get(forKey: cacheKey(for: service)) else { return [] }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .srhtFlexible
-            switch service {
-            case .git:
-                if let response = try? decoder.decode(
-                    GraphQLResponse<RepositoriesResponse>.self,
-                    from: data
-                ), let repos = response.data?.repositories {
-                    return repos.results.map { $0.repositorySummary(service: service) }
-                }
-            case .hg:
-                if let response = try? decoder.decode(
-                    GraphQLResponse<HGRepositoriesResponse>.self,
-                    from: data
-                ), let repos = response.data?.repositories {
-                    return repos.results.map { $0.repositorySummary(service: service) }
-                }
-            default:
-                break
+    private func loadFromCache() async {
+        var persistedRepositories: [RepositorySummary] = []
+        for service in [SRHTService.git, .hg] {
+            if let data = await client.cachedPayload(forKey: cacheKey(for: service)) {
+                persistedRepositories.append(contentsOf: Self.decodeCachedRepositories(data, service: service))
             }
-            return []
         }
+        let cachedRepositories = persistedRepositories.isEmpty ? legacyCachedRepositories() : persistedRepositories
         if !cachedRepositories.isEmpty {
             let sortedRepositories = cachedRepositories.sorted(by: repositorySortOrder)
             repositories = sortedRepositories
             updateSearchIndex(with: sortedRepositories)
             scheduleBuildStatusRefresh()
         }
+    }
+
+    private func legacyCachedRepositories() -> [RepositorySummary] {
+        [SRHTService.git, .hg].flatMap { service -> [RepositorySummary] in
+            guard let data = client.responseCache.get(forKey: cacheKey(for: service)) else { return [] }
+            return Self.decodeCachedRepositories(data, service: service)
+        }
+    }
+
+    private static func decodeCachedRepositories(_ data: Data, service: SRHTService) -> [RepositorySummary] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .srhtFlexible
+        switch service {
+        case .git:
+            if let response = try? decoder.decode(
+                GraphQLResponse<RepositoriesResponse>.self,
+                from: data
+            ), let repos = response.data?.repositories {
+                return repos.results.map { $0.repositorySummary(service: service) }
+            }
+        case .hg:
+            if let response = try? decoder.decode(
+                GraphQLResponse<HGRepositoriesResponse>.self,
+                from: data
+            ), let repos = response.data?.repositories {
+                return repos.results.map { $0.repositorySummary(service: service) }
+            }
+        default:
+            break
+        }
+        return []
     }
 
     private func scheduleBuildStatusRefresh(force: Bool = false) {
@@ -640,14 +663,17 @@ final class RepositoryListViewModel {
         }
 
         if useCache && cursor == nil {
-            let result = try await client.executeAndCache(
+            let cached = try await client.executeCached(
                 service: .builds,
                 query: Self.buildsQuery,
                 variables: variables.isEmpty ? nil : variables,
                 responseType: BuildJobsResponse.self,
-                cacheKey: Self.buildsCacheKey
+                cacheKey: APICacheKeys.builds(cursor: cursor, filter: "repository-status"),
+                resourceType: .buildList,
+                ttl: APICacheTTLs.activeBuild,
+                policy: .cacheFirstThenRefresh
             )
-            return result.jobs
+            return cached.value.jobs
         }
 
         let result = try await client.execute(
@@ -681,11 +707,11 @@ final class RepositoryListViewModel {
     private func cacheKey(for service: SRHTService) -> String {
         switch service {
         case .git:
-            Self.gitCacheKey
+            APICacheKeys.repositories(service: .git)
         case .hg:
-            Self.hgCacheKey
+            APICacheKeys.repositories(service: .hg)
         default:
-            "\(service.rawValue).repositories"
+            APICacheKeys.repositories(service: service)
         }
     }
 

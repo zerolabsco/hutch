@@ -287,12 +287,17 @@ struct ProjectService: Sendable {
                 variables["cursor"] = cursor
             }
 
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .hub,
                 query: Self.projectsQuery,
                 variables: variables.isEmpty ? nil : variables,
-                responseType: ProjectPageResponse.self
+                responseType: ProjectPageResponse.self,
+                cacheKey: APICacheKeys.projects(cursor: cursor),
+                resourceType: .userProfile,
+                ttl: APICacheTTLs.projectList,
+                policy: .cacheFirstThenRefresh
             )
+            let response = cached.value
 
             results.append(contentsOf: response.me.projects.results)
             guard let nextCursor = response.me.projects.cursor else {
@@ -324,12 +329,22 @@ struct ProjectService: Sendable {
                 variables["trackersCursor"] = trackersCursor
             }
 
-            let response = try await client.execute(
+            let cached = try await client.executeCached(
                 service: .hub,
                 query: Self.projectDetailQuery,
                 variables: variables,
-                responseType: ProjectDetailResponse.self
+                responseType: ProjectDetailResponse.self,
+                cacheKey: APICacheKeys.projectDetail(
+                    rid: rid,
+                    mailingListsCursor: mailingListsCursor,
+                    sourcesCursor: sourcesCursor,
+                    trackersCursor: trackersCursor
+                ),
+                resourceType: .userProfile,
+                ttl: APICacheTTLs.projectDetail,
+                policy: .cacheFirstThenRefresh
             )
+            let response = cached.value
 
             guard let project = response.project else {
                 throw SRHTError.decodingError(

@@ -43,7 +43,7 @@ final class PasteListViewModel {
     }
 
     func loadPastes() async {
-        if pastes.isEmpty, let cached = service.loadCachedPastes() {
+        if pastes.isEmpty, let cached = await service.loadCachedPastes() {
             pastes = cached.results
             cursor = cached.cursor
             hasMore = cached.cursor != nil
