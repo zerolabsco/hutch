@@ -6,6 +6,14 @@ struct AppStateTests {
 
     @Test
     @MainActor
+    func srhtUsernameNormalizesWebPathOwner() {
+        #expect(AppState.srhtUsername(from: "~vicho") == "vicho")
+        #expect(AppState.srhtUsername(from: " vicho ") == "vicho")
+        #expect(AppState.srhtUsername(from: "  ~vicho  ") == "vicho")
+    }
+
+    @Test
+    @MainActor
     func presentRepositoryDeepLinkErrorSetsUserFacingMessage() {
         let appState = AppState()
 

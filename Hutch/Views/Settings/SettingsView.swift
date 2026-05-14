@@ -15,6 +15,7 @@ struct SettingsView: View {
         Form {
             appearanceSection()
             behaviorSection()
+            safariExtensionSection()
             authenticationSection()
         }
         .themedList()
@@ -52,6 +53,22 @@ struct SettingsView: View {
             if let pendingDestructiveAction {
                 Text(pendingDestructiveAction.message)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func safariExtensionSection() -> some View {
+        Section {
+            NavigationLink {
+                SafariExtensionHelpView()
+            } label: {
+                Label("Safari Extension", systemImage: "safari")
+            }
+            .themedRow()
+        } header: {
+            Text("Browser")
+        } footer: {
+            Text("Open supported SourceHut pages in Hutch from Safari without claiming sr.ht links system-wide.")
         }
     }
 

@@ -1,4 +1,7 @@
 import SwiftUI
+import os
+
+private let rootDeepLinkLogger = Logger(subsystem: "net.cleberg.Hutch", category: "DeepLink")
 
 /// The root view of the app. Shows a TabView when authenticated, or a
 /// full-screen sheet for token entry on first launch.
@@ -154,6 +157,7 @@ struct RootView: View {
     // MARK: - Deep Link Handling
 
     private func handleAuthPhaseChange(_ newPhase: AppState.AuthPhase) {
+        rootDeepLinkLogger.info("Auth phase changed: \(String(describing: newPhase), privacy: .public); pendingDeepLink=\(String(describing: appState.pendingDeepLink), privacy: .public)")
         switch newPhase {
         case .launching:
             break
@@ -171,7 +175,11 @@ struct RootView: View {
     }
 
     private func consumePendingDeepLinkIfPossible(_ link: DeepLink?) {
-        guard appState.isAuthenticated, let link else { return }
+        rootDeepLinkLogger.info("Attempting to consume pending deep link. authenticated=\(appState.isAuthenticated, privacy: .public), link=\(String(describing: link), privacy: .public)")
+        guard appState.isAuthenticated, let link else {
+            rootDeepLinkLogger.info("Deferred deep link consumption.")
+            return
+        }
         handleDeepLink(link)
         appState.pendingDeepLink = nil
     }
@@ -183,15 +191,19 @@ struct RootView: View {
     }
 
     private func handleDeepLink(_ link: DeepLink) {
-        guard appState.isAuthenticated else { return }
+        rootDeepLinkLogger.info("Handling deep link: \(String(describing: link), privacy: .public)")
+        guard appState.isAuthenticated else {
+            rootDeepLinkLogger.info("Ignoring deep link while unauthenticated: \(String(describing: link), privacy: .public)")
+            return
+        }
 
         switch link {
         case .home:
             homePath = NavigationPath()
             appState.selectedTab = .home
 
-        case .repository(let owner, let repo):
-            resolveRepositoryLink(owner: owner, repo: repo)
+        case .repository(let service, let owner, let repo):
+            resolveRepositoryLink(service: service, owner: owner, repo: repo)
 
         case .build(let jobId):
             buildsPath = NavigationPath()
@@ -203,6 +215,12 @@ struct RootView: View {
 
         case .ticket(let owner, let tracker, let ticketId):
             resolveTicketLink(owner: owner, tracker: tracker, ticketId: ticketId)
+
+        case .mailingList(let owner, let list):
+            resolveMailingListLink(owner: owner, list: list)
+
+        case .userProfile(let owner):
+            resolveUserProfileLink(owner: owner)
 
         case .work:
             homePath = NavigationPath()
@@ -276,12 +294,12 @@ struct RootView: View {
         }
     }
 
-    private func resolveRepositoryLink(owner: String, repo: String) {
+    private func resolveRepositoryLink(service: SRHTService, owner: String, repo: String) {
         isResolvingDeepLink = true
         Task {
             defer { isResolvingDeepLink = false }
             do {
-                let summary = try await appState.resolveRepository(owner: owner, name: repo)
+                let summary = try await appState.resolveRepository(owner: owner, name: repo, service: service)
                 repoPath = NavigationPath()
                 appState.selectedTab = .repositories
                 await settleNavigationTransition()
@@ -289,6 +307,34 @@ struct RootView: View {
             } catch {
                 appState.presentRepositoryDeepLinkError()
             }
+        }
+    }
+
+    private func resolveMailingListLink(owner: String, list: String) {
+        isResolvingDeepLink = true
+        Task {
+            defer { isResolvingDeepLink = false }
+            do {
+                let mailingList = try await appState.resolveMailingList(owner: owner, name: list)
+                morePath = NavigationPath()
+                appState.selectedTab = .more
+                await settleNavigationTransition()
+                morePath.append(MoreRoute.lists)
+                morePath.append(MoreRoute.mailingList(mailingList))
+            } catch {
+                appState.deepLinkError = "The mailing list could not be found or is inaccessible."
+            }
+        }
+    }
+
+    private func resolveUserProfileLink(owner: String) {
+        rootDeepLinkLogger.info("Routing user profile deep link for owner=\(owner, privacy: .public)")
+        morePath = NavigationPath()
+        appState.selectedTab = .more
+        Task {
+            await settleNavigationTransition()
+            rootDeepLinkLogger.info("Appending user profile route for owner=\(owner, privacy: .public)")
+            morePath.append(MoreRoute.userProfile(owner))
         }
     }
 
@@ -337,6 +383,7 @@ enum MoreRoute: Hashable {
     case systemStatus
     case settings
     case about
+    case userProfile(String)
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
     case manPageBrowser
@@ -366,6 +413,8 @@ private struct MoreNavigationRoot: View {
                     SettingsView()
                 case .about:
                     AboutView()
+                case .userProfile(let owner):
+                    UserProfileDeepLinkView(owner: owner)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):
@@ -390,6 +439,48 @@ private struct MoreNavigationRoot: View {
                     ManPageDetailView(url: url)
                 }
             }
+    }
+}
+
+struct UserProfileDeepLinkView: View {
+    private let logger = Logger(subsystem: "net.cleberg.Hutch", category: "DeepLink")
+    @Environment(AppState.self) private var appState
+    let owner: String
+    @State private var user: User?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let user {
+                UserProfileView(user: user)
+            } else if let errorMessage {
+                ContentUnavailableView("Couldn't Open Profile", systemImage: "person.crop.circle.badge.exclamationmark", description: Text(errorMessage))
+            } else {
+                SRHTLoadingStateView(message: "Loading profile...")
+            }
+        }
+        .navigationTitle(displayOwner)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: owner) {
+            await loadProfile()
+        }
+    }
+
+    private var displayOwner: String {
+        owner.hasPrefix("~") ? owner : "~\(owner)"
+    }
+
+    @MainActor
+    private func loadProfile() async {
+        logger.info("Loading user profile for owner=\(owner, privacy: .public)")
+        errorMessage = nil
+        do {
+            user = try await appState.resolveUser(username: owner)
+            logger.info("Loaded user profile for owner=\(owner, privacy: .public), canonical=\(user?.canonicalName ?? "nil", privacy: .public)")
+        } catch {
+            logger.error("Failed loading user profile for owner=\(owner, privacy: .public): \(String(describing: error), privacy: .public)")
+            errorMessage = "The user profile could not be found or is inaccessible."
+        }
     }
 }
 

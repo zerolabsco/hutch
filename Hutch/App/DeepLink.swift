@@ -1,15 +1,22 @@
 import Foundation
+import os
+
+private let deepLinkParserLogger = Logger(subsystem: "net.cleberg.Hutch", category: "DeepLink")
 
 /// Represents a parsed `hutch://` deep link.
 enum DeepLink: Equatable {
     case home
     case work
-    /// hutch://git/<owner>/<repo>
-    case repository(owner: String, repo: String)
+    /// hutch://git/<owner>/<repo> or hutch://hg/<owner>/<repo>
+    case repository(service: SRHTService, owner: String, repo: String)
     /// hutch://todo/<owner>/<tracker>/<ticketId>
     case ticket(owner: String, tracker: String, ticketId: Int)
-    /// hutch://builds/<jobId>
+    /// hutch://builds/<jobId> or hutch://builds/<owner>/job/<jobId>
     case build(jobId: Int)
+    /// hutch://lists/<owner>/<list>
+    case mailingList(owner: String, list: String)
+    /// hutch://lookup/<owner>
+    case userProfile(owner: String)
     /// hutch://builds (tab-level)
     case buildsTab
     /// hutch://repositories (tab-level)
@@ -26,9 +33,8 @@ enum DeepLink: Equatable {
     init?(url: URL) {
         guard url.scheme == "hutch" else { return nil }
 
-        // url.host gives the first path component for opaque URLs;
-        // use standardized path components from the full string.
-        let components = url.pathComponents(fromScheme: "hutch")
+        let components = url.deepLinkPathComponents
+        deepLinkParserLogger.info("DeepLink parser components for \(url.absoluteString, privacy: .public): \(components.joined(separator: ","), privacy: .public)")
 
         switch components.first {
         case "home", nil:
@@ -37,10 +43,18 @@ enum DeepLink: Equatable {
         case "work", "inbox":
             self = .work
 
-        case "git" where components.count >= 3:
+        case let .some(serviceName) where ["git", "hg", "todo", "builds", "lists"].contains(serviceName)
+            && components.count == 2
+            && components[1].hasPrefix("~"):
+            deepLinkParserLogger.info("Treating owner-root service URL as user profile: service=\(serviceName, privacy: .public), owner=\(components[1], privacy: .public)")
+            self = .userProfile(owner: components[1])
+
+        case let .some(serviceName) where ["git", "hg"].contains(serviceName) && components.count >= 3:
+            guard let service = SRHTService(rawValue: serviceName)
+            else { return nil }
             let owner = components[1]
             let repo = components[2]
-            self = .repository(owner: owner, repo: repo)
+            self = .repository(service: service, owner: owner, repo: repo)
 
         case "todo" where components.count >= 4:
             let owner = components[1]
@@ -49,11 +63,20 @@ enum DeepLink: Equatable {
             self = .ticket(owner: owner, tracker: tracker, ticketId: ticketId)
 
         case "builds" where components.count >= 2:
-            guard let jobId = Int(components[1]) else { return nil }
+            let rawJobId: String
+            if components.count >= 4, components[2] == "job" {
+                rawJobId = components[3]
+            } else {
+                rawJobId = components[1]
+            }
+            guard let jobId = Int(rawJobId) else { return nil }
             self = .build(jobId: jobId)
 
         case "builds":
             self = .buildsTab
+
+        case "lists" where components.count >= 3:
+            self = .mailingList(owner: components[1], list: components[2])
 
         case "repositories":
             self = .repositoriesTab
@@ -63,6 +86,9 @@ enum DeepLink: Equatable {
 
         case "status":
             self = .systemStatus
+
+        case "lookup" where components.count >= 2:
+            self = .userProfile(owner: components[1])
 
         case "lookup":
             self = .lookup
@@ -74,14 +100,18 @@ enum DeepLink: Equatable {
 }
 
 private extension URL {
-    /// Parse path components from a custom-scheme URL.
-    /// For `hutch://git/~user/repo`, returns `["git", "~user", "repo"]`.
-    func pathComponents(fromScheme scheme: String) -> [String] {
-        // Remove scheme prefix and split by "/"
-        var str = absoluteString
-        if str.hasPrefix("\(scheme)://") {
-            str = String(str.dropFirst("\(scheme)://".count))
+    var deepLinkPathComponents: [String] {
+        guard let components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+            return []
         }
-        return str.split(separator: "/").map(String.init)
+
+        let pathComponents = components.path
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+
+        if let host = components.host, !host.isEmpty {
+            return [host] + pathComponents
+        }
+        return pathComponents
     }
 }

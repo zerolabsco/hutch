@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Sourcehut user from meta.sr.ht.
-struct User: Decodable, Sendable {
+struct User: Decodable, Sendable, Hashable {
     let id: Int
     let created: String?
     let updated: String?

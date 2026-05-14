@@ -18,6 +18,7 @@
 		8B2FA9D22F7E211800E609E2 /* todo.json in Resources */ = {isa = PBXBuildFile; fileRef = 8B2FA9CA2F7E211800E609E2 /* todo.json */; };
 		8B2FA9D32F7E211800E609E2 /* lists.json in Resources */ = {isa = PBXBuildFile; fileRef = 8B2FA9C72F7E211800E609E2 /* lists.json */; };
 		8BE082012F80000100000001 /* HutchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8BE081F62F80000100000001 /* HutchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8BE083012F81000100000001 /* HutchSafariExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8BE083032F81000100000001 /* HutchSafariExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8BF100032F9A000100000001 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 8BF100022F9A000100000001 /* Markdown */; };
 		8BF100052F9A000100000002 /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 8BF100042F9A000100000002 /* Splash */; };
 /* End PBXBuildFile section */
@@ -37,6 +38,13 @@
 			remoteGlobalIDString = 8BE081F72F80000100000001;
 			remoteInfo = HutchWidgetExtension;
 		};
+		8BE083022F81000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B4B28C92F6704280045FA19 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BE083092F81000100000001;
+			remoteInfo = HutchSafariExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -47,6 +55,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				8BE082012F80000100000001 /* HutchWidgetExtension.appex in Embed Foundation Extensions */,
+				8BE083012F81000100000001 /* HutchSafariExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -70,6 +79,7 @@
 		8B8182C22F6B742B000AE049 /* HutchTests */ = {isa = PBXFileReference; lastKnownFileType = folder; path = HutchTests; sourceTree = "<group>"; };
 		8BDCA5272F6B76B20066AA29 /* HutchTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = HutchTests.xctestplan; sourceTree = "<group>"; };
 		8BE081F62F80000100000001 /* HutchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HutchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BE083032F81000100000001 /* HutchSafariExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HutchSafariExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -86,6 +96,13 @@
 				Info.plist,
 			);
 			target = 8BE081F72F80000100000001 /* HutchWidgetExtension */;
+		};
+		8BE083042F81000100000001 /* Exceptions for "HutchSafariExtension" folder in "HutchSafariExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8BE083092F81000100000001 /* HutchSafariExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -116,6 +133,14 @@
 			path = HutchWidgetExtension;
 			sourceTree = "<group>";
 		};
+		8BE083052F81000100000001 /* HutchSafariExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8BE083042F81000100000001 /* Exceptions for "HutchSafariExtension" folder in "HutchSafariExtension" target */,
+			);
+			path = HutchSafariExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +161,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8BE081F92F80000100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BE083062F81000100000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -180,6 +212,7 @@
 				8B4B28D32F6704280045FA19 /* Hutch */,
 				8BE081F42F80000100000001 /* Shared */,
 				8BE081F52F80000100000001 /* HutchWidgetExtension */,
+				8BE083052F81000100000001 /* HutchSafariExtension */,
 				8B8182B82F6B73F3000AE049 /* HutchTests */,
 				8B4B28D22F6704280045FA19 /* Products */,
 			);
@@ -191,6 +224,7 @@
 				8B4B28D12F6704280045FA19 /* Hutch.app */,
 				8B8182B72F6B73F3000AE049 /* HutchTests.xctest */,
 				8BE081F62F80000100000001 /* HutchWidgetExtension.appex */,
+				8BE083032F81000100000001 /* HutchSafariExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -211,6 +245,7 @@
 			);
 			dependencies = (
 				8BE082042F80000100000001 /* PBXTargetDependency */,
+				8BE0830A2F81000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8B4B28D32F6704280045FA19 /* Hutch */,
@@ -271,6 +306,28 @@
 			productReference = 8BE081F62F80000100000001 /* HutchWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		8BE083092F81000100000001 /* HutchSafariExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BE0830D2F81000100000001 /* Build configuration list for PBXNativeTarget "HutchSafariExtension" */;
+			buildPhases = (
+				8BE083072F81000100000001 /* Sources */,
+				8BE083062F81000100000001 /* Frameworks */,
+				8BE083082F81000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8BE083052F81000100000001 /* HutchSafariExtension */,
+			);
+			name = HutchSafariExtension;
+			packageProductDependencies = (
+			);
+			productName = HutchSafariExtension;
+			productReference = 8BE083032F81000100000001 /* HutchSafariExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -287,6 +344,9 @@
 					8B8182B62F6B73F3000AE049 = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 8B4B28D02F6704280045FA19;
+					};
+					8BE083092F81000100000001 = {
+						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -310,6 +370,7 @@
 			targets = (
 				8B4B28D02F6704280045FA19 /* Hutch */,
 				8BE081F72F80000100000001 /* HutchWidgetExtension */,
+				8BE083092F81000100000001 /* HutchSafariExtension */,
 				8B8182B62F6B73F3000AE049 /* HutchTests */,
 			);
 		};
@@ -347,6 +408,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8BE083082F81000100000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -371,6 +439,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8BE083072F81000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -383,6 +458,11 @@
 			isa = PBXTargetDependency;
 			target = 8BE081F72F80000100000001 /* HutchWidgetExtension */;
 			targetProxy = 8BE082022F80000100000001 /* PBXContainerItemProxy */;
+		};
+		8BE0830A2F81000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BE083092F81000100000001 /* HutchSafariExtension */;
+			targetProxy = 8BE083022F81000100000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -517,7 +597,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -534,7 +614,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.3.1;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -554,7 +634,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Hutch/Hutch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -571,7 +651,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.3.1;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -634,7 +714,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -644,7 +724,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.3.1;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -663,7 +743,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = HutchWidgetExtension/HutchWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEVELOPMENT_TEAM = ZCNAX3VL9D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HutchWidgetExtension/Info.plist;
@@ -673,8 +753,66 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.3.1;
+				MARKETING_VERSION = 3.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8BE0830B2F81000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 84;
+				DEVELOPMENT_TEAM = ZCNAX3VL9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HutchSafariExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 3.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchSafariExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8BE0830C2F81000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 84;
+				DEVELOPMENT_TEAM = ZCNAX3VL9D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HutchSafariExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 3.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = net.cleberg.Hutch.HutchSafariExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -721,6 +859,15 @@
 			buildConfigurations = (
 				8BE081FC2F80000100000001 /* Debug */,
 				8BE081FD2F80000100000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BE0830D2F81000100000001 /* Build configuration list for PBXNativeTarget "HutchSafariExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BE0830B2F81000100000001 /* Debug */,
+				8BE0830C2F81000100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

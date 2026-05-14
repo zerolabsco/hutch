@@ -19,7 +19,19 @@ struct DeepLinkTests {
     @Test
     func parsesRepositoryLink() {
         let link = DeepLink(url: HutchDeepLinkURL.repositoryGit)
-        #expect(link == .repository(owner: "~user", repo: "repo"))
+        #expect(link == .repository(service: .git, owner: "~user", repo: "repo"))
+    }
+
+    @Test
+    func parsesHgRepositoryLink() {
+        let link = DeepLink(url: HutchDeepLinkURL.repositoryHg)
+        #expect(link == .repository(service: .hg, owner: "~user", repo: "repo"))
+    }
+
+    @Test
+    func parsesServiceOwnerRootAsUserProfile() {
+        let link = DeepLink(url: HutchDeepLinkURL.gitOwnerRoot)
+        #expect(link == .userProfile(owner: "~owner"))
     }
 
     @Test
@@ -32,6 +44,18 @@ struct DeepLinkTests {
     func parsesBuildJobLink() {
         let link = DeepLink(url: HutchDeepLinkURL.buildJob)
         #expect(link == .build(jobId: 12345))
+    }
+
+    @Test
+    func parsesBuildJobLinkWithOwnerPath() {
+        let link = DeepLink(url: HutchDeepLinkURL.buildJobWithOwner)
+        #expect(link == .build(jobId: 12345))
+    }
+
+    @Test
+    func parsesMailingListLink() {
+        let link = DeepLink(url: HutchDeepLinkURL.mailingList)
+        #expect(link == .mailingList(owner: "~owner", list: "list"))
     }
 
     @Test
@@ -62,6 +86,12 @@ struct DeepLinkTests {
     func parsesLookupLink() {
         let link = DeepLink(url: HutchDeepLinkURL.lookup)
         #expect(link == .lookup)
+    }
+
+    @Test
+    func parsesUserProfileLink() {
+        let link = DeepLink(url: HutchDeepLinkURL.userProfile)
+        #expect(link == .userProfile(owner: "~owner"))
     }
 
     @Test

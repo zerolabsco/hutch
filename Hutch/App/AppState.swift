@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import UIKit
 import WebKit
+import os
+
+private let appStateDeepLinkLogger = Logger(subsystem: "net.cleberg.Hutch", category: "DeepLink")
 
 /// Central application state shared across the view hierarchy.
 @Observable
@@ -260,10 +263,11 @@ final class AppState {
 
     /// Resolve a repository by owner and name for deep linking.
     func resolveRepository(owner: String, name: String, service: SRHTService = .git) async throws -> RepositorySummary {
+        let normalizedOwner = Self.srhtUsername(from: owner)
         let result = try await client.execute(
             service: service,
             query: Self.repoLookupQuery,
-            variables: ["owner": owner, "name": name],
+            variables: ["owner": normalizedOwner, "name": name],
             responseType: RepoLookupResponse.self
         )
         return result.user.repository
@@ -271,13 +275,37 @@ final class AppState {
 
     /// Resolve a tracker by owner and name for deep linking.
     func resolveTracker(owner: String, name: String) async throws -> TrackerSummary {
+        let normalizedOwner = Self.srhtUsername(from: owner)
         let result = try await client.execute(
             service: .todo,
             query: Self.trackerLookupQuery,
-            variables: ["owner": owner, "name": name],
+            variables: ["owner": normalizedOwner, "name": name],
             responseType: TrackerLookupResponse.self
         )
         return result.user.tracker
+    }
+
+    func resolveMailingList(owner: String, name: String) async throws -> InboxMailingListReference {
+        let normalizedOwner = Self.srhtUsername(from: owner)
+        let result = try await client.execute(
+            service: .lists,
+            query: Self.mailingListLookupQuery,
+            variables: ["owner": normalizedOwner, "name": name],
+            responseType: MailingListLookupResponse.self
+        )
+        return result.user.mailingList
+    }
+
+    func resolveUser(username: String) async throws -> User {
+        let normalizedUsername = Self.srhtUsername(from: username)
+        appStateDeepLinkLogger.info("Resolving user. raw=\(username, privacy: .public), normalized=\(normalizedUsername, privacy: .public)")
+        let result = try await client.execute(
+            service: .meta,
+            query: Self.userLookupQuery,
+            variables: ["username": normalizedUsername],
+            responseType: UserLookupResponse.self
+        )
+        return result.user
     }
 
     func resolveProjectSource(_ source: Project.SourceRepo) async throws -> RepositorySummary {
@@ -384,6 +412,11 @@ final class AppState {
         return result.me
     }
 
+    static func srhtUsername(from value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("~") ? String(trimmed.dropFirst()) : trimmed
+    }
+
     // MARK: - Deep link queries
 
     private static let repoLookupQuery = """
@@ -423,6 +456,47 @@ final class AppState {
 
     private struct TrackerLookupUser: Decodable, Sendable {
         let tracker: TrackerSummary
+    }
+
+    private static let mailingListLookupQuery = """
+    query mailingListLookup($owner: String!, $name: String!) {
+        user(username: $owner) {
+            mailingList: list(name: $name) {
+                id rid name owner { canonicalName }
+            }
+        }
+    }
+    """
+
+    private struct MailingListLookupResponse: Decodable, Sendable {
+        let user: MailingListLookupUser
+    }
+
+    private struct MailingListLookupUser: Decodable, Sendable {
+        let mailingList: InboxMailingListReference
+    }
+
+    private static let userLookupQuery = """
+    query userLookup($username: String!) {
+        user: userByName(username: $username) {
+            id
+            created
+            updated
+            canonicalName
+            username
+            email
+            url
+            location
+            bio
+            avatar
+            pronouns
+            userType
+        }
+    }
+    """
+
+    private struct UserLookupResponse: Decodable, Sendable {
+        let user: User
     }
 
     private func addValidatedAccount(token: String, activateNewAccount: Bool) async throws {

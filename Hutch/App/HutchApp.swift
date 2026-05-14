@@ -1,7 +1,9 @@
 import SwiftUI
+import os
 
 @main
 struct HutchApp: App {
+    private let deepLinkLogger = Logger(subsystem: "net.cleberg.Hutch", category: "DeepLink")
     @State private var appState = AppState()
     @State private var networkMonitor = NetworkMonitor()
     @AppStorage(AppStorageKeys.appTheme, store: .standard) private var appTheme: AppTheme = .system
@@ -18,8 +20,12 @@ struct HutchApp: App {
                 .background(appTheme == .amoled ? Color.black : Color.clear)
                 .preferredColorScheme(appTheme.colorScheme)
                 .onOpenURL { url in
+                    deepLinkLogger.info("Received URL: \(url.absoluteString, privacy: .public)")
                     if let link = DeepLink(url: url) {
+                        deepLinkLogger.info("Parsed deep link: \(String(describing: link), privacy: .public)")
                         appState.pendingDeepLink = link
+                    } else {
+                        deepLinkLogger.error("Rejected URL: \(url.absoluteString, privacy: .public)")
                     }
                 }
                 .onChange(of: HutchIntentNavigator.shared.pendingDestination) { _, destination in

@@ -443,6 +443,8 @@ struct LookupView: View {
                     SettingsView()
                 case .about:
                     AboutView()
+                case .userProfile(let owner):
+                    UserProfileDeepLinkView(owner: owner)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):
