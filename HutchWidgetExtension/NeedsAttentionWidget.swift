@@ -99,37 +99,34 @@ private struct NeedsAttentionWidgetView: View {
     }
 
     private func mediumView(snapshot: NeedsAttentionSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                Link(destination: HutchDeepLinkURL.home) {
-                    metricColumn(
-                        count: snapshot.unreadInboxThreads,
-                        label: "Unread",
-                        systemImage: "tray",
-                        tint: unreadTint(for: snapshot.unreadInboxThreads)
-                    )
-                }
-                Link(destination: HutchDeepLinkURL.trackers) {
-                    metricColumn(
-                        count: snapshot.assignedOpenTickets,
-                        label: "Assigned",
-                        systemImage: "ticket"
-                    )
-                }
-                Link(destination: HutchDeepLinkURL.builds) {
-                    metricColumn(
-                        count: snapshot.failedBuilds,
-                        label: "Failed",
-                        systemImage: "hammer",
-                        tint: failedTint(for: snapshot.failedBuilds)
-                    )
-                }
+        HStack(alignment: .center, spacing: 12) {
+            Link(destination: HutchDeepLinkURL.home) {
+                metricColumn(
+                    count: snapshot.unreadInboxThreads,
+                    label: "Unread",
+                    systemImage: "tray",
+                    tint: unreadTint(for: snapshot.unreadInboxThreads)
+                )
             }
-            Spacer(minLength: 0)
+            Link(destination: HutchDeepLinkURL.trackers) {
+                metricColumn(
+                    count: snapshot.assignedOpenTickets,
+                    label: "Assigned",
+                    systemImage: "ticket"
+                )
+            }
+            Link(destination: HutchDeepLinkURL.builds) {
+                metricColumn(
+                    count: snapshot.failedBuilds,
+                    label: "Failed",
+                    systemImage: "hammer",
+                    tint: failedTint(for: snapshot.failedBuilds)
+                )
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(.horizontal, 16)
-        .padding(.top, 18)
-        .padding(.bottom, 16)
+        .padding(.vertical, 16)
     }
 
     private func largeView(snapshot: NeedsAttentionSnapshot) -> some View {
@@ -203,13 +200,12 @@ private struct NeedsAttentionWidgetView: View {
     }
 
     private func metricColumn(count: Int?, label: String, systemImage: String, tint: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .center, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 24, alignment: .leading)
-                    .padding(.trailing, 4)
+                    .frame(width: 24, alignment: .center)
                 Text(displayCount(count))
                     .font(.system(size: 28, weight: .semibold, design: .rounded))
                     .monospacedDigit()
@@ -222,9 +218,9 @@ private struct NeedsAttentionWidgetView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
-                .frame(height: 16, alignment: .topLeading)
+                .frame(height: 16, alignment: .center)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func metricRow(count: Int?, label: String, systemImage: String, tint: Color = .primary) -> some View {
