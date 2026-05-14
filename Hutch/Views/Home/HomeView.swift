@@ -106,7 +106,7 @@ struct HomeView: View {
 
     private func workSection(_ viewModel: HomeViewModel) -> some View {
         Section("Work") {
-            NavigationLink(value: HomeRoute.work) {
+            NavigationLink(value: HomeRoute.work(scope: .all)) {
                 HomeSummaryRow(
                     title: workTitle(viewModel),
                     summary: workSummary(viewModel),
@@ -424,7 +424,7 @@ struct HomeView: View {
 }
 
 enum HomeRoute: Hashable {
-    case work
+    case work(scope: HutchWorkQueueScope)
 }
 
 private enum HomeSummaryEmphasis {

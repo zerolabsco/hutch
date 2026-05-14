@@ -84,6 +84,7 @@ final class AppState {
     /// Set by the deep link handler; consumed by RootView to drive navigation.
     var pendingDeepLink: DeepLink?
     var pendingTabNavigation: TabNavigationTarget?
+    var pendingBuildListFilter: BuildListFilter?
     var deepLinkError: String?
 
     // MARK: - Init
@@ -373,6 +374,10 @@ final class AppState {
         selectedTab = .builds
     }
 
+    func open(_ route: HutchRoute) {
+        pendingDeepLink = DeepLink(route: route)
+    }
+
     func presentRepositoryDeepLinkError() {
         deepLinkError = "The repository could not be found or is inaccessible."
     }
@@ -574,6 +579,7 @@ final class AppState {
     private func resetNavigationState() {
         pendingDeepLink = nil
         pendingTabNavigation = nil
+        pendingBuildListFilter = nil
         deepLinkError = nil
         selectedTab = .home
     }

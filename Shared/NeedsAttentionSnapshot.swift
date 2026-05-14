@@ -58,11 +58,11 @@ enum NeedsAttentionSnapshotStore {
     private static let snapshotKey = "needsAttention.snapshot"
 
     static func load(
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) -> NeedsAttentionSnapshot? {
         guard let defaults,
-              let data = defaults.data(forKey: scopedKey(for: accountID)) else {
+              let data = defaults.data(forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults))) else {
             return nil
         }
 
@@ -71,7 +71,7 @@ enum NeedsAttentionSnapshotStore {
 
     static func save(
         _ snapshot: NeedsAttentionSnapshot,
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
         guard let defaults,
@@ -79,7 +79,7 @@ enum NeedsAttentionSnapshotStore {
             return
         }
 
-        defaults.set(data, forKey: scopedKey(for: accountID))
+        defaults.set(data, forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults)))
         reloadWidgetTimelines()
     }
 
@@ -87,7 +87,7 @@ enum NeedsAttentionSnapshotStore {
         unreadInboxThreads: Int? = nil,
         assignedOpenTickets: Int? = nil,
         failedBuilds: Int? = nil,
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
         let existing = load(accountID: accountID, defaults: defaults)
@@ -102,7 +102,7 @@ enum NeedsAttentionSnapshotStore {
 
     static func adjustUnreadInboxThreads(
         by delta: Int,
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
         guard let existing = load(accountID: accountID, defaults: defaults),
@@ -123,10 +123,11 @@ enum NeedsAttentionSnapshotStore {
     }
 
     static func clear(
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
-        defaults?.removeObject(forKey: scopedKey(for: accountID))
+        guard let defaults else { return }
+        defaults.removeObject(forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults)))
         reloadWidgetTimelines()
     }
 
@@ -137,6 +138,10 @@ enum NeedsAttentionSnapshotStore {
     private static func scopedKey(for accountID: String?) -> String {
         guard let accountID, !accountID.isEmpty else { return snapshotKey }
         return "\(snapshotKey).\(accountID)"
+    }
+
+    private static func resolvedAccountID(_ accountID: String?, defaults: UserDefaults) -> String? {
+        accountID ?? ActiveAccountContextStore.load(defaults: defaults)
     }
 
     private static func reloadWidgetTimelines() {

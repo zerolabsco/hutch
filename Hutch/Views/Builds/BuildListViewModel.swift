@@ -21,6 +21,7 @@ private struct SubmittedJob: Decodable, Sendable {
 
 enum BuildListFilter: String, CaseIterable, Sendable {
     case attention = "Attention"
+    case failed = "Failed"
     case active = "Active"
     case all = "All"
 }
@@ -411,6 +412,13 @@ final class BuildListViewModel {
                 case .failed, .timeout, .running, .queued, .pending:
                     return true
                 case .success, .cancelled:
+                    return false
+                }
+            case .failed:
+                switch job.status {
+                case .failed, .timeout:
+                    return true
+                case .success, .cancelled, .running, .queued, .pending:
                     return false
                 }
             case .active:

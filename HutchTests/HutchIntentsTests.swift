@@ -6,6 +6,15 @@ import Testing
 struct HutchIntentsTests {
 
     @Test
+    func navigationIntentsMapToCentralRoutes() {
+        #expect(OpenWorkQueueIntent().route == .workQueue(scope: .all))
+        #expect(OpenRecentActivityIntent().route == .recentActivity)
+        #expect(OpenSystemStatusIntent().route == .systemStatus)
+        #expect(OpenFailedBuildsIntent().route == .failedBuilds)
+        #expect(OpenAssignedTicketsIntent().route == .workQueue(scope: .assigned))
+    }
+
+    @Test
     func checkSystemStatusReturnsOperationalWhenNoDisruption() async throws {
         let defaultsName = "HutchIntentsTests-status-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: defaultsName)!

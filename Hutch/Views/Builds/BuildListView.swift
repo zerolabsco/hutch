@@ -124,6 +124,10 @@ struct BuildListView: View {
                 let vm = BuildListViewModel(client: appState.client, defaults: appState.accountDefaults)
                 vm.repoFilter = savedRepoFilter
                 vm.lookbackDays = lookbackDays
+                if let pendingFilter = appState.pendingBuildListFilter {
+                    vm.filter = pendingFilter
+                    appState.pendingBuildListFilter = nil
+                }
                 viewModel = vm
                 await vm.loadJobs()
             }
@@ -133,6 +137,11 @@ struct BuildListView: View {
         }
         .onChange(of: lookbackDays) { _, newValue in
             viewModel?.lookbackDays = newValue
+        }
+        .onChange(of: appState.pendingBuildListFilter) { _, newValue in
+            guard let newValue else { return }
+            viewModel?.filter = newValue
+            appState.pendingBuildListFilter = nil
         }
         .onDisappear {
             viewModel?.stopAutoRefresh()

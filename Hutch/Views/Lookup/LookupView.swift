@@ -92,11 +92,17 @@ final class LookupViewModel {
         )
     }
 
-    init(client: SRHTClient, appState: AppState, defaults: UserDefaults = .standard) {
+    init(
+        client: SRHTClient,
+        appState: AppState,
+        defaults: UserDefaults = .standard,
+        initialQuery: String = ""
+    ) {
         self.client = client
         self.appState = appState
         self.defaults = defaults
         self.history = LookupHistoryStore.load(defaults: defaults)
+        self.inputText = initialQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func lookup() async {
@@ -329,6 +335,11 @@ final class LookupViewModel {
 struct LookupView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: LookupViewModel?
+    private let initialQuery: String
+
+    init(initialQuery: String = "") {
+        self.initialQuery = initialQuery
+    }
 
     var body: some View {
         Group {
@@ -341,7 +352,12 @@ struct LookupView: View {
         .navigationTitle("Look Up")
         .task {
             if viewModel == nil {
-                viewModel = LookupViewModel(client: appState.client, appState: appState, defaults: appState.accountDefaults)
+                viewModel = LookupViewModel(
+                    client: appState.client,
+                    appState: appState,
+                    defaults: appState.accountDefaults,
+                    initialQuery: initialQuery
+                )
             }
         }
     }
@@ -427,8 +443,8 @@ struct LookupView: View {
             }
             .navigationDestination(for: MoreRoute.self) { route in
                 switch route {
-                case .lookup:
-                    LookupView()
+                case .lookup(let query):
+                    LookupView(initialQuery: query ?? "")
                 case .projects:
                     ProjectsListView()
                 case .lists:
@@ -445,6 +461,8 @@ struct LookupView: View {
                     AboutView()
                 case .userProfile(let owner):
                     UserProfileDeepLinkView(owner: owner)
+                case .projectDashboard(let id, let title):
+                    ProjectDashboardDeepLinkView(projectID: id, title: title)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):

@@ -1,20 +1,28 @@
 import SwiftUI
 
-struct WorkView: View {
-    private enum Scope: String, CaseIterable, Identifiable {
-        case all = "All"
-        case unread = "Unread"
-        case assigned = "Assigned"
+extension HutchWorkQueueScope: Identifiable {
+    var id: String { rawValue }
 
-        var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all: "All"
+        case .unread: "Unread"
+        case .assigned: "Assigned"
+        }
     }
+}
 
+struct WorkView: View {
     @AppStorage(AppStorageKeys.swipeActionsEnabled, store: .standard) private var swipeActionsEnabled = true
     @Environment(AppState.self) private var appState
     @Environment(\.isAMOLEDTheme) private var isAMOLED
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HomeViewModel?
-    @State private var scope: Scope = .all
+    @State private var scope: HutchWorkQueueScope
+
+    init(initialScope: HutchWorkQueueScope = .all) {
+        _scope = State(initialValue: initialScope)
+    }
 
     var body: some View {
         Group {
@@ -106,8 +114,8 @@ struct WorkView: View {
     private var scopeSection: some View {
         Section {
             Picker("Scope", selection: $scope) {
-                ForEach(Scope.allCases) { scope in
-                    Text(scope.rawValue).tag(scope)
+                ForEach(HutchWorkQueueScope.allCases) { scope in
+                    Text(scope.displayName).tag(scope)
                 }
             }
             .pickerStyle(.segmented)

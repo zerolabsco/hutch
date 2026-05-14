@@ -34,11 +34,11 @@ enum SystemStatusWidgetSnapshotStore {
     private static let snapshotKey = "systemStatus.widgetSnapshot"
 
     static func load(
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) -> SystemStatusWidgetSnapshot? {
         guard let defaults,
-              let data = defaults.data(forKey: scopedKey(for: accountID)) else {
+              let data = defaults.data(forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults))) else {
             return nil
         }
         return try? JSONDecoder().decode(SystemStatusWidgetSnapshot.self, from: data)
@@ -46,22 +46,23 @@ enum SystemStatusWidgetSnapshotStore {
 
     static func save(
         _ snapshot: SystemStatusWidgetSnapshot,
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
         guard let defaults,
               let data = try? JSONEncoder().encode(snapshot) else {
             return
         }
-        defaults.set(data, forKey: scopedKey(for: accountID))
+        defaults.set(data, forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults)))
         reloadWidgetTimelines()
     }
 
     static func clear(
-        accountID: String? = ActiveAccountContextStore.load(),
+        accountID: String? = nil,
         defaults: UserDefaults? = sharedDefaults()
     ) {
-        defaults?.removeObject(forKey: scopedKey(for: accountID))
+        guard let defaults else { return }
+        defaults.removeObject(forKey: scopedKey(for: resolvedAccountID(accountID, defaults: defaults)))
         reloadWidgetTimelines()
     }
 
@@ -72,6 +73,10 @@ enum SystemStatusWidgetSnapshotStore {
     private static func scopedKey(for accountID: String?) -> String {
         guard let accountID, !accountID.isEmpty else { return snapshotKey }
         return "\(snapshotKey).\(accountID)"
+    }
+
+    private static func resolvedAccountID(_ accountID: String?, defaults: UserDefaults) -> String? {
+        accountID ?? ActiveAccountContextStore.load(defaults: defaults)
     }
 
     private static func reloadWidgetTimelines() {

@@ -59,9 +59,15 @@ struct BuildListViewModelTests {
             filter: .active,
             lookbackDays: BuildListViewModel.defaultLookbackDays
         )
+        let failed = BuildListViewModel.filterJobs(
+            jobs,
+            filter: .failed,
+            lookbackDays: BuildListViewModel.defaultLookbackDays
+        )
 
         #expect(attention.map(\.id) == [2, 3])
         #expect(active.map(\.id) == [3])
+        #expect(failed.map(\.id) == [2])
     }
 
     @Test

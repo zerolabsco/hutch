@@ -75,8 +75,8 @@ struct RootView: View {
                 HomeView()
                     .navigationDestination(for: HomeRoute.self) { route in
                         switch route {
-                        case .work:
-                            WorkView()
+                        case .work(let scope):
+                            WorkView(initialScope: scope)
                         }
                     }
             }
@@ -202,8 +202,15 @@ struct RootView: View {
             homePath = NavigationPath()
             appState.selectedTab = .home
 
+        case .recentActivity:
+            homePath = NavigationPath()
+            appState.selectedTab = .home
+
         case .repository(let service, let owner, let repo):
             resolveRepositoryLink(service: service, owner: owner, repo: repo)
+
+        case .tracker(let owner, let tracker):
+            resolveTrackerLink(owner: owner, tracker: tracker)
 
         case .build(let jobId):
             buildsPath = NavigationPath()
@@ -223,11 +230,39 @@ struct RootView: View {
             resolveUserProfileLink(owner: owner)
 
         case .work:
-            homePath = NavigationPath()
-            appState.selectedTab = .home
+            navigateToWork(scope: .all)
+
+        case .workQueue(let scope):
+            navigateToWork(scope: scope)
+
+        case .projectDashboard(let id, let title):
+            morePath = NavigationPath()
+            appState.selectedTab = .more
             Task {
                 await settleNavigationTransition()
-                homePath.append(HomeRoute.work)
+                morePath.append(MoreRoute.projects)
+                morePath.append(MoreRoute.projectDashboard(id: id, title: title))
+            }
+
+        case .failedBuilds:
+            buildsPath = NavigationPath()
+            appState.pendingBuildListFilter = .failed
+            appState.selectedTab = .builds
+
+        case .search(let query):
+            morePath = NavigationPath()
+            appState.selectedTab = .more
+            Task {
+                await settleNavigationTransition()
+                morePath.append(MoreRoute.lookup(query: query))
+            }
+
+        case .lookup:
+            morePath = NavigationPath()
+            appState.selectedTab = .more
+            Task {
+                await settleNavigationTransition()
+                morePath.append(MoreRoute.lookup(query: nil))
             }
 
         case .buildsTab:
@@ -244,14 +279,15 @@ struct RootView: View {
 
         case .systemStatus:
             appState.navigateToSystemStatus()
+        }
+    }
 
-        case .lookup:
-            morePath = NavigationPath()
-            appState.selectedTab = .more
-            Task {
-                await settleNavigationTransition()
-                morePath.append(MoreRoute.lookup)
-            }
+    private func navigateToWork(scope: HutchWorkQueueScope) {
+        homePath = NavigationPath()
+        appState.selectedTab = .home
+        Task {
+            await settleNavigationTransition()
+            homePath.append(HomeRoute.work(scope: scope))
         }
     }
 
@@ -306,6 +342,22 @@ struct RootView: View {
                 repoPath.append(summary)
             } catch {
                 appState.presentRepositoryDeepLinkError()
+            }
+        }
+    }
+
+    private func resolveTrackerLink(owner: String, tracker: String) {
+        isResolvingDeepLink = true
+        Task {
+            defer { isResolvingDeepLink = false }
+            do {
+                let trackerSummary = try await appState.resolveTracker(owner: owner, name: tracker)
+                ticketsPath = NavigationPath()
+                appState.selectedTab = .tickets
+                await settleNavigationTransition()
+                ticketsPath.append(trackerSummary)
+            } catch {
+                appState.presentTicketDeepLinkError()
             }
         }
     }
@@ -375,7 +427,7 @@ enum MoreDestination: Hashable {
 }
 
 enum MoreRoute: Hashable {
-    case lookup
+    case lookup(query: String?)
     case projects
     case lists
     case pastes
@@ -384,6 +436,7 @@ enum MoreRoute: Hashable {
     case settings
     case about
     case userProfile(String)
+    case projectDashboard(id: String, title: String?)
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
     case manPageBrowser
@@ -397,8 +450,8 @@ private struct MoreNavigationRoot: View {
         MoreView()
             .navigationDestination(for: MoreRoute.self) { route in
                 switch route {
-                case .lookup:
-                    LookupView()
+                case .lookup(let query):
+                    LookupView(initialQuery: query ?? "")
                 case .projects:
                     ProjectsListView()
                 case .lists:
@@ -415,6 +468,8 @@ private struct MoreNavigationRoot: View {
                     AboutView()
                 case .userProfile(let owner):
                     UserProfileDeepLinkView(owner: owner)
+                case .projectDashboard(let id, let title):
+                    ProjectDashboardDeepLinkView(projectID: id, title: title)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
                 case .thread(let thread):
@@ -480,6 +535,45 @@ struct UserProfileDeepLinkView: View {
         } catch {
             logger.error("Failed loading user profile for owner=\(owner, privacy: .public): \(String(describing: error), privacy: .public)")
             errorMessage = "The user profile could not be found or is inaccessible."
+        }
+    }
+}
+
+struct ProjectDashboardDeepLinkView: View {
+    @Environment(AppState.self) private var appState
+    let projectID: String
+    let title: String?
+    @State private var project: Project?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let project {
+                ProjectDetailView(project: project)
+            } else if let errorMessage {
+                ContentUnavailableView(
+                    "Couldn't Open Project",
+                    systemImage: "square.stack.3d.up.slash",
+                    description: Text(errorMessage)
+                )
+            } else {
+                SRHTLoadingStateView(message: "Loading project...")
+            }
+        }
+        .navigationTitle(title ?? "Project")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: projectID) {
+            await loadProject()
+        }
+    }
+
+    @MainActor
+    private func loadProject() async {
+        errorMessage = nil
+        do {
+            project = try await ProjectService(client: appState.client).fetchProjectDetail(rid: projectID)
+        } catch {
+            errorMessage = "The project could not be found or is inaccessible."
         }
     }
 }
