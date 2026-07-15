@@ -71,7 +71,6 @@ tasks:
       cd "$HOME/Hutch"
 
       test -f "Hutch.xcodeproj/project.pbxproj"
-      test -d "website"
       test -f "README.md"
 
   - xcode-project-check: |
