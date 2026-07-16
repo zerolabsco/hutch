@@ -134,7 +134,8 @@ struct SearchHutchIntent: AppIntent {
 
     var route: HutchRoute {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        // TODO: Route to global local search once Hutch has one.
+        // Routes to Lookup for now; repoint at a global content search when Hutch
+        // gains one — tracked in ROADMAP.md § "App Intent gaps".
         return normalized.isEmpty ? .lookup : .search(query: normalized)
     }
 
@@ -145,7 +146,8 @@ struct SearchHutchIntent: AppIntent {
     }
 }
 
-// TODO: Add OpenSavedSearchIntent when Hutch has global saved-search persistence.
+// An OpenSavedSearchIntent belongs here once Hutch has global saved-search
+// persistence — tracked in ROADMAP.md § "App Intent gaps".
 
 // MARK: - App Entities
 

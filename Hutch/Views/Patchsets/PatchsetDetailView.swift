@@ -71,7 +71,7 @@ struct PatchsetDetailView: View {
                         Task { await viewModel.updateStatus(to: status) }
                     }
                 }
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { /* dismisses the dialog; no action needed */ }
             }
             .alert(
                 "Couldn't Update Patchset",

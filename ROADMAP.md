@@ -198,23 +198,56 @@ Labels and hints appear in 17 of 89 view files. Mechanical and low-risk, but it
 cannot be verified from a build — it needs VoiceOver driven on a device.
 Independent of every other bucket, so it can move if a device pass is convenient.
 
-### SonarCloud backlog — v3.8.1
+### SonarCloud backlog — done in code (v3.8.1)
 
-51 open issues: **0 bugs, 0 vulnerabilities, 51 code smells**, plus 3 security
-hotspots. The headline number is misleading, so trust the breakdown before
-budgeting:
+The live count is **53 issues / 10 rules**, not the 51 / 5 an earlier pass
+recorded — a reminder that this section rots like everything else, so query the
+API before budgeting. **0 bugs, 0 vulnerabilities**; everything is a code smell
+or hotspot. What the code side of v3.8.1 actually did:
 
-- **35× `swift:S1075` (hardcoded URI)** — 28 of them in
-  `SourceHutWebDeepLinkMapperTests`, 5 in `Shared/HutchDeepLinkURLs`. A deep-link
-  mapper's tests exist precisely to assert against literal URLs, and a client for
-  one forge has fixed endpoints by definition. These want triaging as *Won't
-  Fix* in SonarCloud, not refactoring. "Fixing" them would make the code worse.
-- **5× `swift:S1135`** — TODO comments. Two are in `HutchIntents` and name real
-  gaps.
-- **3× `swift:S1186` (empty closure)** — all three CRITICAL, all three trivial:
-  `Button("Cancel", role: .cancel) {}` needs no body. A comment settles it.
-- **2× `javascript:S4624`** in the Safari extension; **2× `swift:S1172`** unused
-  parameters.
+Fixed (`e93972f`):
+
+- **`swift:S1871`** — `RootView` had byte-identical `.home` / `.recentActivity`
+  deep-link cases. Merged; recent activity is a *section* of Home, not a screen,
+  so both correctly land on the Home tab.
+- **3× `swift:S1186` (empty closure/function, CRITICAL)** — two are
+  `Button("Cancel", role: .cancel) {}` (dialog dismissal needs no body); the
+  third is an empty `URLProtocol.stopLoading()` override in a test. All three now
+  carry a nested comment. Note the earlier claim that "all three are Cancel
+  buttons" was wrong — only two are.
+- **`swift:S108`** — the expected-miss `catch` in `APICacheTests` is commented.
+- **`swift:S1172`** — the unused `url` in `mimeType(for:)` is now `_`.
+- **2× `javascript:S4624`** — the nested template literal in the deep-link
+  builders (`background.js`, `content.js`) is extracted to a `pathSegment` var.
+
+Fixed as a real bug instead (`65412ee`), not silenced:
+
+- **2× `swift:S1172` on `forceRefresh`** — `HomeViewModel.loadProjects` and
+  `loadSystemStatusSnapshot` took the flag and dropped it, so dashboard
+  pull-to-refresh returned cached projects and status. This is the trap named at
+  the top of this file. `ProjectsListView` carried the same defect via its own
+  `.refreshable`. Both fixed at the root in `ProjectService.fetchProjects`.
+
+Won't Fix, with reasons (resolve in SonarCloud's web UI, not in code):
+
+- **35× `swift:S1075` (hardcoded URI)** — 28 in `SourceHutWebDeepLinkMapperTests`,
+  the rest in `HutchDeepLinkURLs`. A deep-link mapper's tests exist to assert
+  literal URLs, and a one-forge client has fixed endpoints. "Fixing" them makes
+  the code worse.
+- **`swift:S107`** — `executeCached` has 8 params across **38 call sites**. A
+  param object would rewrite the hottest networking method for no behaviour or
+  correctness gain against an arbitrary 7-param line. Not worth the regression
+  surface.
+- **`swift:S1481`** — `ArtifactsView`'s `@Bindable var vm` is flagged unused, but
+  `$vm.error` is used at line 134; Sonar's Swift analyzer misses the projected
+  value. False positive — removing it breaks the build.
+- **`javascript:S7785`** — prefers top-level `await` for `injectBannerIfEnabled()`,
+  but `content.js` is a classic content script, not a module. Top-level `await`
+  would be a syntax error. Not applicable.
+- **5× `swift:S1135`** — TODO comments (INFO). The two in `HutchIntents` named
+  real gaps and are now promoted to "App Intent gaps" below, with the inline
+  `TODO`s replaced by plain references — so those two clear. The remaining three
+  (`DeepLink`, `NotificationPreferencesViewModel` ×2) stay until addressed.
 
 The 3 hotspots are the part actually worth thought:
 
@@ -234,10 +267,11 @@ The 3 hotspots are the part actually worth thought:
 Query it with:
 `https://sonarcloud.io/api/issues/search?componentKeys=zerolabsco_hutch&resolved=false`
 
-This is a patch because nothing executes differently afterwards. The 35 hardcoded-URI
-issues are resolved as *Won't Fix* in SonarCloud's web UI — not a commit at all — and
-the rest is three comments and one annotation. If it produces a diff that changes a
-runtime path, something has gone wrong.
+This was scoped as a patch on the assumption nothing executes differently — and
+that mostly held: the cosmetic fixes are comments, a merge, and a rename. The one
+exception earns the release its own line: the `forceRefresh` fix changes what
+pull-to-refresh does, so it needs a manual pass on a device before v3.8.1 ships,
+not just a green suite.
 
 ### Ingest "What's cooking on SourceHut?" — v3.9.0
 
@@ -283,6 +317,24 @@ sequenced after the ingest rather than planned now. Read
 `api/graph/schema.graphqls` in `hub.sr.ht` before committing the version number.
 The bucket may be empty.
 
+### App Intent gaps — unscheduled
+
+Two App Intents in `HutchIntents.swift` are placeholders for features Hutch does
+not have yet. Both are gated on the same missing capability — a global
+search/persistence layer — so neither is schedulable until that lands. (These
+were the two `swift:S1135` TODOs; promoted here so the code carries a reference
+rather than a bare `TODO`.)
+
+- **Global content search.** `SearchHutchIntent` accepts a query but routes to
+  the Lookup screen — sourcehut entity resolution — because Hutch has no
+  full-text search across tickets, repos, and lists. Its own description says
+  "Opens Hutch lookup with a search query." When a real search exists, repoint
+  the `.search` route in `SearchHutchIntent.route`.
+- **`OpenSavedSearchIntent`.** Saved searches are per-tracker only
+  (`TicketSavedFilterStore`, `ScopedSearchHistoryStore`); there is no global
+  saved-search store for an intent to open. Add the intent once global
+  saved-search persistence exists.
+
 ### Swift 6 language mode — no release of its own
 
 The project builds in Swift 5 language mode with
@@ -309,7 +361,9 @@ which already consults the persistent cache before the memory layer.
 Like Swift 6 above, this is internal and rides along with whatever release
 already touches that area. Neither justifies a tag.
 
-## Housekeeping — v3.8.1
+## Housekeeping
 
-- `Hutch/Hutch/App/AccountSession.swift` sits in a stray nested directory;
-  `Hutch/HutchTests/` is empty.
+- ~~`Hutch/Hutch/App/AccountSession.swift` sits in a stray nested directory;
+  `Hutch/HutchTests/` is empty.~~ Done (v3.8.1, `9834b78`). Moved beside the rest
+  of `App/`; both stray dirs removed. No pbxproj change — the target is a
+  synchronized root group, so the file compiled by path all along.

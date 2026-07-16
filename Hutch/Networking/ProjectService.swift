@@ -269,15 +269,15 @@ struct ProjectService: Sendable {
         self.client = client
     }
 
-    func fetchProjects() async throws -> [Project] {
-        try await fetchProjectSummaries().map(Self.makeSummaryProject)
+    func fetchProjects(forceRefresh: Bool = false) async throws -> [Project] {
+        try await fetchProjectSummaries(forceRefresh: forceRefresh).map(Self.makeSummaryProject)
     }
 
     func fetchProjectDetail(rid: String) async throws -> Project {
         try await fetchProjectDetailPayload(rid: rid)
     }
 
-    private func fetchProjectSummaries() async throws -> [ProjectSummaryPayload] {
+    private func fetchProjectSummaries(forceRefresh: Bool) async throws -> [ProjectSummaryPayload] {
         var results: [ProjectSummaryPayload] = []
         var cursor: String?
 
@@ -295,7 +295,7 @@ struct ProjectService: Sendable {
                 cacheKey: APICacheKeys.projects(cursor: cursor),
                 resourceType: .userProfile,
                 ttl: APICacheTTLs.projectList,
-                policy: .cacheFirstThenRefresh
+                policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
             )
             let response = cached.value
 

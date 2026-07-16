@@ -63,7 +63,8 @@ function hutchDeepLinkForLocation() {
 
   const path = hutchDeepLinkPath(location.hostname, hutchNormalizedPath(location.pathname));
   const service = hutchDeepLinkService(location.hostname, path);
-  return `hutch://${service}${path ? `/${path}` : ""}${location.search}${location.hash}`;
+  const pathSegment = path ? `/${path}` : "";
+  return `hutch://${service}${pathSegment}${location.search}${location.hash}`;
 }
 
 function storageGet(defaults) {
