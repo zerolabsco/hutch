@@ -6,6 +6,28 @@ call sites in the Swift source.
 
 See [SCOPE.md](SCOPE.md) for features that are intentionally out of scope.
 
+## SourceHut API traps
+
+Things the schema does not tell you, each of which has already cost real time.
+
+- **`Thread.updated` is not the thread's activity.** It is the root email's
+  insert time and never advances when a reply arrives, despite the name and
+  despite the schema describing `MailingList.threads` as ordered "most recently
+  bumped". sr.ht returns `updated` seven seconds after `root.date` on a thread
+  carrying four replies. Anything built on it silently treats thread creation as
+  activity. Use `MailingList.emails`, which is reverse-chronological arrival
+  data — see `MailingListActivity`. Prefer `Email.received` over `Email.date`:
+  `received` is server-side and non-null, `date` comes from the sender's header
+  and is neither.
+- **The schema dumps in `Docs/API` are partial.** They were captured with an
+  introspection query that omits `inputFields` and `enumValues`, so they cannot
+  answer what a mutation's input looks like or what an enum accepts — both come
+  back as empty arrays rather than as an error. For input shapes and enum cases,
+  read the real SDL instead:
+  `git clone --depth 1 https://git.sr.ht/~sircmpwn/<service>.sr.ht` and look at
+  `api/graph/schema.graphqls`. Regenerating the dumps with a full introspection
+  query would remove the trap.
+
 ## Phase 0: Unblock CI — done (v3.5.0)
 
 Nothing downstream is trustworthy until the build badge means something.
@@ -29,12 +51,19 @@ been running only on demand in Xcode, and ten had rotted:
   `request.httpBody` read inside a `URLProtocol` (always nil; the body lives on
   `httpBodyStream`), an incident fixture contradicting its own RSS input, and an
   image assertion that treated the correct `&amp;` attribute encoding as a bug.
-- Four were real bugs the suite had been right about all along: repository
+- Three were real bugs the suite had been right about all along: repository
   descriptions could not be cleared (a nil subscript assignment drops the key
   instead of sending JSON null), `serviceNotProvisioned` was unreachable behind
-  a broader `no such` match, code spans rendered their contents as live markup,
-  and inbox threads keyed `id` on a subject-derived grouping key so two threads
-  sharing a subject on one list collided under `Identifiable`.
+  a broader `no such` match, and code spans rendered their contents as live
+  markup.
+- One was neither. `keepsDistinctThreadsDistinctByRootMessageID` asserted that
+  two same-subject threads get distinct `id`s, and `eff81f3` obliged by keying
+  `id` on the root Message-ID. The commit message claims this fixed an
+  `Identifiable` collision; it did not, because `deduplicateThreads` merges
+  same-subject threads into one summary before anything renders, so the
+  collision is unreachable. The test constructed summaries by hand and skipped
+  that step. The change is harmless and separating identity from grouping reads
+  better, but the stated reason was wrong.
 
 ## Phase 1: Close the write gaps — done (v3.6.0)
 
@@ -69,10 +98,8 @@ alongside Phase 2, which surfaces lists through patchsets.
   TTL-aware path — so both were removed rather than merged. `responseCache`
   remains as the in-memory layer behind `cachedPayload`.
 
-Known follow-up: `BuildListViewModel`, `RepositoryListViewModel`, and
-`PasteService` still read `client.responseCache` directly, falling back across
-two different cache keys. That predates `APICacheKeys` and should be folded into
-`cachedPayload`.
+Known follow-up: three view models still read `client.responseCache` directly.
+Tracked under Phase 3.
 
 ## Phase 2: Patchsets — done (v3.7.0)
 
@@ -120,6 +147,29 @@ GraphQL mutation. Treat that boundary as explicit rather than half-building it.
 - Mailing list creation and settings (`createMailingList`, `updateMailingList`,
   `deleteMailingList`).
 - `events` feed (todo.sr.ht) and `archiveMessage` (lists.sr.ht).
+
+### Swift 6 language mode
+
+The project builds in Swift 5 language mode with
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. Moving to Swift 6 is blocked on
+concurrency diagnostics that are warnings today and errors there:
+
+- `APICacheTests` and `BundleUserAgentTests` call main-actor-isolated
+  initialisers and properties from nonisolated contexts, and `await` a few
+  expressions without marking them. Roughly 20 warnings, all in tests.
+- Response types are implicitly `@MainActor` under the default isolation, so
+  their `Decodable` conformances are too. Decoding one from a nonisolated
+  context — an `async let` over a raw `client.execute`, say — warns now and
+  fails then. The pattern that avoids it is `async let` over `@MainActor`
+  methods, as in `HomeViewModel.loadDashboard` and
+  `NotificationPreferencesViewModel.load`.
+
+### Cache reads that bypass the client
+
+`BuildListViewModel`, `RepositoryListViewModel`, and `PasteService` still read
+`client.responseCache` directly, each falling back across two different cache
+keys. That predates `APICacheKeys` and should be folded into `cachedPayload`,
+which already consults the persistent cache before the memory layer.
 
 ## Housekeeping
 
