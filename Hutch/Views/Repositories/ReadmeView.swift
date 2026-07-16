@@ -371,8 +371,21 @@ nonisolated func processInline(
 ) -> String {
 
     var protectedFragments: [String: String] = [:]
+
+    // Code spans render their contents literally, so they have to be taken out of
+    // the text before any later pass can treat those contents as markup — the tag
+    // pass below would otherwise promote an allowlisted `<b>` into a live tag.
     var result = protectMatches(
         in: text,
+        pattern: #"`([^`]+)`"#,
+        protectedFragments: &protectedFragments
+    ) { match, nsText in
+        let code = nsText.substring(with: match.range(at: 1))
+        return "<code>\(escapeHTML(code))</code>"
+    }
+
+    result = protectMatches(
+        in: result,
         pattern: #"</?[A-Za-z][^>]*?>"#,
         protectedFragments: &protectedFragments
     ) { match, nsText in
@@ -438,13 +451,6 @@ nonisolated func processInline(
         with: "<em>$1</em>",
         options: .regularExpression
     )
-    // Inline code: `text`
-    result = result.replacingOccurrences(
-        of: #"`([^`]+)`"#,
-        with: "<code>$1</code>",
-        options: .regularExpression
-    )
-
     for (token, fragment) in protectedFragments {
         result = result.replacingOccurrences(of: token, with: fragment)
     }
