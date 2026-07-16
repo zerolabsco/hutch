@@ -294,7 +294,7 @@ private final class CachedURLProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
-    override func stopLoading() {} // required override; nothing to tear down
+    override func stopLoading() { /* required override; nothing to tear down */ }
 
     static func reset(responses: [CachedURLProtocolResponse], responseDelay: TimeInterval = 0) {
         Self.responses = responses
