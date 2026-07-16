@@ -291,39 +291,45 @@ struct RootView: View {
         }
     }
 
+    /// Replaces the target tab's path in one assignment.
+    ///
+    /// Resetting the path and appending to it afterwards races when the target tab
+    /// is already the one on screen: the reset starts an animated pop of the view
+    /// the user is standing on, and the appends land mid-animation, leaving a blank
+    /// screen. That is why opening a mailing list from a pinned project on Home
+    /// worked while the same tap under More → Projects did not — one changes tabs
+    /// and the other does not.
+    ///
+    /// Building the whole path first and assigning once gives SwiftUI a single
+    /// diff, with nothing to race.
     private func handleTabNavigation(_ target: AppState.TabNavigationTarget) {
         switch target {
         case .repository(let repository):
-            repoPath = NavigationPath()
+            var path = NavigationPath()
+            path.append(repository)
+            repoPath = path
             appState.selectedTab = .repositories
-            Task {
-                await settleNavigationTransition()
-                repoPath.append(repository)
-            }
 
         case .tracker(let tracker):
-            ticketsPath = NavigationPath()
+            var path = NavigationPath()
+            path.append(tracker)
+            ticketsPath = path
             appState.selectedTab = .tickets
-            Task {
-                await settleNavigationTransition()
-                ticketsPath.append(tracker)
-            }
 
         case .mailingList(let mailingList):
-            morePath = NavigationPath()
+            // .lists first so back lands on Mailing Lists rather than dead-ending.
+            var path = NavigationPath()
+            path.append(MoreRoute.lists)
+            path.append(MoreRoute.mailingList(mailingList))
+            morePath = path
             appState.selectedTab = .more
-            Task {
-                await settleNavigationTransition()
-                morePath.append(MoreRoute.lists)
-                morePath.append(MoreRoute.mailingList(mailingList))
-            }
+
         case .systemStatus:
-            morePath = NavigationPath()
+            var path = NavigationPath()
+            path.append(MoreRoute.systemStatus)
+            morePath = path
             appState.selectedTab = .more
-            Task {
-                await settleNavigationTransition()
-                morePath.append(MoreRoute.systemStatus)
-            }
+
         case .builds:
             buildsPath = NavigationPath()
             appState.selectedTab = .builds

@@ -751,11 +751,12 @@ struct TrackerACLManagementSheet: View {
                                 TrackerPermissionSummary(permissions: entry.permissions)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
+                                Button {
                                     pendingDeletion = entry
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .tint(.red)
 
                                 Button {
                                     editingACL = entry
@@ -1132,11 +1133,12 @@ struct TrackerLabelManagementSheet: View {
                             }
                             .tint(.blue)
 
-                            Button(role: .destructive) {
+                            Button {
                                 pendingDeletion = label
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
                     }
                     .themedRow()

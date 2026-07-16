@@ -373,11 +373,12 @@ struct MailingListListView: View {
                 // the data has not actually changed.
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if isOwned(mailingList) {
-                        Button(role: .destructive) {
+                        Button {
                             pendingDeletion = mailingList
                         } label: {
                             SwiftUI.Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                         Button {
                             editingList = mailingList
                         } label: {

@@ -145,11 +145,12 @@ struct TrackerListView: View {
                     TrackerRowView(tracker: tracker)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
+                    Button {
                         pendingDeletion = tracker
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .tint(.red)
 
                     Button {
                         editingTracker = tracker

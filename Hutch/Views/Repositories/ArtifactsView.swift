@@ -16,6 +16,21 @@ struct ArtifactsView: View {
 
     var body: some View {
         List {
+            // In the list rather than the toolbar: this view is a segment inside
+            // RepositoryDetailView's tab switch, not its own navigation
+            // destination, and a toolbar declared from there does not reliably
+            // reach the navigation bar. It also has to be reachable when there are
+            // no artifacts at all, which is the state a new tag is in.
+            if isOwnedByCurrentUser {
+                Button {
+                    showTagPicker = true
+                } label: {
+                    SwiftUI.Label("Upload Artifact…", systemImage: "square.and.arrow.up")
+                }
+                .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
+                .themedRow()
+            }
+
             ForEach(viewModel.referenceArtifacts) { refArtifacts in
                 Section {
                     ForEach(refArtifacts.artifacts) { artifact in
@@ -26,11 +41,12 @@ struct ArtifactsView: View {
                         // action animates the row out before the confirmation.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if isOwnedByCurrentUser {
-                                Button(role: .destructive) {
+                                Button {
                                     pendingDeletion = artifact
                                 } label: {
                                     SwiftUI.Label("Delete", systemImage: "trash")
                                 }
+                                .tint(.red)
                             }
                         }
                     }
@@ -83,20 +99,6 @@ struct ArtifactsView: View {
         } message: { _ in
             Text("This permanently removes the artifact from the tag. This cannot be undone.")
         }
-        // The sections above only list tags that already have an artifact, so
-        // without this there would be no way to attach the first one to a tag.
-        .toolbar {
-            if isOwnedByCurrentUser {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showTagPicker = true
-                    } label: {
-                        SwiftUI.Label("Upload Artifact", systemImage: "square.and.arrow.up")
-                    }
-                    .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
-                }
-            }
-        }
         .confirmationDialog("Upload to Tag", isPresented: $showTagPicker, titleVisibility: .visible) {
             ForEach(viewModel.tags.prefix(12), id: \.name) { tag in
                 Button(RepositorySummary.displayBranchName(for: tag.name)) {
@@ -125,11 +127,21 @@ struct ArtifactsView: View {
                     retryAction: { await viewModel.loadArtifacts() }
                 )
             } else if viewModel.referenceArtifacts.isEmpty {
-                ContentUnavailableView(
-                    "No Artifacts",
-                    systemImage: "archivebox",
-                    description: Text("This repository has no release artifacts.")
-                )
+                // The overlay covers the whole list, so the upload row above is
+                // hidden underneath it — and a repository with no artifacts is
+                // exactly the one that needs uploading. Offer it here too.
+                ContentUnavailableView {
+                    SwiftUI.Label("No Artifacts", systemImage: "archivebox")
+                } description: {
+                    Text("This repository has no release artifacts.")
+                } actions: {
+                    if isOwnedByCurrentUser {
+                        Button("Upload Artifact…") {
+                            showTagPicker = true
+                        }
+                        .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
+                    }
+                }
             }
         }
         .task {
