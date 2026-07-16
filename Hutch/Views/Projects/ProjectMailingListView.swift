@@ -104,8 +104,14 @@ final class MailingListDetailViewModel {
                 responseType: ProjectMailingListThreadsResponse.self
             )
 
+            let activity = await MailingListActivityLoader.load(
+                client: client,
+                listRID: mailingList.rid,
+                since: InboxReadStateStore.baseline(defaults: defaults) ?? .distantPast
+            )
+
             threads = deduplicateThreads(
-                response.list.threads.results.map(makeSummary(from:))
+                response.list.threads.results.map { makeSummary(from: $0, activity: activity) }
             )
             patchsets = Self.patchsets(from: response.list.threads.results)
         } catch {
@@ -193,13 +199,20 @@ final class MailingListDetailViewModel {
         NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -unreadThreads.count, accountID: accountID)
     }
 
-    private func makeSummary(from thread: ProjectMailingListThreadPayload) -> InboxThreadSummary {
+    private func makeSummary(
+        from thread: ProjectMailingListThreadPayload,
+        activity: MailingListActivity
+    ) -> InboxThreadSummary {
         let normalizedSubject = thread.subject
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: #"^(?:(?:re|fwd?)\s*:\s*)+"#, with: "", options: [.regularExpression, .caseInsensitive])
             .lowercased()
         let threadID = "\(mailingList.rid)#\(normalizedSubject)"
+
+        // thread.updated is the root email's insert time and never advances when a
+        // reply lands, so activity has to come from the list's mail feed.
+        let lastActivityAt = activity.lastActivity(rootEmailID: thread.root.id, fallback: thread.updated)
 
         return InboxThreadSummary(
             rootEmailID: thread.root.id,
@@ -212,11 +225,11 @@ final class MailingListDetailViewModel {
             listOwner: mailingList.owner,
             subject: thread.subject,
             latestSender: thread.sender,
-            lastActivityAt: thread.updated,
+            lastActivityAt: lastActivityAt,
             messageCount: thread.replies + 1,
             repo: nil,
             containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
-            isUnread: InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: thread.updated, defaults: defaults)
+            isUnread: InboxReadStateStore.isUnread(threadID: threadID, lastActivityAt: lastActivityAt, defaults: defaults)
         )
     }
 

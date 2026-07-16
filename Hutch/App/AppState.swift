@@ -561,6 +561,9 @@ final class AppState {
         UserDefaults.standard.set(session.account.id, forKey: AppStorageKeys.activeAccountID)
         ActiveAccountContextStore.save(session.account.id)
         ContributionWidgetContextStore.saveActor(session.user.canonicalName, accountID: session.account.id)
+        // Every sign-in path funnels through here, so this is where an account
+        // first learns which mail predates it.
+        InboxReadStateStore.establishBaselineIfNeeded(defaults: session.defaults)
         authStatusMessage = "Connecting…"
     }
 

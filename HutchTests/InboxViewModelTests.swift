@@ -42,6 +42,110 @@ struct InboxViewModelTests {
     }
 
     @Test
+    func freshAccountTreatsExistingMailAsRead() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let signIn = Date(timeIntervalSince1970: 5_000)
+        InboxReadStateStore.establishBaselineIfNeeded(now: signIn, defaults: defaults)
+
+        // Years of list history should not land on a new user as unread.
+        #expect(
+            !InboxReadStateStore.isUnread(
+                threadID: "list#old",
+                lastActivityAt: Date(timeIntervalSince1970: 4_000),
+                defaults: defaults
+            )
+        )
+    }
+
+    @Test
+    func mailArrivingAfterSignInIsUnread() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        InboxReadStateStore.establishBaselineIfNeeded(now: Date(timeIntervalSince1970: 5_000), defaults: defaults)
+
+        #expect(
+            InboxReadStateStore.isUnread(
+                threadID: "list#new",
+                lastActivityAt: Date(timeIntervalSince1970: 6_000),
+                defaults: defaults
+            )
+        )
+    }
+
+    @Test
+    func mailExactlyAtTheBaselineIsRead() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let signIn = Date(timeIntervalSince1970: 5_000)
+        InboxReadStateStore.establishBaselineIfNeeded(now: signIn, defaults: defaults)
+
+        #expect(!InboxReadStateStore.isUnread(threadID: "list#edge", lastActivityAt: signIn, defaults: defaults))
+    }
+
+    @Test
+    func baselineIsEstablishedOnceAndNotMovedBySubsequentSignIns() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        InboxReadStateStore.establishBaselineIfNeeded(now: Date(timeIntervalSince1970: 5_000), defaults: defaults)
+        // A later launch must not silently mark the backlog read.
+        InboxReadStateStore.establishBaselineIfNeeded(now: Date(timeIntervalSince1970: 9_000), defaults: defaults)
+
+        #expect(
+            InboxReadStateStore.isUnread(
+                threadID: "list#since",
+                lastActivityAt: Date(timeIntervalSince1970: 6_000),
+                defaults: defaults
+            )
+        )
+    }
+
+    @Test
+    func existingAccountsKeepTheirUnreadBacklog() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // An account already carrying read state has been in use, so upgrading
+        // must not retroactively mark everything it had not read as read.
+        InboxReadStateStore.markViewed(Date(timeIntervalSince1970: 1_000), for: "list#seen", defaults: defaults)
+        InboxReadStateStore.establishBaselineIfNeeded(now: Date(timeIntervalSince1970: 5_000), defaults: defaults)
+
+        #expect(
+            InboxReadStateStore.isUnread(
+                threadID: "list#unseen",
+                lastActivityAt: Date(timeIntervalSince1970: 4_000),
+                defaults: defaults
+            )
+        )
+    }
+
+    @Test
+    func markingAnOldThreadUnreadSurvivesTheBaseline() {
+        let suiteName = "InboxViewModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        InboxReadStateStore.establishBaselineIfNeeded(now: Date(timeIntervalSince1970: 5_000), defaults: defaults)
+        let oldActivity = Date(timeIntervalSince1970: 4_000)
+
+        #expect(!InboxReadStateStore.isUnread(threadID: "list#old", lastActivityAt: oldActivity, defaults: defaults))
+
+        // Explicitly marking it unread must stick, rather than falling back to the
+        // baseline rule and reading as read again.
+        InboxReadStateStore.markUnread(for: "list#old", defaults: defaults)
+        #expect(InboxReadStateStore.isUnread(threadID: "list#old", lastActivityAt: oldActivity, defaults: defaults))
+    }
+
+    @Test
     func normalizesThreadSubjectsForDisplay() {
         let summary = InboxThreadSummary(
             rootEmailID: 1,

@@ -343,7 +343,12 @@ final class HomeViewModel {
         self.accountID = accountID
     }
 
-    func loadDashboard() async {
+    /// Loads the dashboard.
+    ///
+    /// `forceRefresh` bypasses the cache. Without it, a pull to refresh returns
+    /// whatever is already cached and only schedules a background fetch, so new
+    /// mail cannot show up on the first pull.
+    func loadDashboard(forceRefresh: Bool = false) async {
         isLoadingProjects = true
         isLoadingAssignedTickets = true
         isLoadingRecentBuilds = true
@@ -354,11 +359,11 @@ final class HomeViewModel {
         isShowingStaleSystemStatus = false
         systemStatusErrorMessage = nil
 
-        async let projectsTask = loadProjects()
-        async let jobsTask = loadRecentJobs()
-        async let assignedTicketsTask = loadAssignedTickets()
-        async let inboxUnreadTask = loadInboxUnreadSnapshot()
-        async let systemStatusTask = loadSystemStatusSnapshot()
+        async let projectsTask = loadProjects(forceRefresh: forceRefresh)
+        async let jobsTask = loadRecentJobs(forceRefresh: forceRefresh)
+        async let assignedTicketsTask = loadAssignedTickets(forceRefresh: forceRefresh)
+        async let inboxUnreadTask = loadInboxUnreadSnapshot(forceRefresh: forceRefresh)
+        async let systemStatusTask = loadSystemStatusSnapshot(forceRefresh: forceRefresh)
 
         let projectsResult = await projectsTask
         switch projectsResult {
@@ -676,7 +681,7 @@ final class HomeViewModel {
         persistNeedsAttentionSnapshot()
     }
 
-    private func loadProjects() async -> Result<[Project], Error> {
+    private func loadProjects(forceRefresh: Bool) async -> Result<[Project], Error> {
         do {
             return .success(try await projectService.fetchProjects())
         } catch {
@@ -684,7 +689,7 @@ final class HomeViewModel {
         }
     }
 
-    private func loadRecentJobs() async -> Result<[HomeJobPayload], Error> {
+    private func loadRecentJobs(forceRefresh: Bool) async -> Result<[HomeJobPayload], Error> {
         do {
             let cached = try await client.executeCached(
                 service: .builds,
@@ -693,7 +698,7 @@ final class HomeViewModel {
                 cacheKey: APICacheKeys.homeJobs(actor: currentUser.canonicalName),
                 resourceType: .buildList,
                 ttl: APICacheTTLs.homeDashboard,
-                policy: .cacheFirstThenRefresh
+                policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
             )
             return .success(cached.value.jobs.results)
         } catch {
@@ -701,15 +706,15 @@ final class HomeViewModel {
         }
     }
 
-    private func loadInboxUnreadSnapshot() async -> HomeInboxUnreadSnapshot? {
+    private func loadInboxUnreadSnapshot(forceRefresh: Bool) async -> HomeInboxUnreadSnapshot? {
         do {
-            return try await fetchUnreadInboxSnapshot()
+            return try await fetchUnreadInboxSnapshot(forceRefresh: forceRefresh)
         } catch {
             return nil
         }
     }
 
-    private func loadSystemStatusSnapshot() async -> Result<CachedSystemStatusValue<SystemStatusSnapshot>, Error> {
+    private func loadSystemStatusSnapshot(forceRefresh: Bool) async -> Result<CachedSystemStatusValue<SystemStatusSnapshot>, Error> {
         do {
             return .success(try await systemStatusRepository.snapshotResult())
         } catch {
@@ -717,8 +722,8 @@ final class HomeViewModel {
         }
     }
 
-    private func fetchUnreadInboxSnapshot() async throws -> HomeInboxUnreadSnapshot {
-        let mailingLists = try await fetchInboxMailingLists()
+    private func fetchUnreadInboxSnapshot(forceRefresh: Bool) async throws -> HomeInboxUnreadSnapshot {
+        let mailingLists = try await fetchInboxMailingLists(forceRefresh: forceRefresh)
         guard !mailingLists.isEmpty else { return HomeInboxUnreadSnapshot(unreadCount: 0, threads: []) }
 
         var startIndex = mailingLists.startIndex
@@ -737,7 +742,7 @@ final class HomeViewModel {
                 for mailingList in batch {
                     group.addTask {
                         do {
-                            return .success(try await self.fetchUnreadThreadSnapshot(for: mailingList))
+                            return .success(try await self.fetchUnreadThreadSnapshot(for: mailingList, forceRefresh: forceRefresh))
                         } catch {
                             return .failure(error)
                         }
@@ -776,7 +781,7 @@ final class HomeViewModel {
         )
     }
 
-    private func fetchInboxMailingLists() async throws -> [InboxMailingListReference] {
+    private func fetchInboxMailingLists(forceRefresh: Bool) async throws -> [InboxMailingListReference] {
         var subscriptions: [HomeInboxSubscription] = []
         var cursor: String?
 
@@ -794,7 +799,7 @@ final class HomeViewModel {
                 cacheKey: APICacheKeys.inboxSubscriptions(cursor: cursor),
                 resourceType: .ticketList,
                 ttl: APICacheTTLs.inboxSummary,
-                policy: .cacheFirstThenRefresh
+                policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
             )
             let response = cached.value
 
@@ -809,10 +814,18 @@ final class HomeViewModel {
         return subscriptions.compactMap(\.list).filter { seen.insert($0.rid).inserted }
     }
 
-    private func fetchUnreadThreadSnapshot(for mailingList: InboxMailingListReference) async throws -> HomeInboxUnreadSnapshot {
+    private func fetchUnreadThreadSnapshot(for mailingList: InboxMailingListReference, forceRefresh: Bool) async throws -> HomeInboxUnreadSnapshot {
         var unreadCount = 0
         var cursor: String?
         var unreadThreads: [InboxThreadSummary] = []
+
+        // thread.updated is the root email's insert time and never advances when a
+        // reply lands, so activity has to come from the list's mail feed.
+        let activity = await MailingListActivityLoader.load(
+            client: client,
+            listRID: mailingList.rid,
+            since: InboxReadStateStore.baseline(defaults: defaults) ?? .distantPast
+        )
 
         while true {
             var variables: [String: any Sendable] = ["rid": mailingList.rid]
@@ -828,11 +841,12 @@ final class HomeViewModel {
                 cacheKey: APICacheKeys.inboxThreads(listRid: mailingList.rid, cursor: cursor),
                 resourceType: .ticketList,
                 ttl: APICacheTTLs.inboxSummary,
-                policy: .cacheFirstThenRefresh
+                policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
             )
             let response = cached.value
 
             let unreadThreadSummaries = response.list.threads.results.compactMap { thread -> InboxThreadSummary? in
+                let lastActivityAt = activity.lastActivity(rootEmailID: thread.root.id, fallback: thread.updated)
                 let summary = InboxThreadSummary(
                     rootEmailID: thread.root.id,
                     rootMessageID: thread.root.messageID,
@@ -844,13 +858,13 @@ final class HomeViewModel {
                     listOwner: mailingList.owner,
                     subject: thread.subject,
                     latestSender: thread.sender,
-                    lastActivityAt: thread.updated,
+                    lastActivityAt: lastActivityAt,
                     messageCount: thread.replies + 1,
                     repo: InboxThreadUtilities.deriveRepositoryName(from: mailingList.name),
                     containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
                     isUnread: InboxReadStateStore.isUnread(
                         threadID: "\(mailingList.rid)#\(InboxThreadSummary.normalizationKey(for: thread.subject))",
-                        lastActivityAt: thread.updated,
+                        lastActivityAt: lastActivityAt,
                         defaults: defaults
                     )
                 )
@@ -871,10 +885,10 @@ final class HomeViewModel {
         )
     }
 
-    private func loadAssignedTickets() async -> Result<[HomeAssignedTicket], Error> {
+    private func loadAssignedTickets(forceRefresh: Bool) async -> Result<[HomeAssignedTicket], Error> {
         do {
-            let trackers = try await fetchAllTrackers()
-            let tickets = try await fetchAssignedTickets(for: trackers)
+            let trackers = try await fetchAllTrackers(forceRefresh: forceRefresh)
+            let tickets = try await fetchAssignedTickets(for: trackers, forceRefresh: forceRefresh)
                 .sorted(by: Self.sortAssignedTicketsForTriage)
             return .success(tickets)
         } catch {
@@ -882,7 +896,7 @@ final class HomeViewModel {
         }
     }
 
-    private func fetchAllTrackers() async throws -> [TrackerSummary] {
+    private func fetchAllTrackers(forceRefresh: Bool) async throws -> [TrackerSummary] {
         var allTrackers: [TrackerSummary] = []
         var cursor: String?
 
@@ -900,7 +914,7 @@ final class HomeViewModel {
                 cacheKey: APICacheKeys.trackers(cursor: cursor),
                 resourceType: .ticketList,
                 ttl: APICacheTTLs.ticketList,
-                policy: .cacheFirstThenRefresh
+                policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
             )
             let response = cached.value
 
@@ -914,7 +928,7 @@ final class HomeViewModel {
         return allTrackers
     }
 
-    private func fetchAssignedTickets(for trackers: [TrackerSummary]) async throws -> [HomeAssignedTicket] {
+    private func fetchAssignedTickets(for trackers: [TrackerSummary], forceRefresh: Bool) async throws -> [HomeAssignedTicket] {
         guard !trackers.isEmpty else { return [] }
 
         var assignedTickets: [HomeAssignedTicket] = []
@@ -927,7 +941,7 @@ final class HomeViewModel {
             let batchTickets = try await withThrowingTaskGroup(of: [HomeAssignedTicket].self) { group in
                 for tracker in batch {
                     group.addTask {
-                        try await self.fetchAssignedTickets(for: tracker)
+                        try await self.fetchAssignedTickets(for: tracker, forceRefresh: forceRefresh)
                     }
                 }
 
@@ -945,7 +959,7 @@ final class HomeViewModel {
         return assignedTickets
     }
 
-    private func fetchAssignedTickets(for tracker: TrackerSummary) async throws -> [HomeAssignedTicket] {
+    private func fetchAssignedTickets(for tracker: TrackerSummary, forceRefresh: Bool) async throws -> [HomeAssignedTicket] {
         let cached = try await client.executeCached(
             service: .todo,
             query: Self.trackerTicketsQuery,
@@ -964,7 +978,7 @@ final class HomeViewModel {
             ),
             resourceType: .ticketList,
             ttl: APICacheTTLs.ticketList,
-            policy: .cacheFirstThenRefresh
+            policy: forceRefresh ? .refreshIgnoringCache : .cacheFirstThenRefresh
         )
         let response = cached.value
 
