@@ -134,6 +134,28 @@ GraphQL mutation. Treat that boundary as explicit rather than half-building it.
 Unlike Phases 1 and 2, this is not one shippable thing. It is several, and they
 are sized very differently — measure before committing to one.
 
+### Release plan
+
+Hutch is an app with a `MARKETING_VERSION`, not a library with an API contract,
+so "breaking change" does not apply. These buckets track *user-visible scale*.
+
+| Version | Contents | Why here |
+| --- | --- | --- |
+| v3.8.1 | SonarCloud triage; housekeeping | No behaviour change at all |
+| v3.9.0 | "What's cooking" ingest; doc truth-up; deploy keys | Ships one feature, corrects the map |
+| v3.10.0 | hub.sr.ht writes: projects, discovery, `mailingListSubscribe` | Provisional — gated on what v3.9.0 finds |
+| v3.11.0 | Accessibility | Independent, device-verified |
+| v4.0.0 | Localization *with* translations | The only true re-presentation |
+| — | Swift 6 language mode; cache reads | Internal; ride along, no tag |
+
+Ordering is by dependency, not size. v3.9.0 leads because it is the only item
+that corrects the others' inputs: the ingest's real output is a `SCOPE.md` that
+is true, and v3.10.0 rests entirely on one unverified sentence in a blog post.
+Do not commit v3.10.0's number until the SDL has been read — the bucket may turn
+out to be empty, which is the point of sequencing it second.
+
+`KeychainHelper` is deliberately unbucketed; see the SonarCloud hotspots below.
+
 ### API features — done (v3.8.0)
 
 - ~~`uploadArtifact` / `deleteArtifact`~~ — artifacts were read-only.
@@ -152,7 +174,7 @@ Three of the six planned. The other three did not survive contact:
   on judgement — see [SCOPE.md](SCOPE.md) for the reasoning, so they do not get
   re-proposed.
 
-### Localization
+### Localization — v4.0.0, and only with translations
 
 The project sets `LOCALIZATION_PREFERS_STRING_CATALOGS = YES` but ships no
 string catalog, so every user-facing string is hardcoded English. Roughly 634
@@ -164,12 +186,19 @@ for users until translations exist. It is groundwork, and it is the largest diff
 in the roadmap — it touches nearly every view, with the regression risk that
 implies.
 
-### Accessibility
+That combination is why this is bucketed at v4.0.0 *bundled with at least one
+real translation*, rather than shipped alone. An English-only catalog would earn
+the major number on regression risk while delivering nothing — the wrong trade.
+Hold the catalog until a translation lands. If it ever ships unbundled, it is
+groundwork and belongs in a quiet minor, not a 4.0.
+
+### Accessibility — v3.11.0
 
 Labels and hints appear in 17 of 89 view files. Mechanical and low-risk, but it
 cannot be verified from a build — it needs VoiceOver driven on a device.
+Independent of every other bucket, so it can move if a device pass is convenient.
 
-### SonarCloud backlog
+### SonarCloud backlog — v3.8.1
 
 51 open issues: **0 bugs, 0 vulnerabilities, 51 code smells**, plus 3 security
 hotspots. The headline number is misleading, so trust the breakdown before
@@ -193,7 +222,11 @@ The 3 hotspots are the part actually worth thought:
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` with no
   `SecAccessControl`, so it does not require biometric or passcode
   authentication to read. That is a genuine product decision — should a stolen,
-  unlocked phone hand over a sr.ht token? — not a lint nit.
+  unlocked phone hand over a sr.ht token? — not a lint nit. **Unbucketed on
+  purpose:** adding `SecAccessControl` changes what a user must do to read their
+  own token, so it needs a decision first. If the answer is yes, it is a minor
+  bump of its own — a visible auth change should not hide inside a feature
+  release.
 - `ReadmeView:1922` (**LOW**) — unrestricted WebView navigation. Probably a false
   positive: `isAllowedReadmeNavigationURL` enforces a scheme allowlist. Verify,
   then annotate.
@@ -201,7 +234,12 @@ The 3 hotspots are the part actually worth thought:
 Query it with:
 `https://sonarcloud.io/api/issues/search?componentKeys=zerolabsco_hutch&resolved=false`
 
-### Ingest "What's cooking on SourceHut?"
+This is a patch because nothing executes differently afterwards. The 35 hardcoded-URI
+issues are resolved as *Won't Fix* in SonarCloud's web UI — not a commit at all — and
+the rest is three comments and one annotation. If it produces a diff that changes a
+runtime path, something has gone wrong.
+
+### Ingest "What's cooking on SourceHut?" — v3.9.0
 
 sr.ht posts a quarterly update to `~sircmpwn/sr.ht-announce`, mirrored at
 <https://sourcehut.org/blog/>. Nothing in Hutch tracks it, so the API grows and
@@ -227,7 +265,25 @@ flags two openings:
 Start from Q1 2026 forward — that is roughly when the current `Docs/API` dumps
 were captured.
 
-### Swift 6 language mode
+Research does not ship, so v3.9.0 pairs the ingest with **deploy keys** — the one
+self-contained feature it has already surfaced and that the SDL confirms exists.
+That gives the release something a user can see. Everything else the ingest turns
+up gets filed, not built, and hub.sr.ht gets its own bucket below.
+
+### hub.sr.ht writes — v3.10.0, provisional
+
+Everything here rests on a single sentence in the Q2 2026 post: that hub.sr.ht
+gained a writable GraphQL API. If true, three things unblock at once —
+project writes (Hutch's projects are read-only), discovery (which `SCOPE.md`
+rules out on the grounds hub has no public API), and `mailingListSubscribe`,
+which Phase 1 declined for exactly that reason.
+
+All three live or die on the same unverified claim, which is why this is
+sequenced after the ingest rather than planned now. Read
+`api/graph/schema.graphqls` in `hub.sr.ht` before committing the version number.
+The bucket may be empty.
+
+### Swift 6 language mode — no release of its own
 
 The project builds in Swift 5 language mode with
 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. Moving to Swift 6 is blocked on
@@ -243,14 +299,17 @@ concurrency diagnostics that are warnings today and errors there:
   methods, as in `HomeViewModel.loadDashboard` and
   `NotificationPreferencesViewModel.load`.
 
-### Cache reads that bypass the client
+### Cache reads that bypass the client — no release of its own
 
 `BuildListViewModel`, `RepositoryListViewModel`, and `PasteService` still read
 `client.responseCache` directly, each falling back across two different cache
 keys. That predates `APICacheKeys` and should be folded into `cachedPayload`,
 which already consults the persistent cache before the memory layer.
 
-## Housekeeping
+Like Swift 6 above, this is internal and rides along with whatever release
+already touches that area. Neither justifies a tag.
+
+## Housekeeping — v3.8.1
 
 - `Hutch/Hutch/App/AccountSession.swift` sits in a stray nested directory;
   `Hutch/HutchTests/` is empty.
