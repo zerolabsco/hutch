@@ -86,29 +86,43 @@ final class NotificationPreferencesViewModel {
 
         // The two services are independent; one being unreachable should not hide
         // the other's setting.
-        async let todo = try? client.execute(
-            service: .todo,
-            query: Self.todoPreferencesQuery,
-            responseType: TodoPreferencesResponse.self
-        )
-        async let lists = try? client.execute(
-            service: .lists,
-            query: Self.listsPreferencesQuery,
-            responseType: ListsPreferencesResponse.self
-        )
+        async let todo = fetchNotifySelf()
+        async let lists = fetchCopySelf()
 
         let (todoResult, listsResult) = await (todo, lists)
 
         if let todoResult {
-            notifySelf = todoResult.preferences.notifySelf
+            notifySelf = todoResult
         }
         if let listsResult {
-            copySelf = listsResult.preferences.copySelf
+            copySelf = listsResult
         }
 
         if todoResult == nil && listsResult == nil {
             error = "Couldn't load your email preferences."
         }
+    }
+
+    /// The fetches stay in their own methods so the response types are only ever
+    /// decoded on the main actor. The module defaults to MainActor isolation, so
+    /// decoding straight from an `async let` would use a main-actor-isolated
+    /// Decodable conformance from a nonisolated context.
+    private func fetchNotifySelf() async -> Bool? {
+        let response = try? await client.execute(
+            service: .todo,
+            query: Self.todoPreferencesQuery,
+            responseType: TodoPreferencesResponse.self
+        )
+        return response?.preferences.notifySelf
+    }
+
+    private func fetchCopySelf() async -> Bool? {
+        let response = try? await client.execute(
+            service: .lists,
+            query: Self.listsPreferencesQuery,
+            responseType: ListsPreferencesResponse.self
+        )
+        return response?.preferences.copySelf
     }
 
     func setNotifySelf(_ newValue: Bool) async {
