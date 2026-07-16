@@ -273,49 +273,6 @@ final class SRHTClient: Sendable {
         return try decodeGraphQLData(data, service: service, query: query, variables: variables)
     }
 
-    // MARK: - Cached Execute
-
-    /// Execute a query and cache the raw response data. Returns cached data
-    /// immediately on cache hit, then refreshes in the background via the
-    /// `onRefresh` callback.
-    func executeCached<T: Decodable>(
-        service: SRHTService,
-        query: String,
-        variables: [String: any Sendable]? = nil,
-        responseType _: T.Type,
-        cacheKey: String
-    ) async throws -> T {
-        // Try cache first
-        if let cachedData = responseCache.get(forKey: cacheKey),
-           let cached = try? decoder.decode(GraphQLResponse<T>.self, from: cachedData),
-           let data = cached.data {
-            return data
-        }
-
-        // No cache hit — fetch normally
-        return try await executeAndCache(
-            service: service,
-            query: query,
-            variables: variables,
-            responseType: T.self,
-            cacheKey: cacheKey
-        )
-    }
-
-    /// Execute a query, cache the raw data, and return the decoded result.
-    func executeAndCache<T: Decodable>(
-        service: SRHTService,
-        query: String,
-        variables: [String: any Sendable]? = nil,
-        responseType _: T.Type,
-        cacheKey: String
-    ) async throws -> T {
-        // performGraphQLRequest surfaces GraphQL errors before we get here, so an
-        // error payload is never written to the cache.
-        let data = try await performGraphQLRequest(service: service, query: query, variables: variables)
-        responseCache.set(data, forKey: cacheKey)
-        return try decodeGraphQLData(data, service: service, query: query, variables: variables)
-    }
 
     // MARK: - Plain-text fetch
 
