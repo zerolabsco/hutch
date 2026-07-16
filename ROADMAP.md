@@ -244,8 +244,10 @@ Won't Fix, with reasons (resolve in SonarCloud's web UI, not in code):
 - **`javascript:S7785`** — prefers top-level `await` for `injectBannerIfEnabled()`,
   but `content.js` is a classic content script, not a module. Top-level `await`
   would be a syntax error. Not applicable.
-- **5× `swift:S1135`** — TODO comments (INFO). Two in `HutchIntents` name real
-  gaps; leave them until those features land.
+- **5× `swift:S1135`** — TODO comments (INFO). The two in `HutchIntents` named
+  real gaps and are now promoted to "App Intent gaps" below, with the inline
+  `TODO`s replaced by plain references — so those two clear. The remaining three
+  (`DeepLink`, `NotificationPreferencesViewModel` ×2) stay until addressed.
 
 The 3 hotspots are the part actually worth thought:
 
@@ -314,6 +316,24 @@ All three live or die on the same unverified claim, which is why this is
 sequenced after the ingest rather than planned now. Read
 `api/graph/schema.graphqls` in `hub.sr.ht` before committing the version number.
 The bucket may be empty.
+
+### App Intent gaps — unscheduled
+
+Two App Intents in `HutchIntents.swift` are placeholders for features Hutch does
+not have yet. Both are gated on the same missing capability — a global
+search/persistence layer — so neither is schedulable until that lands. (These
+were the two `swift:S1135` TODOs; promoted here so the code carries a reference
+rather than a bare `TODO`.)
+
+- **Global content search.** `SearchHutchIntent` accepts a query but routes to
+  the Lookup screen — sourcehut entity resolution — because Hutch has no
+  full-text search across tickets, repos, and lists. Its own description says
+  "Opens Hutch lookup with a search query." When a real search exists, repoint
+  the `.search` route in `SearchHutchIntent.route`.
+- **`OpenSavedSearchIntent`.** Saved searches are per-tracker only
+  (`TicketSavedFilterStore`, `ScopedSearchHistoryStore`); there is no global
+  saved-search store for an intent to open. Add the intent once global
+  saved-search persistence exists.
 
 ### Swift 6 language mode — no release of its own
 
