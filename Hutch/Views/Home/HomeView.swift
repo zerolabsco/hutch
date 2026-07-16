@@ -74,7 +74,7 @@ struct HomeView: View {
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
         .refreshable {
-            await viewModel.loadDashboard()
+            await viewModel.loadDashboard(forceRefresh: true)
         }
         .connectivityOverlay(hasContent: hasHomeContent(viewModel)) {
             await viewModel.loadDashboard()

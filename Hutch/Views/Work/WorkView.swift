@@ -72,7 +72,7 @@ struct WorkView: View {
         .themedList()
         .listStyle(.insetGrouped)
         .refreshable {
-            await viewModel.loadDashboard()
+            await viewModel.loadDashboard(forceRefresh: true)
         }
         .connectivityOverlay(hasContent: hasWorkContent(viewModel)) {
             await viewModel.loadDashboard()
