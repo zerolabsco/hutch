@@ -1,5 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import os
+
+#if DEBUG
+/// Temporary: diagnosing why the upload menu swallows taps.
+private let artifactsLogger = Logger(subsystem: "net.cleberg.Hutch", category: "Artifacts")
+#endif
 
 struct ArtifactsView: View {
     let viewModel: RepositoryDetailViewModel
@@ -9,6 +15,7 @@ struct ArtifactsView: View {
     @Environment(\.openURL) private var openURL
 
     @State private var uploadTargetRef: String?
+    @State private var isImporting = false
     @State private var pendingDeletion: ArtifactInfo?
 
     private var isOwnedByCurrentUser: Bool { canManage }
@@ -25,17 +32,23 @@ struct ArtifactsView: View {
                 ForEach(viewModel.tags.prefix(12), id: \.name) { tag in
                     Button(RepositorySummary.displayBranchName(for: tag.name)) {
                         uploadTargetRef = tag.name
+                        isImporting = true
                     }
                 }
             }
         } label: {
             SwiftUI.Label("Upload Artifact…", systemImage: "square.and.arrow.up")
         }
-        .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
+        // Deliberately not disabled when there are no tags. The explanation for
+        // that state lives inside the menu, and disabling the control makes the
+        // explanation unreachable — the tap just dies with no reason given.
+        .disabled(viewModel.isMutatingArtifact)
     }
 
     var body: some View {
-        List {
+        @Bindable var vm = viewModel
+
+        return List {
             // In the list rather than the toolbar: this view is a segment inside
             // RepositoryDetailView's tab switch, not its own navigation
             // destination, and a toolbar declared from there does not reliably
@@ -75,6 +88,7 @@ struct ArtifactsView: View {
                             // on the tag rather than in the toolbar.
                             Button {
                                 uploadTargetRef = refArtifacts.name
+                                isImporting = true
                             } label: {
                                 SwiftUI.Label("Upload", systemImage: "plus.circle")
                                     .font(.caption)
@@ -85,18 +99,18 @@ struct ArtifactsView: View {
                 }
             }
         }
+        // isImporting drives presentation; uploadTargetRef carries the tag. They
+        // have to be separate: a binding derived from uploadTargetRef clears it on
+        // dismissal, and dismissal happens before the completion runs — so the
+        // completion read nil and returned without uploading anything.
         .fileImporter(
-            isPresented: .init(
-                get: { uploadTargetRef != nil },
-                set: { if !$0 { uploadTargetRef = nil } }
-            ),
+            isPresented: $isImporting,
             allowedContentTypes: [.data]
         ) { result in
-            guard let revspec = uploadTargetRef else { return }
+            let revspec = uploadTargetRef
             uploadTargetRef = nil
-            if case .success(let fileURL) = result {
-                Task { await viewModel.uploadArtifact(revspec: revspec, fileURL: fileURL) }
-            }
+            guard let revspec, case .success(let fileURL) = result else { return }
+            Task { await viewModel.uploadArtifact(revspec: revspec, fileURL: fileURL) }
         }
         .confirmationDialog(
             pendingDeletion.map { "Delete \($0.filename)?" } ?? "",
@@ -116,11 +130,24 @@ struct ArtifactsView: View {
         }
         .themedList()
         .listStyle(.insetGrouped)
+        .srhtErrorBanner(error: $vm.error)
         .task {
             // Tags drive the picker above and are not otherwise needed by this tab.
             if isOwnedByCurrentUser, viewModel.tags.isEmpty {
                 await viewModel.loadReferences()
             }
+            #if DEBUG
+            // Temporary: diagnosing why the upload menu swallows taps.
+            artifactsLogger.debug(
+                """
+                canManage=\(canManage, privacy: .public) \
+                tags=\(viewModel.tags.count, privacy: .public) \
+                isMutating=\(viewModel.isMutatingArtifact, privacy: .public) \
+                menuDisabled=\(viewModel.isMutatingArtifact || viewModel.tags.isEmpty, privacy: .public) \
+                error=\(viewModel.error ?? "nil", privacy: .public)
+                """
+            )
+            #endif
         }
         .overlay {
             if viewModel.isLoadingArtifacts, viewModel.referenceArtifacts.isEmpty {
