@@ -22,7 +22,9 @@ struct ArtifactsView: View {
                         ArtifactRow(artifact: artifact) {
                             openURL(artifact.url)
                         }
-                        .swipeActions(edge: .trailing) {
+                        // See MailingListListView: a full-swipe destructive
+                        // action animates the row out before the confirmation.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if isOwnedByCurrentUser {
                                 Button(role: .destructive) {
                                     pendingDeletion = artifact

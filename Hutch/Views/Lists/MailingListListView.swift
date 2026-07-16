@@ -367,7 +367,11 @@ struct MailingListListView: View {
                     }
                     .padding(.vertical, 2)
                 }
-                .swipeActions(edge: .trailing) {
+                // allowsFullSwipe: false, as in PasteListView. A destructive
+                // action left to full-swipe animates the row out on the gesture,
+                // before the confirmation is answered, so it flickers back when
+                // the data has not actually changed.
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if isOwned(mailingList) {
                         Button(role: .destructive) {
                             pendingDeletion = mailingList
