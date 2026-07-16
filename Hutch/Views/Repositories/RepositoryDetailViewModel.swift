@@ -542,6 +542,14 @@ final class RepositoryDetailViewModel {
             return false
         }
 
+        // sr.ht streams the upload into S3, which rejects a zero-part multipart
+        // completion with "MalformedXML" — an error that says nothing about the
+        // actual problem. Catch it here where we can name it.
+        guard !fileData.isEmpty else {
+            self.error = "\(fileURL.lastPathComponent) is empty. SourceHut rejects zero-byte artifacts."
+            return false
+        }
+
         do {
             _ = try await client.executeMultipart(
                 service: service,
@@ -564,6 +572,29 @@ final class RepositoryDetailViewModel {
         } catch {
             self.error = "Couldn't upload \(fileURL.lastPathComponent). \(error.userFacingMessage)"
             return false
+        }
+    }
+
+    /// Downloads an artifact and returns a local file URL to share.
+    ///
+    /// `Artifact.url` points at the API origin, not the web one, and returns an
+    /// auth error to anything without a bearer token — so it cannot be opened in
+    /// a browser. Fetch it here and hand the user the file instead.
+    func downloadArtifact(_ artifact: ArtifactInfo) async -> URL? {
+        guard !isMutatingArtifact else { return nil }
+        isMutatingArtifact = true
+        error = nil
+        defer { isMutatingArtifact = false }
+
+        do {
+            let data = try await client.fetchData(url: artifact.url)
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent(artifact.filename)
+            try data.write(to: destination, options: .atomic)
+            return destination
+        } catch {
+            self.error = "Couldn't download \(artifact.filename). \(error.userFacingMessage)"
+            return nil
         }
     }
 

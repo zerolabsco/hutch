@@ -12,11 +12,11 @@ struct ArtifactsView: View {
     /// Passed in rather than recomputed: RepositoryDetailView already owns this
     /// check and gates its other management surfaces on it.
     var canManage: Bool = false
-    @Environment(\.openURL) private var openURL
 
     @State private var uploadTargetRef: String?
     @State private var isImporting = false
     @State private var pendingDeletion: ArtifactInfo?
+    @State private var downloadedFile: DownloadedArtifact?
 
     private var isOwnedByCurrentUser: Bool { canManage }
 
@@ -63,7 +63,14 @@ struct ArtifactsView: View {
                 Section {
                     ForEach(refArtifacts.artifacts) { artifact in
                         ArtifactRow(artifact: artifact) {
-                            openURL(artifact.url)
+                            Task {
+                                // Artifact.url is on the API origin and 401s
+                                // without a bearer token, so it cannot be handed
+                                // to a browser. Fetch it and share the file.
+                                if let fileURL = await viewModel.downloadArtifact(artifact) {
+                                    downloadedFile = DownloadedArtifact(url: fileURL)
+                                }
+                            }
                         }
                         // See MailingListListView: a full-swipe destructive
                         // action animates the row out before the confirmation.
@@ -131,6 +138,9 @@ struct ArtifactsView: View {
         .themedList()
         .listStyle(.insetGrouped)
         .srhtErrorBanner(error: $vm.error)
+        .sheet(item: $downloadedFile) { download in
+            FileContentShareSheet(activityItems: [download.url])
+        }
         .task {
             // Tags drive the picker above and are not otherwise needed by this tab.
             if isOwnedByCurrentUser, viewModel.tags.isEmpty {
@@ -182,6 +192,13 @@ struct ArtifactsView: View {
             await viewModel.loadArtifacts()
         }
     }
+}
+
+/// Wraps the downloaded file for `.sheet(item:)`. URL is not Identifiable, and
+/// conforming a stdlib type retroactively is worse than a four-line struct.
+private struct DownloadedArtifact: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 private struct ArtifactRow: View {
