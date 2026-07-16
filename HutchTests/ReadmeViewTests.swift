@@ -179,8 +179,11 @@ struct MarkdownRenderingTests {
     func markdownImageQueryStringPreservesAmpersands() {
         let html = processInline("![badge](https://sonarcloud.io/api/project_badges/measure?project=ccleberg_Hutch&metric=security_rating)")
 
+        // `&amp;` is the correct encoding for `&` in an attribute value, so the
+        // failure mode to guard against is double-escaping, which would make the
+        // browser request a literal "&amp;" in the query string.
         #expect(html.contains("metric=security_rating"))
-        #expect(!html.contains("amp;metric"))
+        #expect(!html.contains("&amp;amp;"))
         #expect(html.contains("<img"))
     }
 
