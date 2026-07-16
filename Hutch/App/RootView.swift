@@ -439,6 +439,7 @@ enum MoreRoute: Hashable {
     case projectDashboard(id: String, title: String?)
     case mailingList(InboxMailingListReference)
     case thread(InboxThreadSummary)
+    case activity
     case manPageBrowser
     case manPage(URL)
 }
@@ -472,6 +473,8 @@ private struct MoreNavigationRoot: View {
                     ProjectDashboardDeepLinkView(projectID: id, title: title)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
+                case .activity:
+                    ActivityView()
                 case .thread(let thread):
                     ThreadDetailView(
                         thread: thread,
