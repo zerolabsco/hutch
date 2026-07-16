@@ -4,12 +4,14 @@ import Testing
 
 private final class SettingsViewModelCapturingURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
+    nonisolated(unsafe) static var capturedBodies: [Data] = []
 
     override class func canInit(with _: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         Self.capturedRequests.append(request)
+        Self.capturedBodies.append(Self.readBody(from: request))
 
         let response = HTTPURLResponse(
             url: request.url!,
@@ -24,6 +26,26 @@ private final class SettingsViewModelCapturingURLProtocol: URLProtocol, @uncheck
 
     override func stopLoading() {
         // No cleanup is needed because the stub responds immediately in `startLoading()`.
+    }
+
+    /// `URLSession` moves `httpBody` onto `httpBodyStream` before handing a request
+    /// to a `URLProtocol`, so `request.httpBody` is always nil here and the body has
+    /// to be read back off the stream while it is still open.
+    private static func readBody(from request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            guard read > 0 else { break }
+            data.append(buffer, count: read)
+        }
+        return data
     }
 
     static func makeSession() -> URLSession {
@@ -73,6 +95,7 @@ struct SettingsViewModelTests {
     @MainActor
     func loadProfileDoesNotRequestSSHKeyFingerprintField() async throws {
         SettingsViewModelCapturingURLProtocol.capturedRequests = []
+        SettingsViewModelCapturingURLProtocol.capturedBodies = []
 
         let client = SRHTClient(
             session: SettingsViewModelCapturingURLProtocol.makeSession(),
@@ -82,8 +105,7 @@ struct SettingsViewModelTests {
 
         await viewModel.loadProfile()
 
-        let request = try #require(SettingsViewModelCapturingURLProtocol.capturedRequests.first)
-        let body = try #require(request.httpBody)
+        let body = try #require(SettingsViewModelCapturingURLProtocol.capturedBodies.first)
         let jsonObject = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
         let query = try #require(jsonObject["query"] as? String)
 

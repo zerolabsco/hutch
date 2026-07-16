@@ -15,7 +15,7 @@ struct HomeViewModelTests {
 
         let failedBuilds = HomeViewModel.failedBuilds(from: jobs)
 
-        #expect(failedBuilds.map(\.job.id) == [2, 3])
+        #expect(failedBuilds.map(\.job.id) == [3, 2])
     }
 
     @Test

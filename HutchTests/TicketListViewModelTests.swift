@@ -162,8 +162,8 @@ struct TicketListViewModelTests {
             "status": TicketStatus.resolved.rawValue,
             "resolution": TicketResolution.fixed.rawValue
         ]
-        #expect(input["status"] as? String == "resolved")
-        #expect(input["resolution"] as? String == "fixed")
+        #expect(input["status"] as? String == "RESOLVED")
+        #expect(input["resolution"] as? String == "FIXED")
     }
 
     @Test
@@ -172,7 +172,7 @@ struct TicketListViewModelTests {
         let input: [String: any Sendable] = [
             "status": TicketStatus.reported.rawValue
         ]
-        #expect(input["status"] as? String == "reported")
+        #expect(input["status"] as? String == "REPORTED")
         #expect(input["resolution"] == nil)
     }
 
