@@ -9,6 +9,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Without this, GITHUB_TOKEN inherits the repository default, which is
+# read-write for anything created before February 2023. The job only reads code.
+permissions:
+  contents: read
+
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
