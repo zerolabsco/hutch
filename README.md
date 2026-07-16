@@ -21,7 +21,6 @@ The app currently includes:
 - Inbox and mailing list reading flows
 - Patchset review: cover letters, per-patch diffs, checks, version chains, and status changes
 - Mailing list creation, settings, and deletion
-- Ticket activity feed across every tracker you follow
 - Paste browsing, creation, and detail views
 - Profile and account settings, including SSH keys, PGP keys, personal access token management, and the audit log
 - Email preferences for todo.sr.ht and lists.sr.ht

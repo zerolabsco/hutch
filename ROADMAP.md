@@ -140,11 +140,14 @@ are sized very differently — measure before committing to one.
 - ~~`auditLog` (meta.sr.ht)~~ — surfaced under the tokens in Profile.
 - ~~Mailing list creation and settings~~ (`createMailingList`,
   `updateMailingList`, `deleteMailingList`).
-- ~~`events` feed (todo.sr.ht)~~ — a ticket activity feed under More.
 
-Four of the six planned. The other two did not survive contact:
+Three of the six planned. The other three did not survive contact:
 
 - `archiveMessage` is `@internal` and inaccessible.
+- The `events` feed was built, then removed: todo.sr.ht's root `events` resolver
+  joins `event.participant_id` against `participant.user_id`, which are
+  different id spaces, so it returns an empty list for everyone. See
+  [SCOPE.md](SCOPE.md).
 - Webhook management, `shareSecret`, and build groups are reachable but declined
   on judgement — see [SCOPE.md](SCOPE.md) for the reasoning, so they do not get
   re-proposed.

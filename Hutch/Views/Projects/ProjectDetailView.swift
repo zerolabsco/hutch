@@ -196,9 +196,14 @@ struct ProjectDetailView: View {
         if !displayedProject.mailingLists.isEmpty {
             Section("Mailing Lists") {
                 ForEach(displayedProject.mailingLists) { mailingList in
-                    Button {
-                        appState.openMailingList(mailingList.inboxReference)
-                        dismiss()
+                    // Pushed here rather than routed through AppState. Projects
+                    // already lives in the More tab, so asking for a tab
+                    // navigation made the path rebuild itself while dismiss()
+                    // popped this view out from under it, leaving a blank screen.
+                    // Sources and trackers still route, because they genuinely
+                    // land in other tabs.
+                    NavigationLink {
+                        MailingListDetailView(mailingList: mailingList.inboxReference)
                     } label: {
                         ProjectResourceRow(
                             title: mailingList.displayName,

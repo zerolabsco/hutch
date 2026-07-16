@@ -8,6 +8,21 @@
 - Pronouns on profile (not in GraphQL schema)
 - Revoke personal access tokens (`@internal` in schema, inaccessible)
 - Archive a message to a list (`archiveMessage` is `@internal`, inaccessible)
+- Ticket activity feed (todo.sr.ht's root `events` query is broken upstream and
+  returns an empty list for every user). `event.participant_id` references
+  `participant(id)`, but the resolver joins it against `participant.user_id`:
+
+  ```sql
+  FROM event ev
+  JOIN participant p ON p.user_id = ev.participant_id   -- id space vs user id space
+  WHERE p.user_id = <viewer>
+  ```
+
+  The rows exist — the writer inserts `participant.ID` for the submitter and for
+  every subscriber — but that join cannot find them. `Ticket.events` is
+  unaffected because it filters on `ev.ticket_id`, which is why ticket timelines
+  work. Nothing a client can do fixes this; revisit only if sr.ht changes the
+  resolver.
 - Subscribe to a mailing list (`mailingListSubscribe` exists, but `MailingList`
   has no `subscription` field and sr.ht has no discovery API, so there is no way
   to find a list you are not already subscribed to — see hub.sr.ht above)

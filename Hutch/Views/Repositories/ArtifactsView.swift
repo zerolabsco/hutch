@@ -10,9 +10,29 @@ struct ArtifactsView: View {
 
     @State private var uploadTargetRef: String?
     @State private var pendingDeletion: ArtifactInfo?
-    @State private var showTagPicker = false
 
     private var isOwnedByCurrentUser: Bool { canManage }
+
+    /// A menu rather than a confirmation dialog: this view already presents one
+    /// for delete, and two .confirmationDialog modifiers on the same view leave
+    /// one of them silently dead. A menu also puts the tags one tap away.
+    @ViewBuilder
+    private var uploadMenu: some View {
+        Menu {
+            if viewModel.tags.isEmpty {
+                Text("This repository has no tags")
+            } else {
+                ForEach(viewModel.tags.prefix(12), id: \.name) { tag in
+                    Button(RepositorySummary.displayBranchName(for: tag.name)) {
+                        uploadTargetRef = tag.name
+                    }
+                }
+            }
+        } label: {
+            SwiftUI.Label("Upload Artifact…", systemImage: "square.and.arrow.up")
+        }
+        .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
+    }
 
     var body: some View {
         List {
@@ -22,13 +42,8 @@ struct ArtifactsView: View {
             // reach the navigation bar. It also has to be reachable when there are
             // no artifacts at all, which is the state a new tag is in.
             if isOwnedByCurrentUser {
-                Button {
-                    showTagPicker = true
-                } label: {
-                    SwiftUI.Label("Upload Artifact…", systemImage: "square.and.arrow.up")
-                }
-                .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
-                .themedRow()
+                uploadMenu
+                    .themedRow()
             }
 
             ForEach(viewModel.referenceArtifacts) { refArtifacts in
@@ -99,16 +114,6 @@ struct ArtifactsView: View {
         } message: { _ in
             Text("This permanently removes the artifact from the tag. This cannot be undone.")
         }
-        .confirmationDialog("Upload to Tag", isPresented: $showTagPicker, titleVisibility: .visible) {
-            ForEach(viewModel.tags.prefix(12), id: \.name) { tag in
-                Button(RepositorySummary.displayBranchName(for: tag.name)) {
-                    uploadTargetRef = tag.name
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Artifacts attach to a tag. Filenames must be unique within the repository.")
-        }
         .themedList()
         .listStyle(.insetGrouped)
         .task {
@@ -136,10 +141,7 @@ struct ArtifactsView: View {
                     Text("This repository has no release artifacts.")
                 } actions: {
                     if isOwnedByCurrentUser {
-                        Button("Upload Artifact…") {
-                            showTagPicker = true
-                        }
-                        .disabled(viewModel.isMutatingArtifact || viewModel.tags.isEmpty)
+                        uploadMenu
                     }
                 }
             }

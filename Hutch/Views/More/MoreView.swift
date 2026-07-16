@@ -19,13 +19,6 @@ struct MoreView: View {
                 .themedRow()
             }
 
-            Section("Activity") {
-                NavigationLink(value: MoreRoute.activity) {
-                    Label("Ticket Activity", systemImage: "bell.badge")
-                }
-                .themedRow()
-            }
-
             Section("Other Services") {
                 NavigationLink(value: MoreRoute.projects) {
                     Label("Projects", systemImage: "square.stack.3d.up")
