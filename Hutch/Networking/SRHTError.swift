@@ -174,11 +174,13 @@ extension Array where Element == GraphQLError {
         if containsMessage("unknown revision") || containsMessage("path not in the working tree") {
             return .unknownRevision
         }
-        if containsMessage("not found") || containsMessage("no such") || containsMessage("missing revision") {
-            return .notFound
-        }
+        // Must precede the broader "no such" check below, which would otherwise
+        // shadow this and report a provisioning failure as missing content.
         if containsMessage("no such repository or user found") {
             return .serviceNotProvisioned
+        }
+        if containsMessage("not found") || containsMessage("no such") || containsMessage("missing revision") {
+            return .notFound
         }
         if let primaryMessage, !primaryMessage.isEmpty {
             return .validation
