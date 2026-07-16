@@ -1,11 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import os
-
-#if DEBUG
-/// Temporary: diagnosing why the upload menu swallows taps.
-private let artifactsLogger = Logger(subsystem: "net.cleberg.Hutch", category: "Artifacts")
-#endif
 
 struct ArtifactsView: View {
     let viewModel: RepositoryDetailViewModel
@@ -146,18 +140,6 @@ struct ArtifactsView: View {
             if isOwnedByCurrentUser, viewModel.tags.isEmpty {
                 await viewModel.loadReferences()
             }
-            #if DEBUG
-            // Temporary: diagnosing why the upload menu swallows taps.
-            artifactsLogger.debug(
-                """
-                canManage=\(canManage, privacy: .public) \
-                tags=\(viewModel.tags.count, privacy: .public) \
-                isMutating=\(viewModel.isMutatingArtifact, privacy: .public) \
-                menuDisabled=\(viewModel.isMutatingArtifact || viewModel.tags.isEmpty, privacy: .public) \
-                error=\(viewModel.error ?? "nil", privacy: .public)
-                """
-            )
-            #endif
         }
         .overlay {
             if viewModel.isLoadingArtifacts, viewModel.referenceArtifacts.isEmpty {
