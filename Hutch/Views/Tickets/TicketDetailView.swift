@@ -103,6 +103,19 @@ struct TicketDetailView: View {
                 SwiftUI.Label("Copy Tracker RID", systemImage: "number")
             }
 
+            Divider()
+
+            Button {
+                Task { await viewModel.toggleSubscription() }
+            } label: {
+                if viewModel.isSubscribed {
+                    SwiftUI.Label("Unsubscribe", systemImage: "bell.slash")
+                } else {
+                    SwiftUI.Label("Subscribe", systemImage: "bell")
+                }
+            }
+            .disabled(viewModel.isPerformingAction)
+
             if isOwnedByCurrentUser {
                 Divider()
 

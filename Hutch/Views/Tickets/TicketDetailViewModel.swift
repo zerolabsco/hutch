@@ -19,10 +19,16 @@ private struct TicketDetailPayload: Decodable, Sendable {
     let status: TicketStatus
     let resolution: TicketResolution?
     let authenticity: Authenticity
+    /// Null when the authenticated user is not subscribed to this ticket.
+    let subscription: SubscriptionIdPayload?
     let submitter: Entity
     let assignees: [Entity]
     let labels: [TicketLabel]
     let events: EventsPage
+}
+
+struct SubscriptionIdPayload: Decodable, Sendable {
+    let id: Int
 }
 
 private struct EventsPage: Decodable, Sendable {
@@ -50,6 +56,10 @@ private struct UpdateStatusResponse: Decodable, Sendable {
 
 private struct UpdatedStatusEvent: Decodable, Sendable {
     let eventType: String
+}
+
+private struct TicketSubscriptionResponse: Decodable, Sendable {
+    let subscription: SubscriptionIdPayload
 }
 
 private struct UpdateTicketResponse: Decodable, Sendable {
@@ -124,6 +134,9 @@ final class TicketDetailViewModel {
     private(set) var isLoading = false
     private(set) var isSubmitting = false
     private(set) var isPerformingAction = false
+    /// Whether the authenticated user receives email for this ticket. Mirrors
+    /// `Ticket.subscription`, which is null when not subscribed.
+    private(set) var isSubscribed = false
     private(set) var trackerLabels: [TicketLabel] = []
     private(set) var rawTicketResponse: String?
     private(set) var cacheMetadata: CacheEntryMetadata?
@@ -205,6 +218,7 @@ final class TicketDetailViewModel {
                 status
                 resolution
                 authenticity
+                subscription { id }
                 submitter { canonicalName }
                 assignees { canonicalName }
                 labels { id name backgroundColor foregroundColor }
@@ -283,6 +297,18 @@ final class TicketDetailViewModel {
     private static let deleteTicketMutation = """
     mutation deleteTicket($trackerId: Int!, $ticketId: Int!) {
         deleteTicket(trackerId: $trackerId, ticketId: $ticketId) { id }
+    }
+    """
+
+    private static let ticketSubscribeMutation = """
+    mutation ticketSubscribe($trackerId: Int!, $ticketId: Int!) {
+        subscription: ticketSubscribe(trackerId: $trackerId, ticketId: $ticketId) { id }
+    }
+    """
+
+    private static let ticketUnsubscribeMutation = """
+    mutation ticketUnsubscribe($trackerId: Int!, $ticketId: Int!) {
+        subscription: ticketUnsubscribe(trackerId: $trackerId, ticketId: $ticketId) { id }
     }
     """
 
@@ -508,6 +534,35 @@ final class TicketDetailViewModel {
         } catch {
             self.error = error.userFacingMessage
             return false
+        }
+    }
+
+    /// Subscribes to or unsubscribes from email notifications for this ticket.
+    func toggleSubscription() async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        let wasSubscribed = isSubscribed
+        // Reflect the change immediately; the catch below puts it back if the
+        // mutation fails, so the control never lies about server state.
+        isSubscribed.toggle()
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: wasSubscribed ? Self.ticketUnsubscribeMutation : Self.ticketSubscribeMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId
+                ],
+                responseType: TicketSubscriptionResponse.self
+            )
+            await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "ticket"))
+        } catch {
+            isSubscribed = wasSubscribed
+            self.error = error.userFacingMessage
         }
     }
 
@@ -808,6 +863,7 @@ final class TicketDetailViewModel {
             labels: payload.labels
         )
         ticket = updatedTicket
+        isSubscribed = payload.subscription != nil
         let updatedEvents = payload.events.results.sorted(by: Self.timelineOrder)
         events = updatedEvents
     }
