@@ -627,7 +627,7 @@ final class RepositoryDetailViewModel {
 
     /// Artifacts are release tarballs and signatures rather than media, so a
     /// generic binary type is honest more often than guessing from the extension.
-    private nonisolated static func mimeType(for url: URL) -> String {
+    private nonisolated static func mimeType(for _: URL) -> String {
         "application/octet-stream"
     }
 

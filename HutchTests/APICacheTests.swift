@@ -256,6 +256,7 @@ struct APICacheTests {
             _ = try await cache.read(cacheKey: key)
             Issue.record("Expected cache miss for \(key).")
         } catch APICacheError.miss {
+            // expected: a miss is the success path here
         } catch {
             Issue.record("Unexpected error for \(key): \(error).")
         }
@@ -293,7 +294,7 @@ private final class CachedURLProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {} // required override; nothing to tear down
 
     static func reset(responses: [CachedURLProtocolResponse], responseDelay: TimeInterval = 0) {
         Self.responses = responses

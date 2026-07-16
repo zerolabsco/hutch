@@ -68,7 +68,8 @@ function hutchDeepLinkFor(rawURL) {
 
   const path = deepLinkPath(url.hostname, normalizedPath(url.pathname));
   const service = deepLinkService(url.hostname, path);
-  return `hutch://${service}${path ? `/${path}` : ""}${url.search}${url.hash}`;
+  const pathSegment = path ? `/${path}` : "";
+  return `hutch://${service}${pathSegment}${url.search}${url.hash}`;
 }
 
 function showUnsupportedMessage(tabId) {

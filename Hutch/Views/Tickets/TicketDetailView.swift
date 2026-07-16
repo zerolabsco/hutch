@@ -204,7 +204,7 @@ struct TicketDetailView: View {
                     }
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {} // dismisses the dialog; no action needed
         } message: {
             Text("This permanently deletes the ticket and its comments. This cannot be undone.")
         }

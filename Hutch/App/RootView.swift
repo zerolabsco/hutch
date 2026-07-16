@@ -198,11 +198,9 @@ struct RootView: View {
         }
 
         switch link {
-        case .home:
-            homePath = NavigationPath()
-            appState.selectedTab = .home
-
-        case .recentActivity:
+        // Recent activity is a section of the Home tab, not a screen of its
+        // own, so its intent/widget deep link lands on Home like .home does.
+        case .home, .recentActivity:
             homePath = NavigationPath()
             appState.selectedTab = .home
 
