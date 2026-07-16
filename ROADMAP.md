@@ -108,5 +108,3 @@ it.
 
 - `Hutch/Hutch/App/AccountSession.swift` sits in a stray nested directory;
   `Hutch/HutchTests/` is empty.
-</content>
-</invoke>
