@@ -36,35 +36,43 @@ been running only on demand in Xcode, and ten had rotted:
   and inbox threads keyed `id` on a subject-derived grouping key so two threads
   sharing a subject on one list collided under `Identifiable`.
 
-## Phase 1: Close the write gaps
+## Phase 1: Close the write gaps — done (v3.6.0)
 
-Small, independently shippable mutations that already exist in the API but are
-never called. Each removes a "why can't I do this here?" moment.
+Small, independently shippable mutations that already existed in the API but
+were never called. Each removes a "why can't I do this here?" moment.
 
-- `updateTicket` — edit ticket title and description after creation. Currently
-  a ticket can be created and its status changed, but never edited.
-- `deleteTicket` — delete a ticket.
-- `trackerSubscribe` / `trackerUnsubscribe`, `ticketSubscribe` /
-  `ticketUnsubscribe`, `mailingListSubscribe` / `mailingListUnsubscribe` —
-  subscriptions are currently read-only. `MailingListListView` reads the
-  `subscriptions` query, but nothing can subscribe or unsubscribe.
-- `updatePreferences` (todo.sr.ht and lists.sr.ht) — email notification
-  preferences.
+- ~~`updateTicket`~~ — edit a ticket's subject and body after creation.
+- ~~`deleteTicket`~~ — delete a ticket, behind a confirmation.
+- ~~`ticketSubscribe` / `ticketUnsubscribe`, `trackerSubscribe` /
+  `trackerUnsubscribe`~~ — `Ticket.subscription` and `Tracker.subscription` are
+  null when not subscribed, so both toggles reflect real server state.
+- ~~`mailingListUnsubscribe`~~ — see the caveat below.
+- ~~`updatePreferences`~~ (todo.sr.ht and lists.sr.ht) — `notifySelf` and
+  `copySelf`, surfaced as an Email section in Settings.
 
-### Refactors to fold in
+`mailingListSubscribe` is deliberately not wired up. `MailingList` has no
+`subscription` field, unlike `Ticket` and `Tracker`, so per-list state is only
+knowable from the `subscriptions` query — which by definition lists what the
+user is already subscribed to. Subscribing needs a list the user is *not*
+subscribed to, and sr.ht exposes no discovery API to find one (see
+[SCOPE.md](SCOPE.md) on hub.sr.ht). Revisit if hub.sr.ht ever gains an API, or
+alongside Phase 2, which surfaces lists through patchsets.
 
-These are touched by everything in later phases, so they belong here rather
-than as standalone work.
+### Refactors folded in
 
-- `SRHTClient` has four near-identical request-and-decode paths (`execute`,
-  `executeMultipart`, `executeMultipartFiles`, `executeAndCache`, plus the
-  private `performGraphQLRequest`). The token guard, header setup, status-code
-  handling, and a ~35-line `#if DEBUG` logging block are each duplicated about
-  five times. Collapse to one request builder and one decode helper.
-- Two caches overlap: the in-memory `responseCache` and the persistent `cache`,
-  reached through two different `executeCached` overloads with different return
-  types and semantics (one does stale-while-revalidate with TTLs, the other only
-  checks memory). Unify on the TTL-aware path.
+- ~~Collapse `SRHTClient`'s duplicated request paths~~. Extracted
+  `makeAuthorizedRequest`, `send`, and `encodedGraphQLBody`; `executeMultipart`
+  became the single-file case of `executeMultipartFiles`. The `#if DEBUG`
+  logging block went from five copies to one. 938 lines to 569.
+- ~~Unify the two `executeCached` overloads~~. The memory-only overload and
+  `executeAndCache` turned out to be dead — all 38 call sites already used the
+  TTL-aware path — so both were removed rather than merged. `responseCache`
+  remains as the in-memory layer behind `cachedPayload`.
+
+Known follow-up: `BuildListViewModel`, `RepositoryListViewModel`, and
+`PasteService` still read `client.responseCache` directly, falling back across
+two different cache keys. That predates `APICacheKeys` and should be folded into
+`cachedPayload`.
 
 ## Phase 2: Patchsets
 

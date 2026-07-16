@@ -242,6 +242,7 @@ struct TicketListView: View {
                 trackerManagementViewModel = TrackerManagementViewModel(tracker: tracker, client: appState.client)
                 await vm.loadTickets()
                 await vm.loadTrackerLabels()
+                await vm.loadSubscriptionState()
             }
         }
     }
@@ -465,6 +466,20 @@ struct TicketListView: View {
                 ShareLink(item: shareURL) {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
+            }
+
+            Divider()
+
+            if let viewModel {
+                Button {
+                    Task { await viewModel.toggleSubscription() }
+                } label: {
+                    Label(
+                        viewModel.isSubscribed ? "Unsubscribe" : "Subscribe",
+                        systemImage: viewModel.isSubscribed ? "bell.slash" : "bell"
+                    )
+                }
+                .disabled(viewModel.isPerformingAction)
             }
 
             Divider()

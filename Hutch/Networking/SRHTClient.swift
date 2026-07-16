@@ -69,101 +69,8 @@ final class SRHTClient: Sendable {
         variables: [String: any Sendable]? = nil,
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
-            throw SRHTError.unauthorized
-        }
-
-        // Build request
-        var request = URLRequest(url: service.url)
-        request.httpMethod = "POST"
-        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = GraphQLRequestBody(
-            query: query,
-            variables: variables?.mapValues { AnyCodable($0) }
-        )
-        request.httpBody = try encoder.encode(body)
-
-        // Execute
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw SRHTError.networkError(error)
-        }
-
-        // Check HTTP status
-        if let http = response as? HTTPURLResponse {
-            if http.statusCode == 401 {
-                throw SRHTError.unauthorized
-            }
-            if !(200...299).contains(http.statusCode) {
-                try throwGraphQLErrorsIfPresent(in: data)
-                throw SRHTError.httpError(http.statusCode)
-            }
-        }
-
-        try throwGraphQLErrorsIfPresent(in: data)
-
-        // Decode GraphQL response envelope
-        let graphQLResponse: GraphQLResponse<T>
-        do {
-            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
-        } catch {
-            #if DEBUG
-            let responseBody = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
-            let variablesDescription = String(describing: variables)
-            if let decodingError = error as? DecodingError {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    decodingError:
-                    \(String(describing: decodingError), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            } else {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    error:
-                    \(String(describing: error), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            }
-            #else
-            logger.error("Decoding failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)")
-            #endif
-            throw SRHTError.decodingError(error)
-        }
-
-        // Surface GraphQL-level errors
-        if let errors = graphQLResponse.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
-
-        guard let result = graphQLResponse.data else {
-            throw SRHTError.decodingError(
-                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
-            )
-        }
-
-        return result
+        let data = try await performGraphQLRequest(service: service, query: query, variables: variables)
+        return try decodeGraphQLData(data, service: service, query: query, variables: variables)
     }
 
     func executeCached<T: Decodable>(
@@ -308,132 +215,13 @@ final class SRHTClient: Sendable {
         file: MultipartUploadFile,
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
-            throw SRHTError.unauthorized
-        }
-
-        let boundary = "Boundary-\(UUID().uuidString)"
-
-        var request = URLRequest(url: service.url)
-        request.httpMethod = "POST"
-        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        // Build the operations JSON (file variable mapped to null)
-        let operationsBody = GraphQLRequestBody(
+        try await executeMultipartFiles(
+            service: service,
             query: query,
-            variables: variables.mapValues { AnyCodable($0) }
+            variables: variables,
+            files: [file],
+            responseType: T.self
         )
-        let operationsData = try encoder.encode(operationsBody)
-
-        // Build the map JSON: { "0": ["variables.<variablePath>"] }
-        let mapDict = ["0": ["variables.\(file.variablePath)"]]
-        let mapData = try encoder.encode(mapDict)
-
-        // Assemble multipart body
-        var body = Data()
-
-        // Part: operations
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"operations\"\r\n")
-        body.append("Content-Type: application/json\r\n\r\n")
-        body.append(operationsData)
-        body.append("\r\n")
-
-        // Part: map
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"map\"\r\n")
-        body.append("Content-Type: application/json\r\n\r\n")
-        body.append(mapData)
-        body.append("\r\n")
-
-        // Part: file
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"0\"; filename=\"\(file.fileName)\"\r\n")
-        body.append("Content-Type: \(file.mimeType)\r\n\r\n")
-        body.append(file.fileData)
-        body.append("\r\n")
-
-        // Closing boundary
-        body.append("--\(boundary)--\r\n")
-
-        request.httpBody = body
-
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw SRHTError.networkError(error)
-        }
-
-        if let http = response as? HTTPURLResponse {
-            if http.statusCode == 401 {
-                throw SRHTError.unauthorized
-            }
-            if !(200...299).contains(http.statusCode) {
-                try throwGraphQLErrorsIfPresent(in: data)
-                throw SRHTError.httpError(http.statusCode)
-            }
-        }
-
-        try throwGraphQLErrorsIfPresent(in: data)
-
-        let graphQLResponse: GraphQLResponse<T>
-        do {
-            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
-        } catch {
-            #if DEBUG
-            let responseBody = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
-            let variablesDescription = String(describing: variables)
-            if let decodingError = error as? DecodingError {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    decodingError:
-                    \(String(describing: decodingError), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            } else {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    error:
-                    \(String(describing: error), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            }
-            #else
-            logger.error("Decoding failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)")
-            #endif
-            throw SRHTError.decodingError(error)
-        }
-
-        if let errors = graphQLResponse.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
-
-        guard let result = graphQLResponse.data else {
-            throw SRHTError.decodingError(
-                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
-            )
-        }
-
-        return result
     }
 
     func executeMultipartFiles<T: Decodable>(
@@ -443,23 +231,13 @@ final class SRHTClient: Sendable {
         files: [MultipartUploadFile],
         responseType _: T.Type
     ) async throws -> T {
-        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
-            throw SRHTError.unauthorized
-        }
-
         let boundary = "Boundary-\(UUID().uuidString)"
-
-        var request = URLRequest(url: service.url)
-        request.httpMethod = "POST"
-        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        let operationsBody = GraphQLRequestBody(
-            query: query,
-            variables: variables.mapValues { AnyCodable($0) }
+        var request = try makeAuthorizedRequest(
+            service: service,
+            contentType: "multipart/form-data; boundary=\(boundary)"
         )
-        let operationsData = try encoder.encode(operationsBody)
+
+        let operationsData = try encodedGraphQLBody(query: query, variables: variables)
 
         let mapDict = Dictionary(uniqueKeysWithValues: files.enumerated().map { index, file in
             (String(index), ["variables.\(file.variablePath)"])
@@ -491,174 +269,10 @@ final class SRHTClient: Sendable {
         body.append("--\(boundary)--\r\n")
         request.httpBody = body
 
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw SRHTError.networkError(error)
-        }
-
-        if let http = response as? HTTPURLResponse {
-            if http.statusCode == 401 {
-                throw SRHTError.unauthorized
-            }
-            if !(200...299).contains(http.statusCode) {
-                try throwGraphQLErrorsIfPresent(in: data)
-                throw SRHTError.httpError(http.statusCode)
-            }
-        }
-
-        try throwGraphQLErrorsIfPresent(in: data)
-
-        let graphQLResponse: GraphQLResponse<T>
-        do {
-            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
-        } catch {
-            throw SRHTError.decodingError(error)
-        }
-
-        if let errors = graphQLResponse.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
-
-        guard let result = graphQLResponse.data else {
-            throw SRHTError.decodingError(
-                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
-            )
-        }
-
-        return result
+        let data = try await send(request)
+        return try decodeGraphQLData(data, service: service, query: query, variables: variables)
     }
 
-    // MARK: - Cached Execute
-
-    /// Execute a query and cache the raw response data. Returns cached data
-    /// immediately on cache hit, then refreshes in the background via the
-    /// `onRefresh` callback.
-    func executeCached<T: Decodable>(
-        service: SRHTService,
-        query: String,
-        variables: [String: any Sendable]? = nil,
-        responseType _: T.Type,
-        cacheKey: String
-    ) async throws -> T {
-        // Try cache first
-        if let cachedData = responseCache.get(forKey: cacheKey),
-           let cached = try? decoder.decode(GraphQLResponse<T>.self, from: cachedData),
-           let data = cached.data {
-            return data
-        }
-
-        // No cache hit — fetch normally
-        return try await executeAndCache(
-            service: service,
-            query: query,
-            variables: variables,
-            responseType: T.self,
-            cacheKey: cacheKey
-        )
-    }
-
-    /// Execute a query, cache the raw data, and return the decoded result.
-    func executeAndCache<T: Decodable>(
-        service: SRHTService,
-        query: String,
-        variables: [String: any Sendable]? = nil,
-        responseType _: T.Type,
-        cacheKey: String
-    ) async throws -> T {
-        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
-            throw SRHTError.unauthorized
-        }
-
-        var request = URLRequest(url: service.url)
-        request.httpMethod = "POST"
-        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = GraphQLRequestBody(
-            query: query,
-            variables: variables?.mapValues { AnyCodable($0) }
-        )
-        request.httpBody = try encoder.encode(body)
-
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw SRHTError.networkError(error)
-        }
-
-        if let http = response as? HTTPURLResponse {
-            if http.statusCode == 401 {
-                throw SRHTError.unauthorized
-            }
-            if !(200...299).contains(http.statusCode) {
-                try throwGraphQLErrorsIfPresent(in: data)
-                throw SRHTError.httpError(http.statusCode)
-            }
-        }
-
-        // Cache the raw response data before decoding
-        responseCache.set(data, forKey: cacheKey)
-
-        let graphQLResponse: GraphQLResponse<T>
-        do {
-            graphQLResponse = try decoder.decode(GraphQLResponse<T>.self, from: data)
-        } catch {
-            #if DEBUG
-            let responseBody = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
-            let variablesDescription = String(describing: variables)
-            if let decodingError = error as? DecodingError {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    decodingError:
-                    \(String(describing: decodingError), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            } else {
-                logger.error(
-                    """
-                    Decoding failed for \(String(describing: T.self), privacy: .public)
-                    service: \(service.rawValue, privacy: .public)
-                    query:
-                    \(query, privacy: .public)
-                    variables:
-                    \(variablesDescription, privacy: .public)
-                    error:
-                    \(String(describing: error), privacy: .public)
-                    response:
-                    \(responseBody, privacy: .public)
-                    """
-                )
-            }
-            #else
-            logger.error("Decoding failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)")
-            #endif
-            throw SRHTError.decodingError(error)
-        }
-
-        if let errors = graphQLResponse.errors, !errors.isEmpty {
-            throw SRHTError.graphQLErrors(errors)
-        }
-
-        guard let result = graphQLResponse.data else {
-            throw SRHTError.decodingError(
-                DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "No data in response"))
-            )
-        }
-
-        return result
-    }
 
     // MARK: - Plain-text fetch
 
@@ -748,11 +362,9 @@ final class SRHTClient: Sendable {
 // MARK: - Data Helper
 
 private extension SRHTClient {
-    func performGraphQLRequest(
-        service: SRHTService,
-        query: String,
-        variables: [String: any Sendable]?
-    ) async throws -> Data {
+    /// Builds an authorized POST for `service`. Throws ``SRHTError/unauthorized``
+    /// when no token is set, so callers never have to guard separately.
+    func makeAuthorizedRequest(service: SRHTService, contentType: String) throws -> URLRequest {
         guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
             throw SRHTError.unauthorized
         }
@@ -761,14 +373,14 @@ private extension SRHTClient {
         request.httpMethod = "POST"
         request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        return request
+    }
 
-        let body = GraphQLRequestBody(
-            query: query,
-            variables: variables?.mapValues { AnyCodable($0) }
-        )
-        request.httpBody = try encoder.encode(body)
-
+    /// Sends a prepared request and returns the raw body, mapping transport and
+    /// HTTP failures onto ``SRHTError``. sr.ht reports GraphQL errors under a 200
+    /// as often as under a 4xx, so both paths check the envelope.
+    func send(_ request: URLRequest) async throws -> Data {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -788,6 +400,25 @@ private extension SRHTClient {
 
         try throwGraphQLErrorsIfPresent(in: data)
         return data
+    }
+
+    func encodedGraphQLBody(query: String, variables: [String: any Sendable]?) throws -> Data {
+        try encoder.encode(
+            GraphQLRequestBody(
+                query: query,
+                variables: variables?.mapValues { AnyCodable($0) }
+            )
+        )
+    }
+
+    func performGraphQLRequest(
+        service: SRHTService,
+        query: String,
+        variables: [String: any Sendable]?
+    ) async throws -> Data {
+        var request = try makeAuthorizedRequest(service: service, contentType: "application/json")
+        request.httpBody = try encodedGraphQLBody(query: query, variables: variables)
+        return try await send(request)
     }
 
     func decodeGraphQLData<T: Decodable>(

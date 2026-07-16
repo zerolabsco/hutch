@@ -19,10 +19,16 @@ private struct TicketDetailPayload: Decodable, Sendable {
     let status: TicketStatus
     let resolution: TicketResolution?
     let authenticity: Authenticity
+    /// Null when the authenticated user is not subscribed to this ticket.
+    let subscription: SubscriptionIdPayload?
     let submitter: Entity
     let assignees: [Entity]
     let labels: [TicketLabel]
     let events: EventsPage
+}
+
+struct SubscriptionIdPayload: Decodable, Sendable {
+    let id: Int
 }
 
 private struct EventsPage: Decodable, Sendable {
@@ -50,6 +56,22 @@ private struct UpdateStatusResponse: Decodable, Sendable {
 
 private struct UpdatedStatusEvent: Decodable, Sendable {
     let eventType: String
+}
+
+private struct TicketSubscriptionResponse: Decodable, Sendable {
+    let subscription: SubscriptionIdPayload
+}
+
+private struct UpdateTicketResponse: Decodable, Sendable {
+    let updateTicket: TicketIdPayload
+}
+
+private struct DeleteTicketResponse: Decodable, Sendable {
+    let deleteTicket: TicketIdPayload
+}
+
+private struct TicketIdPayload: Decodable, Sendable {
+    let id: Int
 }
 
 private struct AssignUserResponse: Decodable, Sendable {
@@ -112,6 +134,9 @@ final class TicketDetailViewModel {
     private(set) var isLoading = false
     private(set) var isSubmitting = false
     private(set) var isPerformingAction = false
+    /// Whether the authenticated user receives email for this ticket. Mirrors
+    /// `Ticket.subscription`, which is null when not subscribed.
+    private(set) var isSubscribed = false
     private(set) var trackerLabels: [TicketLabel] = []
     private(set) var rawTicketResponse: String?
     private(set) var cacheMetadata: CacheEntryMetadata?
@@ -141,6 +166,35 @@ final class TicketDetailViewModel {
         return input
     }
 
+    /// Builds an `UpdateTicketInput` carrying only the fields that changed, so an
+    /// edit never overwrites a field the user did not touch.
+    static func ticketUpdateInput(
+        subject: String,
+        body: String,
+        currentSubject: String,
+        currentBody: String?
+    ) -> [String: any Sendable] {
+        var input: [String: any Sendable] = [:]
+        let trimmedSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedSubject != currentSubject {
+            input["subject"] = trimmedSubject
+        }
+
+        if trimmedBody != (currentBody ?? "") {
+            if trimmedBody.isEmpty {
+                // A nil subscript assignment would drop the key and leave the old
+                // body in place instead of clearing it.
+                input.updateValue(Optional<String>.none as any Sendable, forKey: "body")
+            } else {
+                input["body"] = trimmedBody
+            }
+        }
+
+        return input
+    }
+
     init(ownerUsername: String, trackerName: String, trackerId: Int, trackerRid: String, ticketId: Int, client: SRHTClient) {
         self.ownerUsername = ownerUsername
         self.trackerName = trackerName
@@ -164,6 +218,7 @@ final class TicketDetailViewModel {
                 status
                 resolution
                 authenticity
+                subscription { id }
                 submitter { canonicalName }
                 assignees { canonicalName }
                 labels { id name backgroundColor foregroundColor }
@@ -230,6 +285,30 @@ final class TicketDetailViewModel {
         updateTicketStatus(trackerId: $trackerId, ticketId: $ticketId, input: $input) {
             eventType: __typename
         }
+    }
+    """
+
+    private static let updateTicketMutation = """
+    mutation updateTicket($trackerId: Int!, $ticketId: Int!, $input: UpdateTicketInput!) {
+        updateTicket(trackerId: $trackerId, ticketId: $ticketId, input: $input) { id }
+    }
+    """
+
+    private static let deleteTicketMutation = """
+    mutation deleteTicket($trackerId: Int!, $ticketId: Int!) {
+        deleteTicket(trackerId: $trackerId, ticketId: $ticketId) { id }
+    }
+    """
+
+    private static let ticketSubscribeMutation = """
+    mutation ticketSubscribe($trackerId: Int!, $ticketId: Int!) {
+        subscription: ticketSubscribe(trackerId: $trackerId, ticketId: $ticketId) { id }
+    }
+    """
+
+    private static let ticketUnsubscribeMutation = """
+    mutation ticketUnsubscribe($trackerId: Int!, $ticketId: Int!) {
+        subscription: ticketUnsubscribe(trackerId: $trackerId, ticketId: $ticketId) { id }
     }
     """
 
@@ -418,6 +497,99 @@ final class TicketDetailViewModel {
         }
 
         isPerformingAction = false
+    }
+
+    /// Edits the ticket's subject and body. Returns true when the edit was sent,
+    /// including the no-op case where nothing changed.
+    @discardableResult
+    func updateTicket(subject: String, body: String) async -> Bool {
+        guard !isPerformingAction, let ticket else { return false }
+
+        let input = Self.ticketUpdateInput(
+            subject: subject,
+            body: body,
+            currentSubject: ticket.title,
+            currentBody: ticket.description
+        )
+        guard !input.isEmpty else { return true }
+
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.updateTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId,
+                    "input": input
+                ],
+                responseType: UpdateTicketResponse.self
+            )
+            await invalidateAfterMutation()
+            await reloadTicketPreservingDebugState()
+            return true
+        } catch {
+            self.error = error.userFacingMessage
+            return false
+        }
+    }
+
+    /// Subscribes to or unsubscribes from email notifications for this ticket.
+    func toggleSubscription() async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        let wasSubscribed = isSubscribed
+        // Reflect the change immediately; the catch below puts it back if the
+        // mutation fails, so the control never lies about server state.
+        isSubscribed.toggle()
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: wasSubscribed ? Self.ticketUnsubscribeMutation : Self.ticketSubscribeMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId
+                ],
+                responseType: TicketSubscriptionResponse.self
+            )
+            await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "ticket"))
+        } catch {
+            isSubscribed = wasSubscribed
+            self.error = error.userFacingMessage
+        }
+    }
+
+    /// Deletes the ticket. Returns true on success so the caller can pop the view.
+    @discardableResult
+    func deleteTicket() async -> Bool {
+        guard !isPerformingAction else { return false }
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.deleteTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId
+                ],
+                responseType: DeleteTicketResponse.self
+            )
+            await invalidateAfterMutation()
+            return true
+        } catch {
+            self.error = error.userFacingMessage
+            return false
+        }
     }
 
     func assignUser(username: String) async {
@@ -691,6 +863,7 @@ final class TicketDetailViewModel {
             labels: payload.labels
         )
         ticket = updatedTicket
+        isSubscribed = payload.subscription != nil
         let updatedEvents = payload.events.results.sorted(by: Self.timelineOrder)
         events = updatedEvents
     }
