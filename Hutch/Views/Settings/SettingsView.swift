@@ -10,16 +10,23 @@ struct SettingsView: View {
     private var failedBuildLookbackDays = HomeViewModel.defaultFailedBuildLookbackDays
     @State private var pendingDestructiveAction: SettingsDestructiveAction?
     @State private var showAccountSwitcher = false
+    @State private var preferences: NotificationPreferencesViewModel?
 
     var body: some View {
         Form {
             appearanceSection()
             behaviorSection()
+            emailSection()
             safariExtensionSection()
             authenticationSection()
         }
         .themedList()
         .navigationTitle("Settings")
+        .task {
+            let viewModel = preferences ?? NotificationPreferencesViewModel(client: appState.client)
+            preferences = viewModel
+            await viewModel.loadIfNeeded()
+        }
         .sheet(isPresented: $showAccountSwitcher) {
             AccountSwitcherView()
         }
@@ -114,6 +121,51 @@ struct SettingsView: View {
             Text("Behavior")
         } footer: {
             Text("When enabled, swipe list rows to quickly take actions like resolving tickets, cancelling builds, and deleting pastes. Contribution graphs controls whether SourceHut activity heatmaps appear in lookup profiles. Failed build window controls how far back the Home tab counts failed builds.")
+        }
+    }
+
+    @ViewBuilder
+    private func emailSection() -> some View {
+        Section {
+            if let preferences {
+                Toggle(
+                    "Notify me about my own tickets",
+                    isOn: Binding(
+                        get: { preferences.notifySelf },
+                        set: { newValue in
+                            Task { await preferences.setNotifySelf(newValue) }
+                        }
+                    )
+                )
+                .disabled(preferences.isLoading || preferences.isSavingNotifySelf)
+                .themedRow()
+
+                Toggle(
+                    "Copy me on my own list mail",
+                    isOn: Binding(
+                        get: { preferences.copySelf },
+                        set: { newValue in
+                            Task { await preferences.setCopySelf(newValue) }
+                        }
+                    )
+                )
+                .disabled(preferences.isLoading || preferences.isSavingCopySelf)
+                .themedRow()
+
+                if let error = preferences.error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .themedRow()
+                }
+            } else {
+                ProgressView()
+                    .themedRow()
+            }
+        } header: {
+            Text("Email")
+        } footer: {
+            Text("These are stored on SourceHut and apply everywhere, not just in Hutch. The first controls whether todo.sr.ht emails you about your own ticket activity; the second whether lists.sr.ht copies you on mail you send to a list.")
         }
     }
 
