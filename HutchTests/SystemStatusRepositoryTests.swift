@@ -60,7 +60,7 @@ struct SystemStatusRepositoryTests {
                 id: "incident-1",
                 title: "builds.sr.ht outage",
                 summary: "Builds are failing.",
-                url: nil,
+                url: URL(string: "https://status.sr.ht/issues/1/"),
                 publishedAt: Date(timeIntervalSince1970: 200),
                 updatedAt: nil,
                 isActive: true
