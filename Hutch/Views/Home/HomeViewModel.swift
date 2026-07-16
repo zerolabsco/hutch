@@ -683,7 +683,7 @@ final class HomeViewModel {
 
     private func loadProjects(forceRefresh: Bool) async -> Result<[Project], Error> {
         do {
-            return .success(try await projectService.fetchProjects())
+            return .success(try await projectService.fetchProjects(forceRefresh: forceRefresh))
         } catch {
             return .failure(error)
         }
@@ -716,7 +716,7 @@ final class HomeViewModel {
 
     private func loadSystemStatusSnapshot(forceRefresh: Bool) async -> Result<CachedSystemStatusValue<SystemStatusSnapshot>, Error> {
         do {
-            return .success(try await systemStatusRepository.snapshotResult())
+            return .success(try await systemStatusRepository.snapshotResult(forceRefresh: forceRefresh))
         } catch {
             return .failure(error)
         }

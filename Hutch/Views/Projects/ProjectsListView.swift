@@ -25,14 +25,14 @@ final class ProjectsListViewModel {
         }
     }
 
-    func loadProjects() async {
+    func loadProjects(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
 
         do {
-            projects = try await service.fetchProjects()
+            projects = try await service.fetchProjects(forceRefresh: forceRefresh)
         } catch {
             if projects.isEmpty {
                 self.error = error.userFacingMessage
@@ -115,7 +115,7 @@ struct ProjectsListView: View {
             )
         )
         .refreshable {
-            await viewModel.loadProjects()
+            await viewModel.loadProjects(forceRefresh: true)
         }
         .connectivityOverlay(hasContent: !viewModel.projects.isEmpty) {
             await viewModel.loadProjects()
