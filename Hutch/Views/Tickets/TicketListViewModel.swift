@@ -33,6 +33,23 @@ private struct LabelMutationResponse: Decodable, Sendable {
     let unlabelTicket: EventRef?
 }
 
+private struct TrackerSubscriptionStateResponse: Decodable, Sendable {
+    let tracker: TrackerSubscriptionWrapper
+}
+
+private struct TrackerSubscriptionWrapper: Decodable, Sendable {
+    /// Null when the authenticated user is not subscribed to this tracker.
+    let subscription: TrackerSubscriptionIdPayload?
+}
+
+private struct TrackerSubscriptionResponse: Decodable, Sendable {
+    let subscription: TrackerSubscriptionIdPayload
+}
+
+private struct TrackerSubscriptionIdPayload: Decodable, Sendable {
+    let id: Int
+}
+
 private struct TrackerLabelsResponse: Decodable, Sendable {
     let tracker: TrackerLabelsWrapper
 }
@@ -90,6 +107,9 @@ final class TicketListViewModel {
     private(set) var isLoadingMore = false
     private(set) var isCreatingTicket = false
     private(set) var isPerformingAction = false
+    /// Whether the authenticated user receives email for this tracker. Mirrors
+    /// `Tracker.subscription`, which is null when not subscribed.
+    private(set) var isSubscribed = false
     private(set) var trackerLabels: [TicketLabel] = []
     private(set) var recentSearches: [ScopedSearchHistoryEntry]
     private(set) var savedFilters: [SavedTicketFilter]
@@ -213,6 +233,28 @@ final class TicketListViewModel {
     private static let unlabelTicketMutation = """
     mutation unlabelTicket($trackerId: Int!, $ticketId: Int!, $labelId: Int!) {
         unlabelTicket(trackerId: $trackerId, ticketId: $ticketId, labelId: $labelId) { id }
+    }
+    """
+
+    /// Kept separate from `query` above, which is paginated and cached — the
+    /// subscription is per-user state and should not ride along in page payloads.
+    private static let trackerSubscriptionQuery = """
+    query trackerSubscription($rid: ID!) {
+        tracker(rid: $rid) {
+            subscription { id }
+        }
+    }
+    """
+
+    private static let trackerSubscribeMutation = """
+    mutation trackerSubscribe($trackerId: Int!) {
+        subscription: trackerSubscribe(trackerId: $trackerId) { id }
+    }
+    """
+
+    private static let trackerUnsubscribeMutation = """
+    mutation trackerUnsubscribe($trackerId: Int!, $tickets: Boolean!) {
+        subscription: trackerUnsubscribe(trackerId: $trackerId, tickets: $tickets) { id }
     }
     """
 
@@ -518,6 +560,52 @@ final class TicketListViewModel {
         }
 
         isPerformingAction = false
+    }
+
+    /// Reads whether the user is subscribed to this tracker. Uncached: it is
+    /// per-user state that must be accurate the moment the menu opens.
+    func loadSubscriptionState() async {
+        do {
+            let response = try await client.execute(
+                service: .todo,
+                query: Self.trackerSubscriptionQuery,
+                variables: ["rid": trackerRid],
+                responseType: TrackerSubscriptionStateResponse.self
+            )
+            isSubscribed = response.tracker.subscription != nil
+        } catch {
+            // Leave the last known value alone; the toggle reports its own errors.
+        }
+    }
+
+    /// Subscribes to or unsubscribes from email notifications for this tracker.
+    /// Unsubscribing leaves individual ticket subscriptions intact.
+    func toggleSubscription() async {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        let wasSubscribed = isSubscribed
+        isSubscribed.toggle()
+
+        var variables: [String: any Sendable] = ["trackerId": trackerId]
+        if wasSubscribed {
+            variables["tickets"] = false
+        }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: wasSubscribed ? Self.trackerUnsubscribeMutation : Self.trackerSubscribeMutation,
+                variables: variables,
+                responseType: TrackerSubscriptionResponse.self
+            )
+            await client.invalidateCache(prefix: APICacheKeys.prefix(SRHTService.todo.rawValue, "tracker"))
+        } catch {
+            isSubscribed = wasSubscribed
+            self.error = error.userFacingMessage
+        }
     }
 
     func loadTrackerLabels() async {
