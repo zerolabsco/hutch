@@ -43,6 +43,15 @@ private struct PATListResponse: Decodable, Sendable {
     let personalAccessTokens: [PersonalAccessToken]
 }
 
+private struct AuditLogResponse: Decodable, Sendable {
+    let auditLog: AuditLogPage
+}
+
+private struct AuditLogPage: Decodable, Sendable {
+    let results: [AuditLogEntry]
+    let cursor: String?
+}
+
 // MARK: - View Model
 
 @Observable
@@ -53,6 +62,11 @@ final class SettingsViewModel {
     private(set) var sshKeys: [SSHKey] = []
     private(set) var pgpKeys: [PGPKey] = []
     private(set) var personalAccessTokens: [PersonalAccessToken] = []
+    private(set) var auditLog: [AuditLogEntry] = []
+    private(set) var isLoadingAuditLog = false
+    /// Kept apart from `error` so a failed audit fetch cannot bury a profile
+    /// save failure, and vice versa.
+    var auditLogError: String?
 
     private(set) var isLoading = false
     private(set) var isLoadingPATs = false
@@ -136,6 +150,12 @@ final class SettingsViewModel {
     private static let deletePGPKeyMutation = """
     mutation deletePGPKey($id: Int!) {
         deletePGPKey(id: $id) { id }
+    }
+    """
+
+    private static let auditLogQuery = """
+    query auditLog {
+        auditLog { results { id created ipAddress eventType details } }
     }
     """
 
@@ -393,4 +413,26 @@ final class SettingsViewModel {
         isLoadingPATs = false
     }
 
+    // MARK: - Audit Log
+
+    /// Loads the most recent audit entries.
+    ///
+    /// Deliberately one page: this is a glanceable "has anything happened to my
+    /// account" surface, not an archive. The full log is on meta.sr.ht.
+    func loadAuditLog() async {
+        guard !isLoadingAuditLog else { return }
+        isLoadingAuditLog = true
+        defer { isLoadingAuditLog = false }
+
+        do {
+            let result = try await client.execute(
+                service: .meta,
+                query: Self.auditLogQuery,
+                responseType: AuditLogResponse.self
+            )
+            auditLog = result.auditLog.results
+        } catch {
+            auditLogError = error.userFacingMessage
+        }
+    }
 }

@@ -84,6 +84,7 @@ struct ProfileView: View {
                 sshKeysSection(viewModel)
                 pgpKeysSection(viewModel)
                 patSection(viewModel)
+                auditLogSection(viewModel)
             }
         }
         .themedList()
@@ -430,6 +431,61 @@ struct ProfileView: View {
             if !viewModel.personalAccessTokens.isEmpty {
                 Text("\(viewModel.personalAccessTokens.count) token\(viewModel.personalAccessTokens.count == 1 ? "" : "s")")
             }
+        }
+    }
+
+    /// Loaded on demand, like the tokens above — an audit log is something you go
+    /// looking for, not something worth a request on every profile view.
+    @ViewBuilder
+    private func auditLogSection(_ viewModel: SettingsViewModel) -> some View {
+        Section {
+            if viewModel.isLoadingAuditLog {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .themedRow()
+            } else if let error = viewModel.auditLogError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .themedRow()
+            } else if viewModel.auditLog.isEmpty {
+                Button("Load Audit Log") {
+                    Task { await viewModel.loadAuditLog() }
+                }
+                .themedRow()
+            } else {
+                ForEach(viewModel.auditLog) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry.eventType)
+                            .font(.subheadline)
+
+                        if let details = entry.details, !details.isEmpty {
+                            Text(details)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+
+                        HStack(spacing: 12) {
+                            Text(entry.created.relativeDescription)
+                            Text(entry.ipAddress)
+                                .monospaced()
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(entry.eventType), \(entry.created.relativeDescription), from \(entry.ipAddress)")
+                }
+                .themedRow()
+            }
+        } header: {
+            Text("Audit Log")
+        } footer: {
+            Text("Recent security-relevant activity on your account, newest first. The full log lives on meta.sr.ht.")
         }
     }
 }
