@@ -365,6 +365,19 @@ final class HomeViewModel {
         async let inboxUnreadTask = loadInboxUnreadSnapshot(forceRefresh: forceRefresh)
         async let systemStatusTask = loadSystemStatusSnapshot(forceRefresh: forceRefresh)
 
+        // Resolve system status first so the Home title-bar status badge can
+        // settle from cache without waiting on the slower list data below.
+        let systemStatusResult = await systemStatusTask
+        switch systemStatusResult {
+        case .success(let result):
+            systemStatusSnapshot = result.value
+            isShowingStaleSystemStatus = result.isStale
+            systemStatusErrorMessage = result.isStale ? result.refreshErrorMessage : nil
+        case .failure(let error):
+            systemStatusErrorMessage = error.userFacingMessage
+        }
+        isLoadingSystemStatus = false
+
         let projectsResult = await projectsTask
         switch projectsResult {
         case .success(let projects):
@@ -404,16 +417,6 @@ final class HomeViewModel {
         unreadInboxThreadCount = inboxUnreadSnapshot?.unreadCount
         unreadInboxThreads = inboxUnreadSnapshot?.threads ?? []
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
-        let systemStatusResult = await systemStatusTask
-        switch systemStatusResult {
-        case .success(let result):
-            systemStatusSnapshot = result.value
-            isShowingStaleSystemStatus = result.isStale
-            systemStatusErrorMessage = result.isStale ? result.refreshErrorMessage : nil
-        case .failure(let error):
-            systemStatusErrorMessage = error.userFacingMessage
-        }
-        isLoadingSystemStatus = false
         lastRefreshed = Date()
         persistNeedsAttentionSnapshot()
         persistSystemStatusWidgetSnapshot()

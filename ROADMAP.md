@@ -142,6 +142,7 @@ so "breaking change" does not apply. These buckets track *user-visible scale*.
 | Version | Contents | Why here |
 | --- | --- | --- |
 | v3.8.1 | SonarCloud triage; housekeeping | No behaviour change at all |
+| v3.8.2 | Home system status moved to a title-bar status badge | Small UI relocation, no new surface |
 | v3.9.0 | "What's cooking" ingest; doc truth-up; deploy keys | Ships one feature, corrects the map |
 | v3.10.0 | hub.sr.ht writes: projects, discovery, `mailingListSubscribe` | Provisional — gated on what v3.9.0 finds |
 | v3.11.0 | Accessibility | Independent, device-verified |

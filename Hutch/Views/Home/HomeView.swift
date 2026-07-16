@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var isOpeningRecentItem = false
     @State private var selectedPinnedProject: Project?
     @State private var selectedPinnedUser: User?
+    @State private var isShowingSystemStatus = false
 
     var body: some View {
         Group {
@@ -20,6 +21,19 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Home")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingSystemStatus = true
+                } label: {
+                    HomeSystemStatusIndicator(
+                        snapshot: viewModel?.systemStatusSnapshot,
+                        isLoading: viewModel?.isLoadingSystemStatus ?? false
+                    )
+                }
+                .accessibilityLabel("System status")
+            }
+        }
         .navigationDestination(isPresented: Binding(
             get: { selectedPinnedProject != nil },
             set: { isPresented in
@@ -44,6 +58,9 @@ struct HomeView: View {
                 UserProfileView(user: selectedPinnedUser)
             }
         }
+        .navigationDestination(isPresented: $isShowingSystemStatus) {
+            SystemStatusView()
+        }
         .task {
             guard let currentUser = appState.currentUser else { return }
             await ensureViewModel(currentUser: currentUser).loadDashboard()
@@ -64,7 +81,6 @@ struct HomeView: View {
     @ViewBuilder
     private func content(_ viewModel: HomeViewModel) -> some View {
         List {
-            systemStatusSection(viewModel)
             workSection(viewModel)
             recentSection
             buildsSection(viewModel)
@@ -81,26 +97,6 @@ struct HomeView: View {
         }
         .onAppear {
             loadRecentActivity()
-        }
-    }
-
-    @ViewBuilder
-    private func systemStatusSection(_ viewModel: HomeViewModel) -> some View {
-        if viewModel.systemStatusSnapshot?.hasDisruption == true {
-            Section {
-                NavigationLink {
-                    SystemStatusView()
-                } label: {
-                    SystemStatusSummaryRow(
-                        snapshot: viewModel.systemStatusSnapshot,
-                        isLoading: viewModel.isLoadingSystemStatus,
-                        errorMessage: viewModel.systemStatusErrorMessage,
-                        isShowingStaleData: viewModel.isShowingStaleSystemStatus
-                    )
-                }
-                .buttonStyle(.plain)
-                .themedRow()
-            }
         }
     }
 
@@ -487,6 +483,41 @@ private struct HomeSummaryRow: View {
         case .monitoring:
             return 2
         }
+    }
+}
+
+private struct HomeSystemStatusIndicator: View {
+    let snapshot: SystemStatusSnapshot?
+    let isLoading: Bool
+
+    var body: some View {
+        if isLoading && snapshot == nil {
+            ProgressView()
+                .controlSize(.small)
+        } else {
+            Circle()
+                .fill(color)
+                .frame(width: 22, height: 22)
+                .overlay {
+                    Image(systemName: glyph)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+        }
+    }
+
+    private var color: Color {
+        if let snapshot {
+            return snapshot.hasDisruption ? .orange : .green
+        }
+        return .secondary
+    }
+
+    private var glyph: String {
+        if let snapshot {
+            return snapshot.hasDisruption ? "exclamationmark" : "checkmark"
+        }
+        return "questionmark"
     }
 }
 
