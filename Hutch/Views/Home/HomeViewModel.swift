@@ -819,6 +819,14 @@ final class HomeViewModel {
         var cursor: String?
         var unreadThreads: [InboxThreadSummary] = []
 
+        // thread.updated is the root email's insert time and never advances when a
+        // reply lands, so activity has to come from the list's mail feed.
+        let activity = await MailingListActivityLoader.load(
+            client: client,
+            listRID: mailingList.rid,
+            since: InboxReadStateStore.baseline(defaults: defaults) ?? .distantPast
+        )
+
         while true {
             var variables: [String: any Sendable] = ["rid": mailingList.rid]
             if let cursor {
@@ -838,6 +846,7 @@ final class HomeViewModel {
             let response = cached.value
 
             let unreadThreadSummaries = response.list.threads.results.compactMap { thread -> InboxThreadSummary? in
+                let lastActivityAt = activity.lastActivity(rootEmailID: thread.root.id, fallback: thread.updated)
                 let summary = InboxThreadSummary(
                     rootEmailID: thread.root.id,
                     rootMessageID: thread.root.messageID,
@@ -849,13 +858,13 @@ final class HomeViewModel {
                     listOwner: mailingList.owner,
                     subject: thread.subject,
                     latestSender: thread.sender,
-                    lastActivityAt: thread.updated,
+                    lastActivityAt: lastActivityAt,
                     messageCount: thread.replies + 1,
                     repo: InboxThreadUtilities.deriveRepositoryName(from: mailingList.name),
                     containsPatch: thread.root.patch != nil || thread.subject.localizedCaseInsensitiveContains("[patch"),
                     isUnread: InboxReadStateStore.isUnread(
                         threadID: "\(mailingList.rid)#\(InboxThreadSummary.normalizationKey(for: thread.subject))",
-                        lastActivityAt: thread.updated,
+                        lastActivityAt: lastActivityAt,
                         defaults: defaults
                     )
                 )
