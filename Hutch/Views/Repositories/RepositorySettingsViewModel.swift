@@ -301,7 +301,14 @@ final class RepositorySettingsViewModel {
         }
 
         if normalizedEditedDescription != (repository.description ?? "") {
-            input["description"] = normalizedEditedDescription.isEmpty ? Optional<String>.none as String? : normalizedEditedDescription
+            if normalizedEditedDescription.isEmpty {
+                // Assigning nil through the subscript would remove the key and omit
+                // `description` from the mutation, leaving the old value in place.
+                // updateValue stores an explicit nil, which AnyCodable encodes as null.
+                input.updateValue(Optional<String>.none as any Sendable, forKey: "description")
+            } else {
+                input["description"] = normalizedEditedDescription
+            }
         }
 
         return input
