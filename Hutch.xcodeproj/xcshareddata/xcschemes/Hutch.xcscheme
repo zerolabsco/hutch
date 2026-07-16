@@ -30,7 +30,7 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:HutchTests"
+            reference = "container:HutchTests.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>
