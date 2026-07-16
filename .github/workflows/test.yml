@@ -1,0 +1,60 @@
+name: Tests
+
+# builds.sr.ht is the canonical CI for this project, but it has no macOS images
+# and will not add them, so xcodebuild cannot run there. This job exists to run
+# the test plan on the GitHub mirror; see builds/swift-ci.yml for the rest.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: xcodebuild test
+    # macos-latest still points at macOS 15, which lacks the iOS 26 SDK.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Select simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices[][] | select(.name | startswith("iPhone"))] | first | .udid')
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "No available iPhone simulator on this image" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Hutch.xcodeproj \
+            -scheme Hutch \
+            -testPlan HutchTests \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
