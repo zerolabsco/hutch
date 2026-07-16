@@ -11,12 +11,15 @@ struct TicketDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel: TicketDetailViewModel?
 
     // Sheet state
     @State private var showResolveSheet = false
     @State private var showAssignSheet = false
     @State private var showLabelsSheet = false
+    @State private var showEditSheet = false
+    @State private var showDeleteConfirmation = false
     @State private var isOpeningTracker = false
 
     // Comment composer mode
@@ -103,6 +106,14 @@ struct TicketDetailView: View {
             if isOwnedByCurrentUser {
                 Divider()
 
+            if viewModel.ticket != nil {
+                Button {
+                    showEditSheet = true
+                } label: {
+                    SwiftUI.Label("Edit Ticket", systemImage: "square.and.pencil")
+                }
+            }
+
             if let ticket = viewModel.ticket {
                 if ticket.status == .resolved {
                     Button {
@@ -133,6 +144,14 @@ struct TicketDetailView: View {
             } label: {
                 SwiftUI.Label("Manage Labels", systemImage: "tag")
             }
+
+            Divider()
+
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                SwiftUI.Label("Delete Ticket", systemImage: "trash")
+            }
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -149,6 +168,32 @@ struct TicketDetailView: View {
         .sheet(isPresented: $showLabelsSheet) {
             LabelsSheet(viewModel: viewModel, isPresented: $showLabelsSheet)
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let ticket = viewModel.ticket {
+                EditTicketSheet(
+                    viewModel: viewModel,
+                    isPresented: $showEditSheet,
+                    initialSubject: ticket.title,
+                    initialBody: ticket.description ?? ""
+                )
+            }
+        }
+        .confirmationDialog(
+            "Delete Ticket #\(ticketId)?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Ticket", role: .destructive) {
+                Task {
+                    if await viewModel.deleteTicket() {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes the ticket and its comments. This cannot be undone.")
         }
     }
 
@@ -719,6 +764,81 @@ private struct EventRow: View {
         case userMention
         case created
         case unknown
+    }
+}
+
+// MARK: - Resolve Sheet
+
+private struct EditTicketSheet: View {
+    let viewModel: TicketDetailViewModel
+    @Binding var isPresented: Bool
+    let initialSubject: String
+    let initialBody: String
+
+    @State private var subject: String
+    @State private var ticketBody: String
+
+    init(
+        viewModel: TicketDetailViewModel,
+        isPresented: Binding<Bool>,
+        initialSubject: String,
+        initialBody: String
+    ) {
+        self.viewModel = viewModel
+        _isPresented = isPresented
+        self.initialSubject = initialSubject
+        self.initialBody = initialBody
+        _subject = State(initialValue: initialSubject)
+        _ticketBody = State(initialValue: initialBody)
+    }
+
+    private var trimmedSubject: String {
+        subject.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasChanges: Bool {
+        trimmedSubject != initialSubject
+            || ticketBody.trimmingCharacters(in: .whitespacesAndNewlines) != initialBody
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Subject") {
+                    TextField("Subject", text: $subject, axis: .vertical)
+                        .themedRow()
+                }
+
+                Section("Description") {
+                    TextField("Description", text: $ticketBody, axis: .vertical)
+                        .lineLimit(5...15)
+                        .themedRow()
+                }
+            }
+            .themedList()
+            .navigationTitle("Edit Ticket")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            if await viewModel.updateTicket(subject: subject, body: ticketBody) {
+                                isPresented = false
+                            }
+                        }
+                    }
+                    .disabled(viewModel.isPerformingAction || trimmedSubject.isEmpty || !hasChanges)
+                }
+            }
+            .overlay {
+                if viewModel.isPerformingAction {
+                    ProgressView()
+                }
+            }
+        }
     }
 }
 

@@ -52,6 +52,18 @@ private struct UpdatedStatusEvent: Decodable, Sendable {
     let eventType: String
 }
 
+private struct UpdateTicketResponse: Decodable, Sendable {
+    let updateTicket: TicketIdPayload
+}
+
+private struct DeleteTicketResponse: Decodable, Sendable {
+    let deleteTicket: TicketIdPayload
+}
+
+private struct TicketIdPayload: Decodable, Sendable {
+    let id: Int
+}
+
 private struct AssignUserResponse: Decodable, Sendable {
     let assignUser: MutationEventResponse
 }
@@ -138,6 +150,35 @@ final class TicketDetailViewModel {
         if status == .resolved, let resolution {
             input["resolution"] = resolution.rawValue
         }
+        return input
+    }
+
+    /// Builds an `UpdateTicketInput` carrying only the fields that changed, so an
+    /// edit never overwrites a field the user did not touch.
+    static func ticketUpdateInput(
+        subject: String,
+        body: String,
+        currentSubject: String,
+        currentBody: String?
+    ) -> [String: any Sendable] {
+        var input: [String: any Sendable] = [:]
+        let trimmedSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedSubject != currentSubject {
+            input["subject"] = trimmedSubject
+        }
+
+        if trimmedBody != (currentBody ?? "") {
+            if trimmedBody.isEmpty {
+                // A nil subscript assignment would drop the key and leave the old
+                // body in place instead of clearing it.
+                input.updateValue(Optional<String>.none as any Sendable, forKey: "body")
+            } else {
+                input["body"] = trimmedBody
+            }
+        }
+
         return input
     }
 
@@ -230,6 +271,18 @@ final class TicketDetailViewModel {
         updateTicketStatus(trackerId: $trackerId, ticketId: $ticketId, input: $input) {
             eventType: __typename
         }
+    }
+    """
+
+    private static let updateTicketMutation = """
+    mutation updateTicket($trackerId: Int!, $ticketId: Int!, $input: UpdateTicketInput!) {
+        updateTicket(trackerId: $trackerId, ticketId: $ticketId, input: $input) { id }
+    }
+    """
+
+    private static let deleteTicketMutation = """
+    mutation deleteTicket($trackerId: Int!, $ticketId: Int!) {
+        deleteTicket(trackerId: $trackerId, ticketId: $ticketId) { id }
     }
     """
 
@@ -418,6 +471,70 @@ final class TicketDetailViewModel {
         }
 
         isPerformingAction = false
+    }
+
+    /// Edits the ticket's subject and body. Returns true when the edit was sent,
+    /// including the no-op case where nothing changed.
+    @discardableResult
+    func updateTicket(subject: String, body: String) async -> Bool {
+        guard !isPerformingAction, let ticket else { return false }
+
+        let input = Self.ticketUpdateInput(
+            subject: subject,
+            body: body,
+            currentSubject: ticket.title,
+            currentBody: ticket.description
+        )
+        guard !input.isEmpty else { return true }
+
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.updateTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId,
+                    "input": input
+                ],
+                responseType: UpdateTicketResponse.self
+            )
+            await invalidateAfterMutation()
+            await reloadTicketPreservingDebugState()
+            return true
+        } catch {
+            self.error = error.userFacingMessage
+            return false
+        }
+    }
+
+    /// Deletes the ticket. Returns true on success so the caller can pop the view.
+    @discardableResult
+    func deleteTicket() async -> Bool {
+        guard !isPerformingAction else { return false }
+        isPerformingAction = true
+        error = nil
+        defer { isPerformingAction = false }
+
+        do {
+            _ = try await client.execute(
+                service: .todo,
+                query: Self.deleteTicketMutation,
+                variables: [
+                    "trackerId": trackerId,
+                    "ticketId": ticketId
+                ],
+                responseType: DeleteTicketResponse.self
+            )
+            await invalidateAfterMutation()
+            return true
+        } catch {
+            self.error = error.userFacingMessage
+            return false
+        }
     }
 
     func assignUser(username: String) async {
