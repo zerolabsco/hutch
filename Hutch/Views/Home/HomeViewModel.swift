@@ -622,7 +622,7 @@ final class HomeViewModel {
     }
 
     func markInboxThreadRead(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.id, defaults: defaults)
+        InboxReadStateStore.markViewed(max(Date(), thread.lastActivityAt), for: thread.threadGroupingKey, defaults: defaults)
         unreadInboxThreads.removeAll { $0.id == thread.id }
         unreadInboxThreadCount = max((unreadInboxThreadCount ?? 1) - 1, 0)
         hasUnreadInboxThreads = (unreadInboxThreadCount ?? 0) > 0
@@ -634,7 +634,7 @@ final class HomeViewModel {
 
         let viewedAt = Date()
         for thread in unreadInboxThreads {
-            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id, defaults: defaults)
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.threadGroupingKey, defaults: defaults)
         }
 
         unreadInboxThreads = []
@@ -644,7 +644,7 @@ final class HomeViewModel {
     }
 
     func markInboxThreadUnread(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
+        InboxReadStateStore.markUnread(for: thread.threadGroupingKey, defaults: defaults)
         if unreadInboxThreads.contains(where: { $0.id == thread.id }) == false {
             unreadInboxThreads.append(
                 InboxThreadSummary(

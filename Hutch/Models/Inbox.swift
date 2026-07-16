@@ -17,8 +17,11 @@ struct InboxThreadSummary: Identifiable, Hashable, Sendable {
     let containsPatch: Bool
     let isUnread: Bool
 
+    /// Identity is per-thread, keyed on the root Message-ID. It deliberately differs
+    /// from ``threadGroupingKey``, which is subject-based so replies collapse into
+    /// one conversation — two unrelated threads can share a subject on the same list.
     var id: String {
-        threadGroupingKey
+        "\(listRID)#\(rootMessageID)"
     }
 
     var listDisplayName: String {

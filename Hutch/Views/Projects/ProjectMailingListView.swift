@@ -94,13 +94,13 @@ final class MailingListDetailViewModel {
 
     func markThreadRead(_ thread: InboxThreadSummary) {
         let viewedAt = max(Date(), thread.lastActivityAt)
-        InboxReadStateStore.markViewed(viewedAt, for: thread.id, defaults: defaults)
+        InboxReadStateStore.markViewed(viewedAt, for: thread.threadGroupingKey, defaults: defaults)
         updateThread(thread, isUnread: false)
         NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: -1, accountID: accountID)
     }
 
     func markThreadUnread(_ thread: InboxThreadSummary) {
-        InboxReadStateStore.markUnread(for: thread.id, defaults: defaults)
+        InboxReadStateStore.markUnread(for: thread.threadGroupingKey, defaults: defaults)
         updateThread(thread, isUnread: true)
         NeedsAttentionSnapshotStore.adjustUnreadInboxThreads(by: 1, accountID: accountID)
     }
@@ -111,7 +111,7 @@ final class MailingListDetailViewModel {
 
         let viewedAt = Date()
         for thread in unreadThreads {
-            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.id, defaults: defaults)
+            InboxReadStateStore.markViewed(max(viewedAt, thread.lastActivityAt), for: thread.threadGroupingKey, defaults: defaults)
         }
 
         threads = threads.map { thread in
