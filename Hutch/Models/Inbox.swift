@@ -170,6 +170,7 @@ struct InboxPatchPreview: Decodable, Sendable, Hashable {
 
 enum InboxReadStateStore {
     private static let key = "InboxThreadLastViewed"
+    private static let baselineKey = "InboxUnreadBaseline"
 
     static func lastViewedAt(for threadID: String, defaults: UserDefaults = .standard) -> Date? {
         guard let dictionary = defaults.dictionary(forKey: key) as? [String: TimeInterval],
@@ -185,16 +186,52 @@ enum InboxReadStateStore {
         defaults.set(dictionary, forKey: key)
     }
 
+    /// Records an explicit unread marker rather than forgetting the thread.
+    ///
+    /// Deleting the entry would drop the thread back to the baseline rule below,
+    /// which would call anything older than the baseline read — so marking an old
+    /// thread unread would appear to do nothing. `distantPast` always compares as
+    /// older than the thread's activity, so the thread reads as unread.
     static func markUnread(for threadID: String, defaults: UserDefaults = .standard) {
         var dictionary = defaults.dictionary(forKey: key) as? [String: TimeInterval] ?? [:]
-        dictionary.removeValue(forKey: threadID)
+        dictionary[threadID] = Date.distantPast.timeIntervalSince1970
         defaults.set(dictionary, forKey: key)
     }
 
-    static func isUnread(threadID: String, lastActivityAt: Date, defaults: UserDefaults = .standard) -> Bool {
-        guard let lastViewedAt = lastViewedAt(for: threadID, defaults: defaults) else {
-            return true
+    /// Mail that arrived before this is treated as already read.
+    static func baseline(defaults: UserDefaults = .standard) -> Date? {
+        guard let timestamp = defaults.object(forKey: baselineKey) as? TimeInterval else {
+            return nil
         }
-        return lastActivityAt > lastViewedAt
+        return Date(timeIntervalSince1970: timestamp)
+    }
+
+    /// Sets the point from which mail counts as unread. Called once per account,
+    /// when the account is activated.
+    ///
+    /// Without this, every thread a list has ever carried is unread on first
+    /// login, because an absent view record reads as unread. On a busy list that
+    /// is thousands of threads, none of which the user has any intention of
+    /// reading.
+    ///
+    /// An account that already has read state has been in use, so it keeps the
+    /// old behavior — a baseline of `distantPast` leaves every existing unread
+    /// thread unread rather than silently marking a real backlog as read.
+    static func establishBaselineIfNeeded(now: Date = .now, defaults: UserDefaults = .standard) {
+        guard defaults.object(forKey: baselineKey) == nil else { return }
+
+        let hasExistingReadState = !((defaults.dictionary(forKey: key) as? [String: TimeInterval])?.isEmpty ?? true)
+        let baseline = hasExistingReadState ? Date.distantPast : now
+        defaults.set(baseline.timeIntervalSince1970, forKey: baselineKey)
+    }
+
+    static func isUnread(threadID: String, lastActivityAt: Date, defaults: UserDefaults = .standard) -> Bool {
+        if let lastViewedAt = lastViewedAt(for: threadID, defaults: defaults) {
+            return lastActivityAt > lastViewedAt
+        }
+        if let baseline = baseline(defaults: defaults), lastActivityAt <= baseline {
+            return false
+        }
+        return true
     }
 }
