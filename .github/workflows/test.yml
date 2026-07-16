@@ -8,13 +8,20 @@ name: Tests
 # source directory still runs the suite. A skip rule that is too broad is how a
 # real change slips through ungated.
 #
-# Safe on pull_request only because main has no required status checks: a run
+# pull_request only, by design. GitHub runs the suite against the merge result
+# (PR merged into main), so a green PR already validates exactly what lands on
+# main. Merges here are merge commits, not squash, so the merged main is the same
+# tree that was tested — re-running on push to main would only burn a macOS runner
+# to re-confirm a result we already have.
+#
+# The tradeoff: a non-docs change pushed straight to main (bypassing a PR) is not
+# tested. That is not how this repo works — only docs go direct to main, and those
+# are path-skipped anyway.
+#
+# Safe as pull_request-only because main has no required status checks: a run
 # skipped by a path filter never reports, so a required check would leave a
 # docs-only PR waiting forever.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['*.md', 'Docs/*.md']
   pull_request:
     paths-ignore: ['*.md', 'Docs/*.md']
   workflow_dispatch:
