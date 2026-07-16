@@ -121,7 +121,7 @@ struct RepositoryDetailView: View {
             case .refs:
                 ReferencesListView(viewModel: viewModel)
             case .artifacts:
-                ArtifactsView(viewModel: viewModel)
+                ArtifactsView(viewModel: viewModel, canManage: canManageRepository)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

@@ -231,6 +231,11 @@ final class RepositorySettingsViewModel {
                 variables: ["id": repositoryId],
                 responseType: DeleteRepositoryResponse.self
             )
+            // The list and Home are both served from cache, so without this the
+            // repository lingers on screen after it no longer exists. Creation
+            // already does this; deletion never did.
+            await client.invalidateCache(prefix: APICacheKeys.prefix(service.rawValue, "repositories"))
+            await client.invalidateCache(prefix: APICacheKeys.prefix("home"))
             didDelete = true
         } catch {
             self.error = error.userFacingMessage

@@ -75,6 +75,20 @@ private struct PathObject: Decodable, Sendable {
     let text: String?
 }
 
+private struct UploadArtifactResponse: Decodable, Sendable {
+    let uploadArtifact: ArtifactInfo
+}
+
+private struct DeleteArtifactResponse: Decodable, Sendable {
+    /// Nullable in the schema: sr.ht returns null when there was no artifact to
+    /// remove, which is still a success from the caller's point of view.
+    let deleteArtifact: ArtifactIDPayload?
+}
+
+private struct ArtifactIDPayload: Decodable, Sendable {
+    let id: Int
+}
+
 private struct ArtifactsResponse: Decodable, Sendable {
     let repository: ArtifactsRepository?
 }
@@ -144,6 +158,7 @@ final class RepositoryDetailViewModel {
 
     private(set) var referenceArtifacts: [ReferenceWithArtifacts] = []
     private(set) var isLoadingArtifacts = false
+    private(set) var isMutatingArtifact = false
 
     // MARK: - Error
 
@@ -457,6 +472,26 @@ final class RepositoryDetailViewModel {
 
     // MARK: - Artifacts
 
+    /// `file` is a top-level Upload variable here, unlike meta's avatar upload
+    /// where it is nested inside an input object.
+    private static let uploadArtifactMutation = """
+    mutation uploadArtifact($repoId: Int!, $revspec: String!, $file: Upload!) {
+        uploadArtifact(repoId: $repoId, revspec: $revspec, file: $file) {
+            id
+            filename
+            checksum
+            size
+            url
+        }
+    }
+    """
+
+    private static let deleteArtifactMutation = """
+    mutation deleteArtifact($id: Int!) {
+        deleteArtifact(id: $id) { id }
+    }
+    """
+
     private static let artifactsQuery = """
     query artifacts($rid: ID!) {
         repository(rid: $rid) {
@@ -479,6 +514,122 @@ final class RepositoryDetailViewModel {
         }
     }
     """
+
+    /// Attaches a file to the tag named by `revspec`.
+    ///
+    /// sr.ht requires the filename to be unique among the repository's artifacts,
+    /// and rejects a duplicate rather than replacing it, so the error is surfaced
+    /// as-is rather than being retried.
+    @discardableResult
+    func uploadArtifact(revspec: String, fileURL: URL) async -> Bool {
+        guard !isMutatingArtifact else { return false }
+        isMutatingArtifact = true
+        error = nil
+        defer { isMutatingArtifact = false }
+
+        let needsScopedAccess = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if needsScopedAccess {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let fileData: Data
+        do {
+            fileData = try Data(contentsOf: fileURL)
+        } catch {
+            self.error = "Couldn't read \(fileURL.lastPathComponent)."
+            return false
+        }
+
+        // sr.ht streams the upload into S3, which rejects a zero-part multipart
+        // completion with "MalformedXML" — an error that says nothing about the
+        // actual problem. Catch it here where we can name it.
+        guard !fileData.isEmpty else {
+            self.error = "\(fileURL.lastPathComponent) is empty. SourceHut rejects zero-byte artifacts."
+            return false
+        }
+
+        do {
+            _ = try await client.executeMultipart(
+                service: service,
+                query: Self.uploadArtifactMutation,
+                variables: [
+                    "repoId": repository.id,
+                    "revspec": revspec,
+                    "file": nil as String? as Any
+                ],
+                file: MultipartUploadFile(
+                    variablePath: "file",
+                    fileData: fileData,
+                    fileName: fileURL.lastPathComponent,
+                    mimeType: Self.mimeType(for: fileURL)
+                ),
+                responseType: UploadArtifactResponse.self
+            )
+            await reloadArtifacts()
+            return true
+        } catch {
+            self.error = "Couldn't upload \(fileURL.lastPathComponent). \(error.userFacingMessage)"
+            return false
+        }
+    }
+
+    /// Downloads an artifact and returns a local file URL to share.
+    ///
+    /// `Artifact.url` points at the API origin, not the web one, and returns an
+    /// auth error to anything without a bearer token — so it cannot be opened in
+    /// a browser. Fetch it here and hand the user the file instead.
+    func downloadArtifact(_ artifact: ArtifactInfo) async -> URL? {
+        guard !isMutatingArtifact else { return nil }
+        isMutatingArtifact = true
+        error = nil
+        defer { isMutatingArtifact = false }
+
+        do {
+            let data = try await client.fetchData(url: artifact.url)
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent(artifact.filename)
+            try data.write(to: destination, options: .atomic)
+            return destination
+        } catch {
+            self.error = "Couldn't download \(artifact.filename). \(error.userFacingMessage)"
+            return nil
+        }
+    }
+
+    @discardableResult
+    func deleteArtifact(id: Int) async -> Bool {
+        guard !isMutatingArtifact else { return false }
+        isMutatingArtifact = true
+        error = nil
+        defer { isMutatingArtifact = false }
+
+        do {
+            _ = try await client.execute(
+                service: service,
+                query: Self.deleteArtifactMutation,
+                variables: ["id": id],
+                responseType: DeleteArtifactResponse.self
+            )
+            await reloadArtifacts()
+            return true
+        } catch {
+            self.error = "Couldn't delete the artifact. \(error.userFacingMessage)"
+            return false
+        }
+    }
+
+    private func reloadArtifacts() async {
+        isLoadingArtifacts = false
+        await loadArtifacts()
+    }
+
+    /// Artifacts are release tarballs and signatures rather than media, so a
+    /// generic binary type is honest more often than guessing from the extension.
+    private nonisolated static func mimeType(for url: URL) -> String {
+        "application/octet-stream"
+    }
 
     func loadArtifacts() async {
         guard !isLoadingArtifacts else { return }

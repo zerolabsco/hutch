@@ -131,22 +131,43 @@ GraphQL mutation. Treat that boundary as explicit rather than half-building it.
 
 ## Phase 3: Polish and reach
 
-- **Localization.** The project sets `LOCALIZATION_PREFERS_STRING_CATALOGS =
-  YES` but ships no string catalog, so every user-facing string is hardcoded
-  English.
-- **Accessibility.** Labels and hints appear in only 16 of roughly 130 view
-  files.
-- `uploadArtifact` / `deleteArtifact` — artifacts are read-only today.
-- Webhook management. Zero calls to any `create*Webhook` across every service.
-  Push notifications are out of scope because they need a relay server (see
-  [SCOPE.md](SCOPE.md)), but webhook management is client-side only and is a
-  prerequisite if that relay ever ships.
-- `auditLog` (meta.sr.ht) — unused security surface.
-- Build groups (`createGroup`, `startGroup`) and secret management
-  (`shareSecret`, the `secrets` query). Today `secrets` is only a submit toggle.
-- Mailing list creation and settings (`createMailingList`, `updateMailingList`,
-  `deleteMailingList`).
-- `events` feed (todo.sr.ht) and `archiveMessage` (lists.sr.ht).
+Unlike Phases 1 and 2, this is not one shippable thing. It is several, and they
+are sized very differently — measure before committing to one.
+
+### API features — done (v3.8.0)
+
+- ~~`uploadArtifact` / `deleteArtifact`~~ — artifacts were read-only.
+- ~~`auditLog` (meta.sr.ht)~~ — surfaced under the tokens in Profile.
+- ~~Mailing list creation and settings~~ (`createMailingList`,
+  `updateMailingList`, `deleteMailingList`).
+
+Three of the six planned. The other three did not survive contact:
+
+- `archiveMessage` is `@internal` and inaccessible.
+- The `events` feed was built, then removed: todo.sr.ht's root `events` resolver
+  joins `event.participant_id` against `participant.user_id`, which are
+  different id spaces, so it returns an empty list for everyone. See
+  [SCOPE.md](SCOPE.md).
+- Webhook management, `shareSecret`, and build groups are reachable but declined
+  on judgement — see [SCOPE.md](SCOPE.md) for the reasoning, so they do not get
+  re-proposed.
+
+### Localization
+
+The project sets `LOCALIZATION_PREFERS_STRING_CATALOGS = YES` but ships no
+string catalog, so every user-facing string is hardcoded English. Roughly 634
+literals: 239 `Text(`, 150 `Label(`, 117 `Button(`, 77 `Section(`, 51
+`navigationTitle(`.
+
+Worth knowing before starting: a catalog containing only English changes nothing
+for users until translations exist. It is groundwork, and it is the largest diff
+in the roadmap — it touches nearly every view, with the regression risk that
+implies.
+
+### Accessibility
+
+Labels and hints appear in 17 of 89 view files. Mechanical and low-risk, but it
+cannot be verified from a build — it needs VoiceOver driven on a device.
 
 ### Swift 6 language mode
 

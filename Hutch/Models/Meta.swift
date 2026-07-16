@@ -69,3 +69,13 @@ struct PersonalAccessToken: Codable, Sendable, Identifiable {
     let comment: String?
     let grants: String?
 }
+
+/// One entry in meta.sr.ht's audit log: a security-relevant action on the
+/// account, with the address it came from.
+struct AuditLogEntry: Codable, Sendable, Identifiable {
+    let id: Int
+    let created: Date
+    let ipAddress: String
+    let eventType: String
+    let details: String?
+}

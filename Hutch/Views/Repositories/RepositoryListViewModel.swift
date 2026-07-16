@@ -189,7 +189,10 @@ final class RepositoryListViewModel {
                     filteredResults = []
                 }
             } else {
-                let repositories = try await fetchAllRepositories(useCache: true)
+                // forceRefresh used to reach only the build statuses, so a pull to
+                // refresh re-served the cached list and a deleted repository stayed
+                // on screen.
+                let repositories = try await fetchAllRepositories(useCache: !forceRefresh)
                 updateSearchIndex(with: repositories)
                 filteredResults = repositories
             }

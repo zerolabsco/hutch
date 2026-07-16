@@ -90,11 +90,12 @@ struct PasteListView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if swipeActionsEnabled {
-                        Button(role: .destructive) {
+                        Button {
                             pasteToDelete = paste
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
                 .task {

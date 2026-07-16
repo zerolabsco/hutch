@@ -276,6 +276,43 @@ final class SRHTClient: Sendable {
 
     // MARK: - Plain-text fetch
 
+    /// Fetch the bytes at a URL using the same authorization header.
+    ///
+    /// sr.ht serves some resources from the API origin rather than the web one —
+    /// `Artifact.url` is `https://git.sr.ht/query/artifact/<checksum>/<filename>`
+    /// — and those return an auth error to anything without a bearer token. They
+    /// cannot be handed to a browser; they have to be fetched here.
+    func fetchData(url: URL) async throws -> Data {
+        guard let token = tokenLock.withLock({ $0 }), !token.isEmpty else {
+            throw SRHTError.unauthorized
+        }
+        guard Self.isTrustedAuthenticatedTextURL(url) else {
+            throw SRHTError.invalidAuthenticatedURL(url)
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue(Bundle.main.hutchUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw SRHTError.networkError(error)
+        }
+
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 401 {
+                throw SRHTError.unauthorized
+            }
+            if !(200...299).contains(http.statusCode) {
+                throw SRHTError.httpError(http.statusCode)
+            }
+        }
+
+        return data
+    }
+
     /// Fetch the contents of a URL as plain text, using the same authorization header.
     /// Used for build logs and other non-GraphQL resources.
     func fetchText(url: URL) async throws -> String {
