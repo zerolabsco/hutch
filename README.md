@@ -82,6 +82,8 @@ Typical workflow:
 
 Contributions are welcome. Keep changes scoped, include tests when behavior changes, and open a pull request with a clear summary of the user-facing impact.
 
+Hutch is hosted on both [GitHub](https://github.com/zerolabsco/hutch) and [sourcehut](https://sr.ht/~ccleberg/Hutch), which are kept in sync. Report issues or send patches on whichever you prefer — GitHub issues and pull requests, or the [todo.sr.ht tracker](https://todo.sr.ht/~ccleberg/hutch) and [`git send-email`](https://git-send-email.io/).
+
 ## Security
 
 If you discover a security issue, see [SECURITY.md](SECURITY.md).
