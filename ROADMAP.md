@@ -169,6 +169,64 @@ implies.
 Labels and hints appear in 17 of 89 view files. Mechanical and low-risk, but it
 cannot be verified from a build — it needs VoiceOver driven on a device.
 
+### SonarCloud backlog
+
+51 open issues: **0 bugs, 0 vulnerabilities, 51 code smells**, plus 3 security
+hotspots. The headline number is misleading, so trust the breakdown before
+budgeting:
+
+- **35× `swift:S1075` (hardcoded URI)** — 28 of them in
+  `SourceHutWebDeepLinkMapperTests`, 5 in `Shared/HutchDeepLinkURLs`. A deep-link
+  mapper's tests exist precisely to assert against literal URLs, and a client for
+  one forge has fixed endpoints by definition. These want triaging as *Won't
+  Fix* in SonarCloud, not refactoring. "Fixing" them would make the code worse.
+- **5× `swift:S1135`** — TODO comments. Two are in `HutchIntents` and name real
+  gaps.
+- **3× `swift:S1186` (empty closure)** — all three CRITICAL, all three trivial:
+  `Button("Cancel", role: .cancel) {}` needs no body. A comment settles it.
+- **2× `javascript:S4624`** in the Safari extension; **2× `swift:S1172`** unused
+  parameters.
+
+The 3 hotspots are the part actually worth thought:
+
+- `KeychainHelper:33` and `:80` (**HIGH**) — the token is stored
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` with no
+  `SecAccessControl`, so it does not require biometric or passcode
+  authentication to read. That is a genuine product decision — should a stolen,
+  unlocked phone hand over a sr.ht token? — not a lint nit.
+- `ReadmeView:1922` (**LOW**) — unrestricted WebView navigation. Probably a false
+  positive: `isAllowedReadmeNavigationURL` enforces a scheme allowlist. Verify,
+  then annotate.
+
+Query it with:
+`https://sonarcloud.io/api/issues/search?componentKeys=zerolabsco_hutch&resolved=false`
+
+### Ingest "What's cooking on SourceHut?"
+
+sr.ht posts a quarterly update to `~sircmpwn/sr.ht-announce`, mirrored at
+<https://sourcehut.org/blog/>. Nothing in Hutch tracks it, so the API grows and
+this repo's assumptions quietly rot. Read each quarter's post, diff it against
+`Docs/API`, `SCOPE.md`, and the call sites, and file what changed.
+
+That this is worth doing is already proven: **`SCOPE.md` claims pronouns are
+"not in GraphQL schema", while `AppState` queries `pronouns` and
+`UserProfileView` displays them.** sr.ht shipped it, the doc never caught up,
+and it has been discouraging work that is in fact already done.
+
+[Q2 2026](https://sourcehut.org/blog/2026-05-28-whats-cooking-q2-2026/) alone
+flags two openings:
+
+- **hub.sr.ht gained a writable GraphQL API** for managing projects and project
+  resources. Hutch's projects are read-only, and `SCOPE.md` still rules out
+  discovery on the grounds that hub has no public API. Both claims need
+  rechecking — this may also unblock `mailingListSubscribe`, which Phase 1 left
+  out for exactly that reason.
+- **git.sr.ht deploy keys are complete** (`createDeployKey` / `deleteDeployKey`
+  are in the SDL). Hutch never calls them.
+
+Start from Q1 2026 forward — that is roughly when the current `Docs/API` dumps
+were captured.
+
 ### Swift 6 language mode
 
 The project builds in Swift 5 language mode with

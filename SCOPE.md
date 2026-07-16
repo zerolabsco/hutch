@@ -5,7 +5,11 @@
 - Push notifications for builds and tickets (requires a backend relay server)
   - ref: https://git.sr.ht/~ccleberg/hutch-notify
 - Explore / search (hub.sr.ht) (no public discovery API)
-- Pronouns on profile (not in GraphQL schema)
+- ~~Pronouns on profile (not in GraphQL schema)~~ — **stale**. sr.ht added
+  pronouns (see the Q1 2026 "What's cooking"), and Hutch already queries them in
+  `AppState` and shows them in `UserProfileView`. Left here struck through as
+  evidence for the ingestion task in ROADMAP.md: this entry spent months telling
+  people not to build something that was already built.
 - Revoke personal access tokens (`@internal` in schema, inaccessible)
 - Archive a message to a list (`archiveMessage` is `@internal`, inaccessible)
 - Ticket activity feed (todo.sr.ht's root `events` query is broken upstream and
