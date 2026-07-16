@@ -446,7 +446,7 @@ final class ThreadViewModel {
 
         let normalizedIdentity = normalizedSenderIdentity(from: body, fallbackAuthor: author)
         let displayBody = sanitizedDisplayBody(from: body)
-        let contentBlocks = segmentMessageBody(displayBody, isPatch: payload.patch != nil)
+        let contentBlocks = InboxThreadUtilities.segmentMessageBody(displayBody, isPatch: payload.patch != nil)
 
         return InboxMessage(
             id: id,
@@ -540,7 +540,7 @@ final class ThreadViewModel {
     }
 
     private static func sanitizedDisplayBody(from body: String) -> String {
-        let normalizedBody = normalizeLineEndings(in: body)
+        let normalizedBody = InboxThreadUtilities.normalizeLineEndings(in: body)
         let lines = normalizedBody.components(separatedBy: "\n")
         let headerPrefixes = ["From:", "Date:", "To:", "Cc:", "Subject:"]
         var headerCount = 0
@@ -563,93 +563,6 @@ final class ThreadViewModel {
         }
 
         return lines.dropFirst(blankLineIndex + 1).joined(separator: "\n")
-    }
-
-    nonisolated static func segmentMessageBodyForTesting(_ body: String, isPatch: Bool) -> [InboxMessageContentBlock] {
-        segmentMessageBody(body, isPatch: isPatch)
-    }
-
-    private nonisolated static func segmentMessageBody(_ body: String, isPatch: Bool) -> [InboxMessageContentBlock] {
-        guard isPatch else {
-            let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedBody.isEmpty ? [] : [.plainText(trimmedBody)]
-        }
-
-        let normalizedBody = normalizeLineEndings(in: body)
-        let lines = normalizedBody.components(separatedBy: "\n")
-        guard let diffStartIndex = actualDiffStartIndex(in: lines) else {
-            let trimmedBody = normalizedBody.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedBody.isEmpty ? [] : [.plainText(trimmedBody)]
-        }
-
-        var blocks: [InboxMessageContentBlock] = []
-        let leadingPlainText = lines[..<diffStartIndex]
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !leadingPlainText.isEmpty {
-            blocks.append(.plainText(leadingPlainText))
-        }
-
-        let remainingLines = Array(lines[diffStartIndex...])
-        let signatureIndex = remainingLines.firstIndex(where: isEmailSignatureSeparator)
-
-        let diffLines: ArraySlice<String>
-        let trailingPlainText: String
-        if let signatureIndex {
-            diffLines = remainingLines[..<signatureIndex]
-            trailingPlainText = remainingLines[signatureIndex...]
-                .joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        } else {
-            diffLines = remainingLines[...]
-            trailingPlainText = ""
-        }
-
-        let diff = diffLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !diff.isEmpty {
-            blocks.append(.diff(diff))
-        }
-
-        if !trailingPlainText.isEmpty {
-            blocks.append(.plainText(trailingPlainText))
-        }
-        return blocks
-    }
-
-    private nonisolated static func actualDiffStartIndex(in lines: [String]) -> Int? {
-        if let explicitDiffIndex = lines.firstIndex(where: { $0.hasPrefix("diff --git ") }) {
-            return explicitDiffIndex
-        }
-
-        for index in lines.indices {
-            let line = lines[index]
-            guard line.hasPrefix("--- ") else { continue }
-            let nextIndex = lines.index(after: index)
-            guard nextIndex < lines.endIndex else { continue }
-            let nextLine = lines[nextIndex]
-            guard nextLine.hasPrefix("+++ ") else { continue }
-
-            let oldPath = String(line.dropFirst(4))
-            let newPath = String(nextLine.dropFirst(4))
-            let looksLikeUnifiedDiff = (oldPath.hasPrefix("a/") || oldPath == "/dev/null") &&
-                (newPath.hasPrefix("b/") || newPath == "/dev/null")
-
-            if looksLikeUnifiedDiff {
-                return index
-            }
-        }
-
-        return nil
-    }
-
-    private nonisolated static func isEmailSignatureSeparator(_ line: String) -> Bool {
-        line == "-- " || line == "--"
-    }
-
-    private nonisolated static func normalizeLineEndings(in text: String) -> String {
-        text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
     }
 
     private static func stripLeadingFromLineIfPresent(in body: String) -> String {

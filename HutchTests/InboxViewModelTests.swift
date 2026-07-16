@@ -186,7 +186,7 @@ struct InboxViewModelTests {
         2.50.1 (Apple Git-155)
         """
 
-        let segments = ThreadViewModel.segmentMessageBodyForTesting(body, isPatch: true)
+        let segments = InboxThreadUtilities.segmentMessageBody(body, isPatch: true)
 
         #expect(segments.count == 3)
 

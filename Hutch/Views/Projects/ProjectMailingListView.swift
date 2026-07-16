@@ -24,12 +24,25 @@ private struct ProjectMailingListRootPayload: Decodable, Sendable {
     let id: Int
     let messageID: String
     let patch: InboxPatchPreview?
+    /// Null unless the thread's root email opens a patchset. `MailingList` has no
+    /// patchsets field, so this is the only way to enumerate a list's patchsets.
+    let patchset: PatchsetSummaryPayload?
+}
+
+private struct PatchsetSummaryPayload: Decodable, Sendable {
+    let id: Int
+    let subject: String
+    let version: Int
+    let prefix: String?
+    let status: PatchsetStatus
 }
 
 @Observable
 @MainActor
 final class MailingListDetailViewModel {
     private(set) var threads: [InboxThreadSummary] = []
+    /// Patchsets on this list, derived from thread roots — see the query below.
+    private(set) var patchsets: [PatchsetSummary] = []
     private(set) var isLoading = false
     var error: String?
     var searchText = ""
@@ -52,6 +65,13 @@ final class MailingListDetailViewModel {
                         id
                         messageID
                         patch { subject }
+                        patchset {
+                            id
+                            subject
+                            version
+                            prefix
+                            status
+                        }
                     }
                 }
             }
@@ -87,9 +107,44 @@ final class MailingListDetailViewModel {
             threads = deduplicateThreads(
                 response.list.threads.results.map(makeSummary(from:))
             )
+            patchsets = Self.patchsets(from: response.list.threads.results)
         } catch {
             self.error = "Failed to load mailing list"
         }
+    }
+
+    var filteredPatchsets: [PatchsetSummary] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return patchsets }
+        return patchsets.filter { $0.subject.lowercased().contains(query) }
+    }
+
+    /// Collects the patchsets opened by these threads, newest first.
+    ///
+    /// A revised series arrives as its own thread, so the same subject can appear
+    /// at several versions; they are kept as distinct patchsets and the version
+    /// chain is shown in the detail view.
+    private nonisolated static func patchsets(
+        from threads: [ProjectMailingListThreadPayload]
+    ) -> [PatchsetSummary] {
+        var seenIDs = Set<Int>()
+        var results: [PatchsetSummary] = []
+
+        for thread in threads {
+            guard let payload = thread.root.patchset, !seenIDs.contains(payload.id) else { continue }
+            seenIDs.insert(payload.id)
+            results.append(
+                PatchsetSummary(
+                    id: payload.id,
+                    subject: payload.subject,
+                    version: payload.version,
+                    prefix: payload.prefix,
+                    status: payload.status
+                )
+            )
+        }
+
+        return results
     }
 
     func markThreadRead(_ thread: InboxThreadSummary) {
@@ -257,12 +312,25 @@ final class MailingListDetailViewModel {
     }
 }
 
+enum MailingListScope: String, CaseIterable, Hashable {
+    case threads
+    case patches
+
+    var displayName: String {
+        switch self {
+        case .threads: "Threads"
+        case .patches: "Patches"
+        }
+    }
+}
+
 struct MailingListDetailView: View {
     let mailingList: InboxMailingListReference
 
     @Environment(AppState.self) private var appState
     @State private var viewModel: MailingListDetailViewModel?
     @State private var pinChangeCount = 0
+    @State private var scope: MailingListScope = .threads
 
     private var currentUserKey: String? {
         appState.currentUser?.canonicalName
@@ -337,6 +405,31 @@ struct MailingListDetailView: View {
         @Bindable var vm = viewModel
 
         List {
+            // Only offered when the list actually carries patches, so discussion
+            // lists do not grow an empty tab.
+            if !viewModel.patchsets.isEmpty {
+                Picker("Scope", selection: $scope) {
+                    ForEach(MailingListScope.allCases, id: \.self) { scope in
+                        Text(scope.displayName).tag(scope)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                .themedRow()
+            }
+
+            if showingPatches(viewModel) {
+                ForEach(viewModel.filteredPatchsets) { patchset in
+                    // Pushed directly rather than by value: this view is also shown
+                    // from a project, whose stack declares no MoreRoute destination.
+                    NavigationLink {
+                        PatchsetDetailView(patchsetID: patchset.id, listName: mailingList.name)
+                    } label: {
+                        PatchsetRow(patchset: patchset)
+                    }
+                    .themedRow()
+                }
+            } else {
             ForEach(viewModel.filteredThreads) { thread in
                 NavigationLink {
                     ThreadDetailView(
@@ -373,13 +466,14 @@ struct MailingListDetailView: View {
                 }
             }
             .themedRow()
+            }
         }
         .themedList()
         .listStyle(.plain)
         .searchable(
             text: $vm.searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search messages"
+            prompt: showingPatches(viewModel) ? "Search patches" : "Search messages"
         )
         .overlay {
             if viewModel.isLoading, viewModel.threads.isEmpty {
@@ -390,6 +484,10 @@ struct MailingListDetailView: View {
                     message: error,
                     retryAction: { await viewModel.loadThreads() }
                 )
+            } else if showingPatches(viewModel) {
+                if !viewModel.patchsets.isEmpty, viewModel.filteredPatchsets.isEmpty {
+                    ContentUnavailableView.search(text: viewModel.searchText)
+                }
             } else if !viewModel.threads.isEmpty, viewModel.filteredThreads.isEmpty {
                 ContentUnavailableView.search(text: viewModel.searchText)
             } else if viewModel.threads.isEmpty {
@@ -404,6 +502,34 @@ struct MailingListDetailView: View {
             await viewModel.loadThreads()
         }
         .srhtErrorBanner(error: $vm.error)
+    }
+
+    private func showingPatches(_ viewModel: MailingListDetailViewModel) -> Bool {
+        scope == .patches && !viewModel.patchsets.isEmpty
+    }
+}
+
+struct PatchsetRow: View {
+    let patchset: PatchsetSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(patchset.subject)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(2)
+
+            HStack(spacing: 8) {
+                PatchsetStatusBadge(status: patchset.status)
+                if let versionLabel = patchset.versionLabel {
+                    Text(versionLabel)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(patchset.subject), \(patchset.status.displayName)")
     }
 }
 

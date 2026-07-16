@@ -15,10 +15,13 @@ The app currently includes:
 - Repository browsing for Git and Mercurial repositories
 - Repository details including README, references, commits, diffs, files, artifacts, and settings
 - Tracker and ticket browsing, ticket detail views, and tracker creation
+- Ticket editing and deletion, with subscriptions for tickets and trackers
 - Build job browsing, build detail views, and build submission
 - Inbox and mailing list reading flows
+- Patchset review: cover letters, per-patch diffs, checks, version chains, and status changes
 - Paste browsing, creation, and detail views
 - Profile and account settings, including SSH keys, PGP keys, and personal access token management
+- Email preferences for todo.sr.ht and lists.sr.ht
 - Deep links for repositories, tickets, and build jobs
 
 Some SourceHut services are still browser-only from within Hutch. Unsupported areas currently open in Safari instead of rendering in-app.

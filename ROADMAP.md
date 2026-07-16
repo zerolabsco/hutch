@@ -74,24 +74,33 @@ Known follow-up: `BuildListViewModel`, `RepositoryListViewModel`, and
 two different cache keys. That predates `APICacheKeys` and should be folded into
 `cachedPayload`.
 
-## Phase 2: Patchsets
+## Phase 2: Patchsets — done (v3.7.0)
 
-The flagship gap. There is currently no reference to `patchset` anywhere in the
-Swift source, yet lists.sr.ht exposes a full `Patchset` type (subject, version,
-prefix, status, coverLetter, patches, tools, mbox), a `patchset` query, and an
-`updatePatchset` mutation. Sending and reviewing patches over email is the
-SourceHut contribution model, and Hutch cannot currently participate in it.
+The flagship gap. Sending and reviewing patches over email is the SourceHut
+contribution model, and Hutch had no reference to `patchset` anywhere.
 
-Scope this as review-and-triage, not submission:
+Scoped as review-and-triage, not submission:
 
-- Patchset list per mailing list.
-- Patchset detail: cover letter, per-patch diffs (reuse the existing
-  `DiffView`), version and superseded-by chain.
-- Status transitions via `updatePatchset`.
+- ~~Patchset list per mailing list~~ — see the caveat below.
+- ~~Patchset detail~~: cover letter, per-patch diffs (via the existing
+  `DiffView`), checks, and the version / superseded-by chain.
+- ~~Status transitions via `updatePatchset`~~.
 
-Patch *submission* is an email / `git send-email` flow and is likely out of
-reach from the app. Treat that boundary as explicit rather than half-building
-it.
+Two schema facts shaped the result, and are worth knowing before extending this:
+
+- **`MailingList` has no `patchsets` field.** A list's patchsets cannot be
+  queried directly; they are reachable only through thread roots. The existing
+  threads query now also selects `root.patchset`, so the Patches tab costs no
+  extra request — but it also means patchsets cannot be filtered by status
+  server-side, and only patchsets whose thread appears in the current page are
+  listed.
+- **`Patch` carries no diff.** It has only `index`, `count`, `version`,
+  `prefix`, `subject`, and `trailers`. The diff exists solely inside the email
+  body, so it is recovered with `InboxThreadUtilities.segmentMessageBody` — the
+  same splitter the inbox thread view uses.
+
+Patch *submission* remains out of reach: it is a `git send-email` flow, not a
+GraphQL mutation. Treat that boundary as explicit rather than half-building it.
 
 ## Phase 3: Polish and reach
 
