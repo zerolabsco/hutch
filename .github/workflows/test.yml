@@ -3,9 +3,10 @@ name: Tests
 # builds.sr.ht is the canonical CI for this project, but it has no macOS images
 # and will not add them, so xcodebuild cannot run there. This job exists to run
 # the test plan on the GitHub mirror; see builds/swift-ci.yml for the rest.
-# paths-ignore is deliberately `*.md`, which matches root level only. Docs/**.md
-# still runs the suite, and so does anything under Hutch/ — a skip rule that is
-# too broad is how a real change slips through ungated.
+# Prose only: the root docs and Docs/. Both patterns are single-star, so they
+# match those two levels and nothing deeper — a .md that ever lands inside a
+# source directory still runs the suite. A skip rule that is too broad is how a
+# real change slips through ungated.
 #
 # Safe on pull_request only because main has no required status checks: a run
 # skipped by a path filter never reports, so a required check would leave a
@@ -13,9 +14,9 @@ name: Tests
 on:
   push:
     branches: [main]
-    paths-ignore: ['*.md']
+    paths-ignore: ['*.md', 'Docs/*.md']
   pull_request:
-    paths-ignore: ['*.md']
+    paths-ignore: ['*.md', 'Docs/*.md']
   workflow_dispatch:
 
 # Without this, GITHUB_TOKEN inherits the repository default, which is
