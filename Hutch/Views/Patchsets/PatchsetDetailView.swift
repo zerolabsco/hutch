@@ -49,6 +49,12 @@ struct PatchsetDetailView: View {
                 patchesSection(patchset)
             }
             .themedList()
+            // Inset grouped lays cells out at a rounded width while the content
+            // measures itself at the unrounded one, so a long Text reflows to a
+            // different height than the cell was sized for and the two chase each
+            // other into a layout loop. ThreadDetailView renders the same bodies
+            // through the same DiffView on a plain list without that fight.
+            .listStyle(.plain)
             .refreshable { await viewModel.loadPatchset() }
             .overlay {
                 if viewModel.isUpdatingStatus {
