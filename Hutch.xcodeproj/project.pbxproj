@@ -880,7 +880,7 @@
 			repositoryURL = "https://github.com/apple/swift-markdown";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.7.3;
+				minimumVersion = 0.8.0;
 			};
 		};
 		8BF100062F9A000100000002 /* XCRemoteSwiftPackageReference "Splash" */ = {
