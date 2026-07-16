@@ -122,8 +122,14 @@ struct PatchsetDetailView: View {
 
             // The version chain matters during review: a superseded series should
             // usually be read at its newest version instead.
+            //
+            // Pushed directly rather than by value, for the same reason as the rows
+            // that lead here — this view inherits whatever stack presented it, and
+            // not all of them declare a MoreRoute destination.
             if let supersededBy = patchset.supersededBy {
-                NavigationLink(value: MoreRoute.patchset(id: supersededBy, listName: listName)) {
+                NavigationLink {
+                    PatchsetDetailView(patchsetID: supersededBy, listName: listName)
+                } label: {
                     SwiftUI.Label("Superseded by a newer version", systemImage: "arrow.right.circle")
                         .font(.subheadline)
                 }
@@ -131,7 +137,9 @@ struct PatchsetDetailView: View {
             }
 
             if let supersedes = patchset.supersedes {
-                NavigationLink(value: MoreRoute.patchset(id: supersedes, listName: listName)) {
+                NavigationLink {
+                    PatchsetDetailView(patchsetID: supersedes, listName: listName)
+                } label: {
                     SwiftUI.Label("Revises an earlier version", systemImage: "arrow.left.circle")
                         .font(.subheadline)
                 }

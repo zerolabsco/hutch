@@ -465,8 +465,6 @@ struct LookupView: View {
                     ProjectDashboardDeepLinkView(projectID: id, title: title)
                 case .mailingList(let mailingList):
                     MailingListDetailView(mailingList: mailingList)
-                case .patchset(let id, let listName):
-                    PatchsetDetailView(patchsetID: id, listName: listName)
                 case .thread(let thread):
                     ThreadDetailView(
                         thread: thread,

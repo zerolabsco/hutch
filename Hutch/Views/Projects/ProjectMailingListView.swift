@@ -420,7 +420,11 @@ struct MailingListDetailView: View {
 
             if showingPatches(viewModel) {
                 ForEach(viewModel.filteredPatchsets) { patchset in
-                    NavigationLink(value: MoreRoute.patchset(id: patchset.id, listName: mailingList.name)) {
+                    // Pushed directly rather than by value: this view is also shown
+                    // from a project, whose stack declares no MoreRoute destination.
+                    NavigationLink {
+                        PatchsetDetailView(patchsetID: patchset.id, listName: mailingList.name)
+                    } label: {
                         PatchsetRow(patchset: patchset)
                     }
                     .themedRow()
