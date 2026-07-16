@@ -7,6 +7,7 @@ struct PatchsetDetailView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: PatchsetDetailViewModel?
     @State private var showStatusPicker = false
+    @State private var expandedPatchIDs: Set<Int> = []
 
     var body: some View {
         Group {
@@ -163,10 +164,31 @@ struct PatchsetDetailView: View {
         }
     }
 
+    /// Patches start collapsed.
+    ///
+    /// A diff is tall, and a series is many of them. Rendering every patch expanded
+    /// puts a dozen self-sizing diffs in one List, which drives UICollectionView
+    /// into a recursive layout loop and wedges the app. The inbox thread view
+    /// collapses all but the last message for the same reason.
     @ViewBuilder
     private func patchesSection(_ patchset: PatchsetDetail) -> some View {
-        ForEach(patchset.patches) { patch in
-            emailSection(patch, title: patch.seriesLabel.map { "Patch \($0)" } ?? "Patch")
+        Section("Patches") {
+            ForEach(patchset.patches) { patch in
+                PatchRow(
+                    patch: patch,
+                    isExpanded: expandedPatchIDs.contains(patch.id),
+                    onToggle: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if expandedPatchIDs.contains(patch.id) {
+                                expandedPatchIDs.remove(patch.id)
+                            } else {
+                                expandedPatchIDs.insert(patch.id)
+                            }
+                        }
+                    }
+                )
+                .themedRow()
+            }
         }
     }
 
@@ -178,19 +200,7 @@ struct PatchsetDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .textSelection(.enabled)
 
-                ForEach(Array(email.contentBlocks.enumerated()), id: \.offset) { _, block in
-                    switch block {
-                    case .plainText(let text):
-                        Text(text)
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    case .diff(let diff):
-                        DiffView(diff: diff)
-                            .textSelection(.enabled)
-                    }
-                }
+                PatchsetContentBlocks(blocks: email.contentBlocks)
             }
             .padding(.vertical, 4)
             .themedRow()
@@ -224,6 +234,70 @@ struct PatchsetDetailView: View {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("Patchset actions")
+    }
+}
+
+// MARK: - Patch Row
+
+private struct PatchRow: View {
+    let patch: PatchsetEmail
+    let isExpanded: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isExpanded ? 10 : 0) {
+            Button(action: onToggle) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 3)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(patch.subject)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(isExpanded ? nil : 2)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if let seriesLabel = patch.seriesLabel {
+                            Text(seriesLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(isExpanded ? "Collapses this patch" : "Expands this patch")
+
+            if isExpanded {
+                PatchsetContentBlocks(blocks: patch.contentBlocks)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Content Blocks
+
+private struct PatchsetContentBlocks: View {
+    let blocks: [InboxMessageContentBlock]
+
+    var body: some View {
+        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            switch block {
+            case .plainText(let text):
+                Text(text)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .diff(let diff):
+                DiffView(diff: diff)
+                    .textSelection(.enabled)
+            }
+        }
     }
 }
 
