@@ -5,6 +5,8 @@ iOS client for SourceHut.
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=zerolabsco_hutch&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=zerolabsco_hutch)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=zerolabsco_hutch&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=zerolabsco_hutch)
 
+[![App Store Badge](https://zerolabs.sh/storebutton.svg)](https://apps.apple.com/us/app/hutch-for-sourcehut/id6760742299)
+
 ## Overview
 
 Hutch is a native SwiftUI app for browsing and managing SourceHut services on iPhone and iPad. It uses SourceHut's GraphQL APIs and stores your personal access token in the iOS keychain.
